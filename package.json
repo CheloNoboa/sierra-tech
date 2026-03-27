@@ -1,0 +1,70 @@
+{
+  "name": "fastfood-app",
+  "version": "0.1.0",
+  "private": true,
+  "doc": {
+    "purpose": "FastFood production app (Next.js App Router) with MongoDB + Stripe for payments.",
+    "notes": [
+      "Next.js 15 + React 19.",
+      "Stripe SDK is installed (server-side usage in /api/stripe/* routes).",
+      "TypeScript strictness depends on your tsconfig; ESLint is enabled via eslint-config-next."
+    ],
+    "scripts": {
+      "dev": "Local development server (hot reload).",
+      "build": "Build for production. You currently run it with Turbopack enabled.",
+      "start": "Run the already-built production server.",
+      "lint": "Run ESLint (Next.js rules + TS rules)."
+    }
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --turbopack",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "@hello-pangea/dnd": "^18.0.1",
+    "@stripe/react-stripe-js": "^5.6.1",
+    "@stripe/stripe-js": "^8.9.0",
+    "@tailwindcss/postcss": "^4.1.14",
+    "autoprefixer": "^10.4.21",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.24",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.548.0",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.19.1",
+    "next": "^15.5.5",
+    "next-auth": "^4.24.11",
+    "nodemailer": "^7.0.7",
+    "pdfkit": "^0.17.2",
+    "postcss": "^8.5.6",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-icons": "^5.5.0",
+    "stripe": "^20.3.1",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^3.4.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@types/bcrypt": "^6.0.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/google.maps": "^3.58.1",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/mongoose": "^5.11.96",
+    "@types/node": "^20",
+    "@types/nodemailer": "^7.0.3",
+    "@types/pdfkit": "^0.17.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.5",
+    "typescript": "^5"
+  }
+}

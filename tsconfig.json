@@ -1,0 +1,141 @@
+{
+  /* =====================================================================
+     🎯 CONFIGURACIÓN PRINCIPAL DE TYPESCRIPT — FastFood App
+     =====================================================================
+     ES:
+       Configuración oficial recomendada para Next.js 15 + TypeScript 5.
+       - Solo incluye archivos del proyecto.
+       - NO incluye .next (evita romper los tipos).
+       - Incluye correctamente las definiciones globales (*.d.ts).
+       - Permite augmentations de NextAuth sin errores.
+       - Usa módulo moderno "bundler" para Turbopack.
+     
+     EN:
+       Official recommended setup for Next.js 15 + TypeScript 5.
+       - Includes only project files.
+       - Does NOT include .next (prevents overwritten types).
+       - Properly loads custom type definitions (*.d.ts).
+       - Supports NextAuth module augmentation with no conflicts.
+       - Uses modern "bundler" module resolution for Turbopack.
+  ===================================================================== */
+  "compilerOptions": {
+    /* --------------------------------------------------------
+       🔄 Permitir archivos .js dentro del proyecto
+       Allow JavaScript files if needed
+    -------------------------------------------------------- */
+    "allowJs": true,
+
+    /* --------------------------------------------------------
+       🎯 Target + Librerías base del runtime
+       Target JS version + DOM support
+    -------------------------------------------------------- */
+    "target": "ES2020",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+
+    /* --------------------------------------------------------
+       📦 Sistema de módulos moderno (requerido por Next.js 15)
+       Modern module system (Next.js 15 requirement)
+    -------------------------------------------------------- */
+    "module": "esnext",
+    "moduleResolution": "bundler",
+
+    /* --------------------------------------------------------
+       🔎 Permitir importar JSON y módulos ES sin problemas
+       Allow JSON imports + ES modules interop
+    -------------------------------------------------------- */
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+
+    /* --------------------------------------------------------
+       🧪 Aislamiento de módulos (importante para Next.js)
+       Enforces isolated file compilation
+    -------------------------------------------------------- */
+    "isolatedModules": true,
+
+    /* --------------------------------------------------------
+       🎨 Soporte JSX nativo de Next.js
+    -------------------------------------------------------- */
+    "jsx": "preserve",
+
+    /* --------------------------------------------------------
+       ⚡ Compilación incremental
+       --------------------------------------------------------
+       ❌ Windows BUG (C:/ vs C:\) con Next.js 15 + Turbopack
+       ✅ Se desactiva para builds estables
+    -------------------------------------------------------- */
+    "incremental": false,
+
+    /* --------------------------------------------------------
+       🚫 No generar JS (Next.js maneja la build)
+       No emit output JS files
+    -------------------------------------------------------- */
+    "noEmit": true,
+
+    /* --------------------------------------------------------
+       🛑 Ignorar errores dentro de node_modules
+       Recommended by Next.js — avoids false positives
+    -------------------------------------------------------- */
+    "skipLibCheck": true,
+
+    /* --------------------------------------------------------
+       🚨 Modo estricto (RECOMENDADO)
+       Strict mode = better TypeScript correctness
+    -------------------------------------------------------- */
+    "strict": true,
+
+    /* --------------------------------------------------------
+       📁 Aliases como "@/components/Button"
+       Alias for imports
+    -------------------------------------------------------- */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    },
+
+    /* --------------------------------------------------------
+       🧩 Plugin de Next.js para mejorar experiencia TS
+    -------------------------------------------------------- */
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+
+  /* =====================================================================
+     📁 ARCHIVOS INCLUIDOS
+     =====================================================================
+     ES:
+       Solo se incluyen archivos REALES del proyecto.
+       ❌ NO incluir .next (rompe los tipos)
+       ❌ NO incluir duplicados
+       ✔️ Sí incluir definiciones de tipo personalizadas (next-auth.d.ts)
+     
+     EN:
+       Only project files are included.
+       ❌ Do NOT include .next (breaks module augmentation)
+       ❌ No duplicates
+       ✔️ Include custom typings (e.g., next-auth.d.ts)
+  ====================================================================== */
+  "include": [
+    "next-env.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/types/**/*.d.ts",
+    ".next/types/**/*.ts"
+  ],
+
+  /* =====================================================================
+     🚫 EXCLUSIONES
+     ===================================================================== */
+  "exclude": [
+    "node_modules",
+    ".next"
+  ]
+}

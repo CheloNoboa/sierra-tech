@@ -1,0 +1,293 @@
+/* ============================================================================
+   Sierra Tech — Global Styles
+   ============================================================================
+   ES:
+   - Este archivo define la identidad visual global del proyecto.
+   - Los colores oficiales viven aquí como variables CSS.
+   - Tailwind consume estas variables desde tailwind.config.js.
+   - Evitar hexadecimales sueltos en componentes.
+   -
+   - Este archivo REEMPLAZA la base visual oscura heredada de FastFood.
+   -
+   * EN:
+   - This file defines the global visual identity of the project.
+   - Official colors live here as CSS variables.
+   - Tailwind consumes these variables via tailwind.config.js.
+   - Avoid scattering hardcoded hex values across components.
+   -
+   - This file REPLACES the inherited dark FastFood visual base.
+   ========================================================================= */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Sierra Tech — Brand Tokens
+   ========================================================================= */
+:root {
+  --color-brand-primary: #adc94a;
+  --color-brand-primary-strong: #92c021;
+  --color-brand-secondary: #a2d5ce;
+  --color-brand-accent: #dbdb01;
+  --color-brand-ink: #625751;
+
+  --color-bg: #f7f8f7;
+  --color-surface: #ffffff;
+  --color-surface-soft: #eef3f1;
+  --color-border: #d9e2de;
+
+  --color-text-primary: #2f2a27;
+  --color-text-secondary: #625751;
+  --color-text-muted: #7d756f;
+
+  --color-success: #2e7d32;
+  --color-warning: #b28704;
+  --color-error: #c62828;
+  --color-info: #1565c0;
+}
+
+/* ============================================================================
+   Base
+   ========================================================================= */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  overflow-x: hidden;
+}
+
+/* Links */
+a {
+  color: var(--color-text-secondary);
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-brand-primary-strong);
+}
+
+/* Buttons */
+button {
+  font-family: inherit;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* ============================================================================
+   Reusable helpers
+   ========================================================================= */
+.btn-primary {
+  background-color: var(--color-brand-primary);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  transition: all 0.25s ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-brand-primary-strong);
+  color: #ffffff;
+}
+
+.btn-secondary {
+  background-color: var(--color-brand-secondary);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  transition: all 0.25s ease;
+}
+
+.btn-secondary:hover {
+  filter: brightness(0.97);
+}
+
+/* ============================================================================
+   Scrollbar
+   ========================================================================= */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface-soft);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #b7c4be;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #98aaa2;
+}
+
+/* ============================================================================
+   Global animations
+   ========================================================================= */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+/* Alias legacy para compatibilidad con componentes antiguos */
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+@keyframes slideInLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  60% {
+    opacity: 0.6;
+    transform: translateX(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.5s ease-out forwards;
+}
+
+@keyframes slideOutLeft {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  40% {
+    opacity: 0.5;
+    transform: translateX(-15px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+}
+
+.animate-slideOutLeft {
+  animation: slideOutLeft 0.4s ease-in forwards;
+}
+
+@keyframes overlayFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.6;
+  }
+}
+
+.animate-overlay {
+  animation: overlayFade 0.3s ease-in forwards;
+}
+
+@keyframes checkMark {
+  0% {
+    stroke-dashoffset: 20;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-check {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: checkMark 0.6s ease forwards 0.3s;
+}
+
+@keyframes pingSoft {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  75%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.animate-ping-soft {
+  animation: pingSoft 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes spin-fast {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-fast {
+  animation: spin-fast 0.8s linear infinite;
+}
+
+/* ============================================================================
+   Headings
+   ========================================================================= */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--color-text-primary);
+}
+
+/* ============================================================================
+   Forms
+   ========================================================================= */
+input,
+textarea,
+select {
+  color: var(--color-text-primary);
+}
+
+/* Chrome autofill fix for LIGHT UI */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text-primary);
+  box-shadow: 0 0 0px 1000px var(--color-surface) inset;
+  transition: background-color 9999s ease-in-out 0s;
+  caret-color: var(--color-text-primary);
+}
