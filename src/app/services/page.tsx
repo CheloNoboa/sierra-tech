@@ -12,6 +12,15 @@
  *   - Entregar HTML ya resuelto
  *   - Mantener la UI interactiva en un componente cliente mínimo
  *
+ *   Responsabilidad real de este archivo:
+ *   - Cargar datos públicos requeridos para /services
+ *   - Normalizar respuestas de Mongo/lean
+ *   - Pasar al componente cliente solo datos serializables y seguros
+ *
+ *   Regla:
+ *   - Este archivo NO construye la UI visual final.
+ *   - La presentación vive en ServicesPageClient.
+ *
  * EN:
  *   Public services page rendered on the server.
  * =============================================================================
@@ -51,7 +60,7 @@ const EMPTY_PAGE_HEADER: ServicesPageHeader = {
 /* -------------------------------------------------------------------------- */
 
 function normalizeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
+  return typeof value === "string" ? value.trim() : fallback;
 }
 
 function normalizeNumber(value: unknown, fallback = 0): number {
@@ -100,7 +109,7 @@ function normalizeFeaturedCards(value: unknown): FeaturedCard[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .map((item) => {
+    .map((item, index) => {
       const record =
         item && typeof item === "object"
           ? (item as Record<string, unknown>)
@@ -110,39 +119,44 @@ function normalizeFeaturedCards(value: unknown): FeaturedCard[] {
         id: normalizeString(record?.id),
         title: normalizeLocalizedText(record?.title),
         description: normalizeLocalizedText(record?.description),
-        order: normalizeNumber(record?.order, 0),
+        order: normalizeNumber(record?.order, index + 1),
         enabled: normalizeBoolean(record?.enabled, false),
       };
     })
-    .filter((card) => card.enabled && card.id.trim().length > 0)
+    .filter((card) => card.enabled && card.id.length > 0)
     .sort((a, b) => a.order - b.order);
 }
 
 function normalizeServices(value: unknown): PublicService[] {
   if (!Array.isArray(value)) return [];
 
-  return value.map((item) => {
-    const record =
-      item && typeof item === "object"
-        ? (item as Record<string, unknown>)
-        : null;
+  return value
+    .map((item, index) => {
+      const record =
+        item && typeof item === "object"
+          ? (item as Record<string, unknown>)
+          : null;
 
-    return {
-    _id:
-      typeof record?._id === "string"
-        ? record._id
-        : record?._id && typeof record._id === "object" && "toString" in record._id
-          ? String(record._id)
-          : "",
-      slug: normalizeString(record?.slug),
-      title: normalizeLocalizedText(record?.title),
-      summary: normalizeLocalizedText(record?.summary),
-      description: normalizeLocalizedText(record?.description),
-      coverImage: normalizeString(record?.coverImage),
-      category: normalizeString(record?.category),
-      order: normalizeNumber(record?.order, 0),
-    };
-  });
+      const rawId = record?._id;
+
+      return {
+        _id:
+          typeof rawId === "string"
+            ? rawId
+            : rawId && typeof rawId === "object" && "toString" in rawId
+              ? String(rawId)
+              : "",
+        slug: normalizeString(record?.slug),
+        title: normalizeLocalizedText(record?.title),
+        summary: normalizeLocalizedText(record?.summary),
+        description: normalizeLocalizedText(record?.description),
+        coverImage: normalizeString(record?.coverImage),
+        category: normalizeString(record?.category),
+        order: normalizeNumber(record?.order, index + 1),
+      };
+    })
+    .filter((service) => service.slug.length > 0)
+    .sort((a, b) => a.order - b.order);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -153,16 +167,22 @@ export default async function ServicesPage() {
   await connectToDB();
 
   const [services, page, homeSettings] = await Promise.all([
-    Service.find({ status: "published" }).sort({ order: 1 }).lean(),
+    Service.find({ status: "published" }).sort({ order: 1, createdAt: -1 }).lean(),
     ServicesPageModel.findOne().lean(),
     HomeSettings.findOne().lean(),
   ]);
 
+  const normalizedPageHeader = normalizePageHeader(page?.header);
+  const normalizedFeaturedCards = normalizeFeaturedCards(
+    homeSettings?.featuredCards
+  );
+  const normalizedServices = normalizeServices(services);
+
   return (
     <ServicesPageClient
-      pageHeader={normalizePageHeader(page?.header)}
-      featuredCards={normalizeFeaturedCards(homeSettings?.featuredCards)}
-      services={normalizeServices(services)}
+      pageHeader={normalizedPageHeader}
+      featuredCards={normalizedFeaturedCards}
+      services={normalizedServices}
     />
   );
 }

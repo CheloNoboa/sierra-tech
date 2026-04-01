@@ -8,9 +8,18 @@
  *
  * ES:
  *   Capa cliente mínima para la página pública de servicios.
- *   Recibe datos ya resueltos desde servidor y conserva:
- *   - idioma activo
- *   - scroll al bloque de servicios
+ *
+ *   Responsabilidad:
+ *   - Recibir datos ya resueltos desde servidor
+ *   - Resolver idioma activo en cliente
+ *   - Gestionar scroll al bloque de servicios
+ *   - Pintar la UI pública final sin inventar contenido
+ *
+ *   Reglas:
+ *   - No usar copy comercial ficticio como contenido principal
+ *   - Dar prioridad absoluta a pageHeader y servicios reales
+ *   - Mantener fallback bilingüe seguro ES / EN
+ *   - Mantener branding neutral sin hardcodear nombre de empresa
  *
  * EN:
  *   Minimal client layer for the public services page.
@@ -73,12 +82,20 @@ interface ServicesPageClientProps {
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
+function normalizeString(value: string | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function getLocalizedText(
   value: LocalizedText | undefined,
   locale: Locale
 ): string {
   if (!value) return "";
-  return locale === "es" ? value.es : value.en;
+
+  const preferred = locale === "es" ? normalizeString(value.es) : normalizeString(value.en);
+  const fallback = locale === "es" ? normalizeString(value.en) : normalizeString(value.es);
+
+  return preferred || fallback || "";
 }
 
 function getScrollableParent(element: HTMLElement | null): HTMLElement | null {
@@ -128,6 +145,24 @@ function scrollToSectionStart(target: HTMLElement | null, offset = 96): void {
   });
 }
 
+function formatCategoryLabel(value: string | undefined): string {
+  const raw = normalizeString(value);
+  if (!raw) return "";
+
+  return raw
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getServiceExcerpt(service: PublicService, locale: Locale): string {
+  const summary = getLocalizedText(service.summary, locale);
+  const description = getLocalizedText(service.description, locale);
+
+  return summary || description || "";
+}
+
 /* -------------------------------------------------------------------------- */
 /* Component                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -147,112 +182,122 @@ export default function ServicesPageClient({
 
   const copy = useMemo(() => {
     return {
-      fallbackTitle:
-        locale === "es"
-          ? "Servicios especializados para infraestructura, tratamiento y sostenibilidad"
-          : "Specialized services for infrastructure, treatment, and sustainability",
-
-      fallbackSubtitle:
-        locale === "es"
-          ? "Integramos soluciones confiables para tratamiento de agua, control de olores, biorremediación, procesos microbiológicos y sistemas de energía limpia."
-          : "We integrate reliable solutions for water treatment, odor control, bioremediation, microbiological processes, and clean energy systems.",
-
-      sectionEyebrow: "Sierra Tech",
-      sectionTitle: locale === "es" ? "Nuestros servicios" : "Our services",
-      sectionText:
-        locale === "es"
-          ? "Cada servicio responde a una necesidad técnica concreta, con enfoque en desempeño operativo, implementación ordenada y continuidad de funcionamiento."
-          : "Each service addresses a concrete technical need, with a focus on operational performance, structured implementation, and continuity.",
-
+      sectionTitle: locale === "es" ? "Servicios" : "Services",
       emptyTitle:
         locale === "es"
           ? "No hay servicios publicados"
           : "No published services available",
-
       emptyText:
         locale === "es"
           ? "Cuando existan servicios activos en el administrador, se mostrarán aquí."
           : "Once active services are published from the admin panel, they will appear here.",
-
       viewDetail: locale === "es" ? "Ver detalle" : "View details",
       exploreServices:
         locale === "es" ? "Explorar servicios" : "Explore services",
-
+      requestQuote:
+        locale === "es" ? "Solicitar cotización" : "Request a quote",
+      contact: locale === "es" ? "Ir a contacto" : "Go to contact",
       finalTitle:
         locale === "es"
-          ? "¿Necesitas una solución a la medida?"
-          : "Need a tailored solution?",
-
+          ? "¿Necesitas una solución para tu proyecto?"
+          : "Need a solution for your project?",
       finalText:
         locale === "es"
-          ? "Podemos ayudarte a evaluar requerimientos técnicos, condiciones de instalación y alcance del proyecto."
-          : "We can help you evaluate technical requirements, installation conditions, and project scope.",
-
-      quote: locale === "es" ? "Solicitar cotización" : "Request a quote",
-      contact: locale === "es" ? "Ir a contacto" : "Go to contact",
+          ? "Podemos ayudarte a revisar requerimientos, alcance técnico y condiciones de implementación."
+          : "We can help you review requirements, technical scope, and implementation conditions.",
     };
   }, [locale]);
+
+  const heroEyebrow = getLocalizedText(pageHeader.eyebrow, locale);
+  const heroTitle = getLocalizedText(pageHeader.title, locale);
+  const heroSubtitle = getLocalizedText(pageHeader.subtitle, locale);
+
+  const primaryCtaLabel =
+    getLocalizedText(pageHeader.primaryCtaLabel, locale) || copy.requestQuote;
+
+  const secondaryCtaLabel =
+    getLocalizedText(pageHeader.secondaryCtaLabel, locale) || copy.exploreServices;
+
+  const primaryCtaHref = normalizeString(pageHeader.primaryCtaHref) || "/contact";
+  const secondaryCtaHref = normalizeString(pageHeader.secondaryCtaHref);
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
       <section className="border-b border-slate-200 bg-gradient-to-br from-white via-slate-50 to-lime-50/70">
         <div className="mx-auto max-w-7xl px-6 pb-16 pt-24 md:px-10 md:pb-16 md:pt-28 lg:pb-20 lg:pt-32">
           <div className="max-w-4xl">
-            {getLocalizedText(pageHeader.eyebrow, locale) ? (
+            {heroEyebrow ? (
               <span className="inline-flex rounded-full border border-lime-200 bg-lime-100 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-lime-700">
-                {getLocalizedText(pageHeader.eyebrow, locale)}
+                {heroEyebrow}
               </span>
             ) : null}
 
-            <h1 className="mt-6 text-4xl font-semibold leading-tight text-slate-950 md:text-5xl xl:text-6xl">
-              {getLocalizedText(pageHeader.title, locale) || copy.fallbackTitle}
-            </h1>
+            {heroTitle ? (
+              <h1 className="mt-6 text-4xl font-semibold leading-tight text-slate-950 md:text-5xl xl:text-6xl">
+                {heroTitle}
+              </h1>
+            ) : null}
 
-            <p className="mt-6 max-w-3xl text-base leading-8 text-slate-600 md:text-lg">
-              {getLocalizedText(pageHeader.subtitle, locale) ||
-                copy.fallbackSubtitle}
-            </p>
+            {heroSubtitle ? (
+              <p className="mt-6 max-w-3xl text-base leading-8 text-slate-600 md:text-lg">
+                {heroSubtitle}
+              </p>
+            ) : null}
 
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
-                href={pageHeader.primaryCtaHref || "/contact"}
+                href={primaryCtaHref}
                 className="inline-flex items-center gap-2 rounded-full bg-lime-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-lime-400"
               >
-                {getLocalizedText(pageHeader.primaryCtaLabel, locale) ||
-                  copy.quote}
+                {primaryCtaLabel}
                 <ArrowRight className="h-4 w-4" />
               </Link>
 
-              <button
-                type="button"
-                onClick={handleExploreServices}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
-              >
-                {getLocalizedText(pageHeader.secondaryCtaLabel, locale) ||
-                  copy.exploreServices}
-                <ArrowRight className="h-4 w-4" />
-              </button>
+              {secondaryCtaHref ? (
+                <Link
+                  href={secondaryCtaHref}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+                >
+                  {secondaryCtaLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleExploreServices}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+                >
+                  {secondaryCtaLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
 
-          {featuredCards.length ? (
+          {featuredCards.length > 0 ? (
             <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {featuredCards.map((card) => {
                 const title = getLocalizedText(card.title, locale);
                 const description = getLocalizedText(card.description, locale);
+
+                if (!title && !description) return null;
 
                 return (
                   <article
                     key={card.id}
                     className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                   >
-                    <h2 className="text-base font-semibold text-slate-900">
-                      {title}
-                    </h2>
+                    {title ? (
+                      <h2 className="text-base font-semibold text-slate-900">
+                        {title}
+                      </h2>
+                    ) : null}
 
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {description}
-                    </p>
+                    {description ? (
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {description}
+                      </p>
+                    ) : null}
                   </article>
                 );
               })}
@@ -265,20 +310,12 @@ export default function ServicesPageClient({
         ref={servicesSectionRef}
         className="mx-auto max-w-7xl px-6 py-14 md:px-10"
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-700">
-          {copy.sectionEyebrow}
-        </p>
-
-        <h2 className="mt-3 text-3xl font-semibold text-slate-950 md:text-4xl">
+        <h2 className="text-3xl font-semibold text-slate-950 md:text-4xl">
           {copy.sectionTitle}
         </h2>
-
-        <p className="mt-4 text-base leading-8 text-slate-600">
-          {copy.sectionText}
-        </p>
       </section>
 
-      {!services.length ? (
+      {services.length === 0 ? (
         <section className="mx-auto max-w-7xl px-6 pb-20 md:px-10">
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center">
             <h3 className="text-2xl font-semibold text-slate-950">
@@ -291,18 +328,19 @@ export default function ServicesPageClient({
           </div>
         </section>
       ) : (
-        <section className="mx-auto max-w-7xl px-6 pt-8 pb-20 md:px-10">
+        <section className="mx-auto max-w-7xl px-6 pb-20 pt-2 md:px-10">
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
             {services.map((service) => {
               const title = getLocalizedText(service.title, locale);
-              const summary = getLocalizedText(service.summary, locale);
+              const excerpt = getServiceExcerpt(service, locale);
+              const categoryLabel = formatCategoryLabel(service.category);
 
               return (
                 <article
                   key={service._id || service.slug}
                   className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:border-lime-300 hover:shadow-xl"
                 >
-                  <Link href={`/services/${service.slug}`} className="block">
+                  <Link href={`/services/${service.slug}`} className="block h-full">
                     <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
                       {service.coverImage ? (
                         <Image
@@ -318,21 +356,23 @@ export default function ServicesPageClient({
 
                       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/35 to-transparent" />
 
-                      {service.category ? (
+                      {categoryLabel ? (
                         <span className="absolute left-4 top-4 inline-flex rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm backdrop-blur-sm">
-                          {service.category}
+                          {categoryLabel}
                         </span>
                       ) : null}
                     </div>
 
-                    <div className="p-6">
+                    <div className="flex h-[calc(100%-theme(spacing.0))] flex-col p-6">
                       <h3 className="text-xl font-semibold leading-snug text-slate-950 transition group-hover:text-lime-700">
-                        {title}
+                        {title || service.slug}
                       </h3>
 
-                      <p className="mt-4 line-clamp-4 text-sm leading-7 text-slate-600">
-                        {summary}
-                      </p>
+                      {excerpt ? (
+                        <p className="mt-4 line-clamp-5 text-sm leading-7 text-slate-600">
+                          {excerpt}
+                        </p>
+                      ) : null}
 
                       <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-lime-700">
                         {copy.viewDetail}
@@ -350,11 +390,7 @@ export default function ServicesPageClient({
       <section className="border-t border-slate-200 bg-slate-950">
         <div className="mx-auto grid max-w-7xl gap-8 px-6 py-16 md:px-10 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-400">
-              Sierra Tech
-            </p>
-
-            <h2 className="mt-3 text-3xl font-semibold text-white md:text-4xl">
+            <h2 className="text-3xl font-semibold text-white md:text-4xl">
               {copy.finalTitle}
             </h2>
 
@@ -368,7 +404,7 @@ export default function ServicesPageClient({
               href="/contact"
               className="inline-flex items-center gap-2 rounded-full bg-lime-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-lime-400"
             >
-              {copy.quote}
+              {copy.requestQuote}
               <ArrowRight className="h-4 w-4" />
             </Link>
 

@@ -25,6 +25,12 @@
  *   - permite drafts incompletos con defaults seguros
  *   - la cabecera global acepta campos vacíos y no debe romper el flujo
  *
+ *   Contrato de attachments:
+ *   - attachments SIEMPRE usa:
+ *     { documentId: string; title: string }
+ *   - title no es opcional en el contrato del API
+ *   - si llega vacío, se normaliza a ""
+ *
  * EN:
  *   Administrative endpoint for listing services, creating services, and
  *   saving the global header for the public /services page.
@@ -74,7 +80,7 @@ interface ServiceTechnicalSpecs {
 
 interface ServiceAttachmentRef {
   documentId: string;
-  title?: string;
+  title: string;
 }
 
 /**
@@ -449,7 +455,6 @@ export async function GET(request: Request) {
     ]);
 
     const services = serviceDocs.map((doc) => toResponsePayload(doc));
-
     const pageHeader = normalizePageHeader(pageDoc?.header);
 
     return NextResponse.json(
@@ -502,16 +507,14 @@ export async function POST(request: Request) {
 
     const safeCategory = normalized.category.trim() || "general";
 
-    if (normalized.status === "published") {
-      if (!safeTitleEs && !safeTitleEn) {
-        return NextResponse.json(
-          {
-            error_es: "El título del servicio es obligatorio para publicar.",
-            error_en: "Service title is required to publish.",
-          },
-          { status: 400 }
-        );
-      }
+    if (normalized.status === "published" && !safeTitleEs && !safeTitleEn) {
+      return NextResponse.json(
+        {
+          error_es: "El título del servicio es obligatorio para publicar.",
+          error_en: "Service title is required to publish.",
+        },
+        { status: 400 }
+      );
     }
 
     const existing = await Service.findOne({ slug: safeSlug }).lean();
@@ -541,7 +544,7 @@ export async function POST(request: Request) {
       seo: normalized.seo,
       attachments: normalized.attachments.map((item) => ({
         documentId: new Types.ObjectId(item.documentId),
-        title: item.title ?? "",
+        title: item.title,
       })),
       updatedBy: guard.userName,
       updatedByEmail: guard.userEmail,
@@ -584,22 +587,6 @@ export async function PUT(request: Request) {
       record.pageHeader ?? record.header
     );
 
-    /**
-     * ------------------------------------------------------------------------
-     * Persistencia real en ServicesPage
-     * ------------------------------------------------------------------------
-     * ES:
-     *   - La cabecera global ya NO se guarda dentro de Service.
-     *   - Se busca el único documento de ServicesPage.
-     *   - Si no existe, se crea.
-     *   - Se permite guardar campos vacíos sin romper el flujo.
-     *
-     * EN:
-     *   - The global header is no longer stored inside Service.
-     *   - The single ServicesPage document is fetched or created.
-     *   - Empty fields are allowed.
-     * ------------------------------------------------------------------------
-     */
     let pageDoc = await ServicesPage.findOne();
 
     if (!pageDoc) {

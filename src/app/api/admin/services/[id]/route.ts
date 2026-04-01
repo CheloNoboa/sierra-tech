@@ -23,6 +23,12 @@
  *   - attachments referencia documentos administrables
  *   - alineado al modelo final Service
  *
+ *   Contrato de attachments:
+ *   - attachments SIEMPRE usa:
+ *     { documentId: string; title: string }
+ *   - title no es opcional en el contrato del API
+ *   - cualquier valor faltante se normaliza como cadena vacía
+ *
  * EN:
  *   Administrative endpoint for reading, updating and deleting a specific
  *   public website service.
@@ -71,7 +77,7 @@ interface ServiceTechnicalSpecs {
 
 interface ServiceAttachmentRef {
   documentId: string;
-  title?: string;
+  title: string;
 }
 
 interface ServicePayload {
@@ -503,7 +509,7 @@ export async function PUT(
           seo: normalized.seo,
           attachments: normalized.attachments.map((item) => ({
             documentId: new Types.ObjectId(item.documentId),
-            title: item.title ?? "",
+            title: item.title,
           })),
           updatedBy: guard.userName,
           updatedByEmail: guard.userEmail,

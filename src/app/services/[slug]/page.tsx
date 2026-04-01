@@ -11,6 +11,15 @@
  *   - Eliminar fetch en cliente para mejorar acceso y retorno
  *   - Entregar HTML ya resuelto
  *   - Resolver idioma desde cookie para soportar ES / EN
+ *   - Resolver documentos relacionados reales desde la colección Document
+ *
+ *   Reglas:
+ *   - Solo expone servicios publicados
+ *   - Soporta fallback bilingüe seguro
+ *   - No muestra bloques vacíos
+ *   - Mantiene attachments con contrato estable:
+ *     { documentId: string; title: string }
+ *   - Solo muestra documentos públicos y publicados
  *
  * EN:
  *   Public service detail page rendered on the server.
@@ -20,16 +29,19 @@
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { ArrowLeft, ArrowRight, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, FileText } from "lucide-react";
+import { Types } from "mongoose";
 
 import { connectToDB } from "@/lib/connectToDB";
 import Service from "@/models/Service";
+import Document from "@/models/Document";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
 
 type Locale = "es" | "en";
+type DocumentLanguage = "es" | "en" | "both" | "other";
 
 interface LocalizedText {
   es: string;
@@ -65,6 +77,14 @@ interface ServiceDetail {
   gallery: ServiceGalleryItem[];
   technicalSpecs: ServiceTechnicalSpecs;
   attachments: ServiceAttachmentRef[];
+}
+
+interface PublicAttachmentItem {
+  documentId: string;
+  title: string;
+  type: string;
+  language: DocumentLanguage;
+  fileUrl: string;
 }
 
 interface PageProps {
@@ -120,12 +140,20 @@ function resolveServerLocale(value: string | undefined): Locale {
   return value === "en" ? "en" : "es";
 }
 
+function normalizeString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function getLocalizedText(
   value: LocalizedText | undefined,
   locale: Locale
 ): string {
   if (!value) return "";
-  return locale === "es" ? value.es : value.en;
+
+  const preferred = locale === "es" ? value.es.trim() : value.en.trim();
+  const fallback = locale === "es" ? value.en.trim() : value.es.trim();
+
+  return preferred || fallback || "";
 }
 
 function normalizeLocalizedText(value: unknown): LocalizedText {
@@ -136,12 +164,37 @@ function normalizeLocalizedText(value: unknown): LocalizedText {
   const record = value as Record<string, unknown>;
 
   return {
-    es: typeof record.es === "string" ? record.es : "",
-    en: typeof record.en === "string" ? record.en : "",
+    es: normalizeString(record.es),
+    en: normalizeString(record.en),
   };
 }
 
 function normalizeGallery(value: unknown): ServiceGalleryItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      const record =
+        item && typeof item === "object"
+          ? (item as Record<string, unknown>)
+          : null;
+
+      const orderValue = record?.order;
+
+      return {
+        url: normalizeString(record?.url),
+        alt: normalizeLocalizedText(record?.alt),
+        order:
+          typeof orderValue === "number" && Number.isFinite(orderValue)
+            ? orderValue
+            : index + 1,
+      };
+    })
+    .filter((item) => item.url.length > 0)
+    .sort((a, b) => a.order - b.order);
+}
+
+function normalizeAttachments(value: unknown): ServiceAttachmentRef[] {
   if (!Array.isArray(value)) return [];
 
   return value
@@ -151,42 +204,23 @@ function normalizeGallery(value: unknown): ServiceGalleryItem[] {
           ? (item as Record<string, unknown>)
           : null;
 
-      return {
-        url: typeof record?.url === "string" ? record.url : "",
-        alt: normalizeLocalizedText(record?.alt),
-        order:
-          typeof record?.order === "number" && Number.isFinite(record.order)
-            ? record.order
-            : 0,
-      };
-    })
-    .filter((item) => item.url.trim().length > 0)
-    .sort((a, b) => a.order - b.order);
-}
+      const rawDocumentId = record?.documentId;
 
-function normalizeAttachments(value: unknown): ServiceAttachmentRef[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.map((item) => {
-    const record =
-      item && typeof item === "object"
-        ? (item as Record<string, unknown>)
-        : null;
-
-    const rawDocumentId = record?.documentId;
-
-    return {
-      documentId:
+      const documentId =
         typeof rawDocumentId === "string"
-          ? rawDocumentId
+          ? rawDocumentId.trim()
           : rawDocumentId &&
               typeof rawDocumentId === "object" &&
               "toString" in rawDocumentId
-            ? String(rawDocumentId)
-            : "",
-      title: typeof record?.title === "string" ? record.title : "",
-    };
-  });
+            ? String(rawDocumentId).trim()
+            : "";
+
+      return {
+        documentId,
+        title: normalizeString(record?.title),
+      };
+    })
+    .filter((item) => item.documentId.length > 0);
 }
 
 function normalizeService(value: unknown): ServiceDetail {
@@ -201,12 +235,12 @@ function normalizeService(value: unknown): ServiceDetail {
       : {};
 
   return {
-    slug: typeof record.slug === "string" ? record.slug : "",
+    slug: normalizeString(record.slug).toLowerCase(),
     title: normalizeLocalizedText(record.title),
     summary: normalizeLocalizedText(record.summary),
     description: normalizeLocalizedText(record.description),
-    coverImage: typeof record.coverImage === "string" ? record.coverImage : "",
-    category: typeof record.category === "string" ? record.category : "",
+    coverImage: normalizeString(record.coverImage),
+    category: normalizeString(record.category),
     gallery: normalizeGallery(record.gallery),
     technicalSpecs: {
       capacity: normalizeLocalizedText(technicalSpecs.capacity),
@@ -231,6 +265,121 @@ function hasTechnicalSpecs(specs: ServiceTechnicalSpecs): boolean {
     hasLocalizedContent(specs.material) ||
     hasLocalizedContent(specs.application) ||
     hasLocalizedContent(specs.technology)
+  );
+}
+
+function normalizeDocumentLanguage(value: unknown): DocumentLanguage {
+  return value === "en" || value === "both" || value === "other" ? value : "es";
+}
+
+function normalizePublicAttachmentDocument(
+  value: unknown,
+  locale: Locale,
+  fallbackTitleMap: Map<string, string>
+): PublicAttachmentItem | null {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+
+  const rawId = record._id;
+  const documentId =
+    typeof rawId === "string"
+      ? rawId.trim()
+      : rawId && typeof rawId === "object" && "toString" in rawId
+        ? String(rawId).trim()
+        : "";
+
+  if (!documentId) return null;
+
+  const localizedTitle = normalizeLocalizedText(record.title);
+  const fileUrl = normalizeString(record.fileUrl);
+
+  if (!fileUrl) return null;
+
+  return {
+    documentId,
+    title:
+      getLocalizedText(localizedTitle, locale) ||
+      fallbackTitleMap.get(documentId) ||
+      "",
+    type: normalizeString(record.type) || "file",
+    language: normalizeDocumentLanguage(record.language),
+    fileUrl,
+  };
+}
+
+function getDocumentLanguageLabel(
+  value: DocumentLanguage,
+  locale: Locale
+): string {
+  if (locale === "es") {
+    switch (value) {
+      case "es":
+        return "ES";
+      case "en":
+        return "EN";
+      case "both":
+        return "ES / EN";
+      case "other":
+        return "OTRO";
+      default:
+        return "ES";
+    }
+  }
+
+  switch (value) {
+    case "es":
+      return "ES";
+    case "en":
+      return "EN";
+    case "both":
+      return "ES / EN";
+    case "other":
+      return "OTHER";
+    default:
+      return "ES";
+  }
+}
+
+function formatCategoryLabel(value: string): string {
+  return value
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function isExternalUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url.trim());
+}
+
+function renderNotFound(text: {
+  notFoundTitle: string;
+  notFoundText: string;
+  back: string;
+}) {
+  return (
+    <main className="min-h-screen bg-white px-6 py-16 text-slate-900 md:px-10">
+      <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center">
+        <h1 className="text-2xl font-semibold text-slate-950 md:text-3xl">
+          {text.notFoundTitle}
+        </h1>
+
+        <p className="mt-4 text-base leading-7 text-slate-600">
+          {text.notFoundText}
+        </p>
+
+        <div className="mt-8">
+          <Link
+            href="/services"
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {text.back}
+          </Link>
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -270,6 +419,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
     application: locale === "es" ? "Aplicación" : "Application",
     technology: locale === "es" ? "Tecnología" : "Technology",
     document: locale === "es" ? "Documento" : "Document",
+    viewDocument: locale === "es" ? "Ver documento" : "View document",
     finalTitle:
       locale === "es"
         ? "¿Necesitas este servicio para tu proyecto?"
@@ -282,29 +432,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   };
 
   if (!slug) {
-    return (
-      <main className="min-h-screen bg-white px-6 py-16 text-slate-900 md:px-10">
-        <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center">
-          <h1 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-            {text.notFoundTitle}
-          </h1>
-
-          <p className="mt-4 text-base leading-7 text-slate-600">
-            {text.notFoundText}
-          </p>
-
-          <div className="mt-8">
-            <Link
-              href="/services"
-              className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              {text.back}
-            </Link>
-          </div>
-        </div>
-      </main>
-    );
+    return renderNotFound(text);
   }
 
   await connectToDB();
@@ -317,34 +445,13 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   const service = rawService ? normalizeService(rawService) : null;
 
   if (!service) {
-    return (
-      <main className="min-h-screen bg-white px-6 py-16 text-slate-900 md:px-10">
-        <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center">
-          <h1 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-            {text.notFoundTitle}
-          </h1>
-
-          <p className="mt-4 text-base leading-7 text-slate-600">
-            {text.notFoundText}
-          </p>
-
-          <div className="mt-8">
-            <Link
-              href="/services"
-              className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              {text.back}
-            </Link>
-          </div>
-        </div>
-      </main>
-    );
+    return renderNotFound(text);
   }
 
   const title = getLocalizedText(service.title, locale);
   const summary = getLocalizedText(service.summary, locale);
   const description = getLocalizedText(service.description, locale);
+  const hasDescription = description.trim().length > 0;
   const hasSpecs = hasTechnicalSpecs(service.technicalSpecs);
 
   const specItems: SpecItem[] = [
@@ -375,10 +482,52 @@ export default async function ServiceDetailPage({ params }: PageProps) {
     },
   ].filter((item) => item.value.trim().length > 0);
 
+  const validAttachments = service.attachments.filter((item) =>
+    Types.ObjectId.isValid(item.documentId)
+  );
+
+  const fallbackTitleMap = new Map<string, string>(
+    service.attachments.map((item) => [item.documentId, item.title])
+  );
+
+  const publicDocumentsRaw =
+    validAttachments.length > 0
+      ? await Document.find({
+          _id: {
+            $in: validAttachments.map(
+              (item) => new Types.ObjectId(item.documentId)
+            ),
+          },
+          status: "published",
+          visibility: "public",
+        })
+          .select({
+            _id: 1,
+            title: 1,
+            type: 1,
+            language: 1,
+            fileUrl: 1,
+          })
+          .lean()
+      : [];
+
+  const publicDocumentsMap = new Map<string, PublicAttachmentItem>(
+    publicDocumentsRaw
+      .map((doc) =>
+        normalizePublicAttachmentDocument(doc, locale, fallbackTitleMap)
+      )
+      .filter((item): item is PublicAttachmentItem => item !== null)
+      .map((item) => [item.documentId, item])
+  );
+
+  const publicAttachments = validAttachments
+    .map((item) => publicDocumentsMap.get(item.documentId))
+    .filter((item): item is PublicAttachmentItem => Boolean(item));
+
   return (
     <main className="min-h-screen bg-white text-slate-900">
       <section className="border-b border-slate-200 bg-gradient-to-br from-white via-slate-50 to-lime-50/70">
-        <div className="mx-auto max-w-6xl px-6 pt-28 pb-14 md:px-10 md:pt-32 lg:pt-36 lg:pb-18">
+        <div className="mx-auto max-w-6xl px-6 pb-14 pt-28 md:px-10 md:pt-32 lg:pt-36">
           <div className="max-w-4xl">
             <Link
               href="/services"
@@ -388,12 +537,14 @@ export default async function ServiceDetailPage({ params }: PageProps) {
               {text.back}
             </Link>
 
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-700">
-              {service.category || "Sierra Tech"}
-            </p>
+            {service.category ? (
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-700">
+                {formatCategoryLabel(service.category)}
+              </p>
+            ) : null}
 
             <h1 className="mt-4 text-4xl font-semibold leading-tight text-slate-950 md:text-5xl">
-              {title}
+              {title || service.slug}
             </h1>
 
             {summary ? (
@@ -422,17 +573,19 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      <section className="mx-auto max-w-4xl px-6 py-14 md:px-10">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm md:p-10">
-          <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-            {text.descriptionTitle}
-          </h2>
+      {hasDescription ? (
+        <section className="mx-auto max-w-4xl px-6 py-14 md:px-10">
+          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm md:p-10">
+            <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
+              {text.descriptionTitle}
+            </h2>
 
-          <p className="mt-6 whitespace-pre-line text-base leading-8 text-slate-700">
-            {description}
-          </p>
-        </div>
-      </section>
+            <p className="mt-6 whitespace-pre-line text-base leading-8 text-slate-700">
+              {description}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {hasSpecs ? (
         <section className="mx-auto max-w-6xl px-6 pb-14 md:px-10">
@@ -459,7 +612,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {service.gallery.length ? (
+      {service.gallery.length > 0 ? (
         <section className="mx-auto max-w-6xl px-6 pb-14 md:px-10">
           <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
             {text.galleryTitle}
@@ -472,17 +625,33 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                 className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
               >
                 <div className="relative aspect-[16/11] bg-slate-100">
-                  <Image
-                    src={item.url}
-                    alt={
-                      getLocalizedText(item.alt, locale) ||
-                      title ||
-                      "Gallery image"
-                    }
-                    fill
-                    sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                    className="object-cover"
-                  />
+                  {isExternalUrl(item.url) ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.url}
+                        alt={
+                          getLocalizedText(item.alt, locale) ||
+                          title ||
+                          "Gallery image"
+                        }
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </>
+                  ) : (
+                    <Image
+                      src={item.url}
+                      alt={
+                        getLocalizedText(item.alt, locale) ||
+                        title ||
+                        "Gallery image"
+                      }
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                      className="object-cover"
+                    />
+                  )}
                 </div>
               </article>
             ))}
@@ -490,32 +659,46 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {service.attachments.length ? (
+      {publicAttachments.length > 0 ? (
         <section className="mx-auto max-w-4xl px-6 pb-16 md:px-10">
           <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
             {text.attachmentsTitle}
           </h2>
 
           <div className="mt-8 space-y-4">
-            {service.attachments.map((attachment, index) => (
-              <div
-                key={`${attachment.documentId || "attachment"}-${index}`}
-                className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+            {publicAttachments.map((attachment, index) => (
+              <a
+                key={`${attachment.documentId}-${index}`}
+                href={attachment.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-lime-300 hover:bg-lime-50/30"
               >
-                <div className="flex items-center gap-4">
+                <div className="flex min-w-0 items-center gap-4">
                   <div className="rounded-2xl bg-slate-900 p-3 text-lime-400">
                     <FileText className="h-5 w-5" />
                   </div>
 
-                  <p className="text-base font-semibold text-slate-900">
-                    {attachment.title || text.document}
-                  </p>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold text-slate-900">
+                      {attachment.title || text.document}
+                    </p>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+                      <span>{attachment.type || "file"}</span>
+                      <span>•</span>
+                      <span>
+                        {getDocumentLanguageLabel(attachment.language, locale)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <span className="text-sm font-medium text-slate-400">
-                  {attachment.documentId || "—"}
+                <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800">
+                  {text.viewDocument}
+                  <ExternalLink className="h-4 w-4" />
                 </span>
-              </div>
+              </a>
             ))}
           </div>
         </section>

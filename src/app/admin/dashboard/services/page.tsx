@@ -20,6 +20,8 @@
  *   - Formulario estructurado
  *   - Configuración superior de la página pública /services
  *     desde el mismo módulo Services
+ *   - Asociación de documentos existentes mediante selector reutilizable
+ *   - Gestión visual de galería por servicio
  *
  *   Decisión de estructura:
  *   - La cabecera pública de /services ya no forma parte de cada servicio.
@@ -42,11 +44,17 @@ import {
   Save,
   Star,
   StarOff,
+  ArrowUp,
+  ArrowDown,
+  Image as ImageIcon,
 } from "lucide-react";
 
 import { useTranslation } from "@/hooks/useTranslation";
 import { AdminPageHeader } from "@/components/ui/AdminPageHeader";
 import { useToast } from "@/components/ui/GlobalToastProvider";
+import DocumentAttachmentSelector, {
+  type ServiceAttachmentItem,
+} from "@/components/admin/documents/DocumentAttachmentSelector";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -81,10 +89,7 @@ interface ServiceTechnicalSpecs {
   technology: LocalizedText;
 }
 
-interface ServiceAttachmentRef {
-  documentId: string;
-  title?: string;
-}
+type ServiceAttachmentRef = ServiceAttachmentItem;
 
 /**
  * Cabecera global de la página pública /services.
@@ -252,7 +257,10 @@ function normalizeAttachments(value: unknown): ServiceAttachmentRef[] {
         title: normalizeString(record.title),
       };
     })
-    .filter((item): item is ServiceAttachmentRef => item !== null);
+    .filter(
+      (item): item is ServiceAttachmentRef =>
+        item !== null && item.documentId.trim().length > 0
+    );
 }
 
 function normalizeService(value: unknown): ServicePayload {
@@ -303,6 +311,33 @@ function slugify(value: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function reorderGallery(items: ServiceGalleryItem[]): ServiceGalleryItem[] {
+  return items.map((item, index) => ({
+    ...item,
+    order: index + 1,
+  }));
+}
+
+function moveGalleryItem(
+  items: ServiceGalleryItem[],
+  fromIndex: number,
+  toIndex: number
+): ServiceGalleryItem[] {
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= items.length ||
+    toIndex >= items.length
+  ) {
+    return items;
+  }
+
+  const clone = [...items];
+  const [moved] = clone.splice(fromIndex, 1);
+  clone.splice(toIndex, 0, moved);
+  return reorderGallery(clone);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -449,18 +484,6 @@ export default function ServicesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ServicePayload>(SERVICE_DEFAULTS);
 
-  /**
-   * --------------------------------------------------------------------------
-   * Header global de la página pública /services
-   * --------------------------------------------------------------------------
-   * ES:
-   *   Estado independiente del CRUD de servicios.
-   *   No pertenece a ningún servicio individual.
-   *
-   * EN:
-   *   Global state for the public /services page header.
-   * --------------------------------------------------------------------------
-   */
   const [servicesHeader, setServicesHeader] = useState<ServicePageHeader>(
     structuredClone(EMPTY_PAGE_HEADER)
   );
@@ -525,7 +548,9 @@ export default function ServicesPage() {
             subtitle: normalizeLocalizedText(safeHeader.subtitle),
             primaryCtaLabel: normalizeLocalizedText(safeHeader.primaryCtaLabel),
             primaryCtaHref: normalizeString(safeHeader.primaryCtaHref),
-            secondaryCtaLabel: normalizeLocalizedText(safeHeader.secondaryCtaLabel),
+            secondaryCtaLabel: normalizeLocalizedText(
+              safeHeader.secondaryCtaLabel
+            ),
             secondaryCtaHref: normalizeString(safeHeader.secondaryCtaHref),
           });
         } else {
@@ -572,6 +597,8 @@ export default function ServicesPage() {
     setForm({
       ...structuredClone(SERVICE_DEFAULTS),
       order: nextOrder,
+      attachments: [],
+      gallery: [],
     });
     setModalOpen(true);
   }
@@ -631,6 +658,24 @@ export default function ServicesPage() {
       const payload: ServicePayload = {
         ...form,
         slug: slugify(form.slug || form.title.es || form.title.en),
+        gallery: reorderGallery(
+          form.gallery
+            .filter((item) => item.url.trim().length > 0)
+            .map((item) => ({
+              url: item.url.trim(),
+              alt: {
+                es: item.alt.es.trim(),
+                en: item.alt.en.trim(),
+              },
+              order: item.order,
+            }))
+        ),
+        attachments: form.attachments
+          .filter((item) => item.documentId.trim().length > 0)
+          .map((item) => ({
+            documentId: item.documentId.trim(),
+            title: item.title.trim(),
+          })),
       };
 
       const isEditing = Boolean(editingId);
@@ -755,6 +800,71 @@ export default function ServicesPage() {
         ...prev[field],
         [localeKey]: value,
       },
+    }));
+  }
+
+  function addGalleryItem(): void {
+    setForm((prev) => ({
+      ...prev,
+      gallery: [
+        ...prev.gallery,
+        {
+          url: "",
+          alt: { es: "", en: "" },
+          order: prev.gallery.length + 1,
+        },
+      ],
+    }));
+  }
+
+  function removeGalleryItem(index: number): void {
+    setForm((prev) => ({
+      ...prev,
+      gallery: reorderGallery(prev.gallery.filter((_, i) => i !== index)),
+    }));
+  }
+
+  function moveGalleryUp(index: number): void {
+    setForm((prev) => ({
+      ...prev,
+      gallery: moveGalleryItem(prev.gallery, index, index - 1),
+    }));
+  }
+
+  function moveGalleryDown(index: number): void {
+    setForm((prev) => ({
+      ...prev,
+      gallery: moveGalleryItem(prev.gallery, index, index + 1),
+    }));
+  }
+
+  function updateGalleryUrl(index: number, value: string): void {
+    setForm((prev) => ({
+      ...prev,
+      gallery: prev.gallery.map((item, i) =>
+        i === index ? { ...item, url: value } : item
+      ),
+    }));
+  }
+
+  function updateGalleryAlt(
+    index: number,
+    localeKey: Locale,
+    value: string
+  ): void {
+    setForm((prev) => ({
+      ...prev,
+      gallery: prev.gallery.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              alt: {
+                ...item.alt,
+                [localeKey]: value,
+              },
+            }
+          : item
+      ),
     }));
   }
 
@@ -1200,7 +1310,9 @@ export default function ServicesPage() {
                   className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
                 >
                   <option value="">
-                    {lang === "es" ? "Selecciona una categoría" : "Select category"}
+                    {lang === "es"
+                      ? "Selecciona una categoría"
+                      : "Select category"}
                   </option>
                   {SERVICE_CATEGORIES.map((category) => (
                     <option key={category} value={category}>
@@ -1323,7 +1435,132 @@ export default function ServicesPage() {
           </SectionCard>
 
           <SectionCard
-            title={lang === "es" ? "Especificaciones técnicas" : "Technical specifications"}
+            title={lang === "es" ? "Galería del servicio" : "Service gallery"}
+            subtitle={
+              lang === "es"
+                ? "Agrega imágenes adicionales para el detalle público del servicio."
+                : "Add extra images for the public service detail page."
+            }
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <PrimaryButton type="button" onClick={addGalleryItem}>
+                <Plus size={18} />
+                <span>
+                  {lang === "es" ? "Agregar imagen" : "Add image"}
+                </span>
+              </PrimaryButton>
+            </div>
+
+            {form.gallery.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-background px-4 py-6 text-center text-sm text-text-secondary">
+                {lang === "es"
+                  ? "No hay imágenes en la galería."
+                  : "There are no gallery images."}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {form.gallery.map((item, index) => (
+                  <div
+                    key={`gallery-item-${index}`}
+                    className="rounded-2xl border border-border bg-background p-4"
+                  >
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-surface-soft p-3 text-text-secondary">
+                          <ImageIcon className="h-5 w-5" />
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-text-primary">
+                            {lang === "es"
+                              ? `Imagen ${index + 1}`
+                              : `Image ${index + 1}`}
+                          </p>
+                          <p className="text-xs text-text-secondary">
+                            {lang === "es"
+                              ? `Orden: ${item.order}`
+                              : `Order: ${item.order}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <ActionButton
+                          type="button"
+                          onClick={() => moveGalleryUp(index)}
+                          disabled={index === 0}
+                        >
+                          <ArrowUp size={16} />
+                        </ActionButton>
+
+                        <ActionButton
+                          type="button"
+                          onClick={() => moveGalleryDown(index)}
+                          disabled={index === form.gallery.length - 1}
+                        >
+                          <ArrowDown size={16} />
+                        </ActionButton>
+
+                        <ActionButton
+                          type="button"
+                          onClick={() => removeGalleryItem(index)}
+                          className="hover:border-status-error hover:text-status-error"
+                        >
+                          <Trash2 size={16} />
+                        </ActionButton>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <FieldLabel>
+                          {lang === "es"
+                            ? "URL / ruta de imagen"
+                            : "Image URL / path"}
+                        </FieldLabel>
+                        <TextInput
+                          value={item.url}
+                          onChange={(e) =>
+                            updateGalleryUrl(index, e.target.value)
+                          }
+                          placeholder="/assets/services/example.jpg"
+                        />
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <FieldLabel>Alt ES</FieldLabel>
+                          <TextInput
+                            value={item.alt.es}
+                            onChange={(e) =>
+                              updateGalleryAlt(index, "es", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Alt EN</FieldLabel>
+                          <TextInput
+                            value={item.alt.en}
+                            onChange={(e) =>
+                              updateGalleryAlt(index, "en", e.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title={
+              lang === "es"
+                ? "Especificaciones técnicas"
+                : "Technical specifications"
+            }
             subtitle={
               lang === "es"
                 ? "Información técnica estructurada del servicio."
@@ -1440,6 +1677,28 @@ export default function ServicesPage() {
               </div>
             </div>
           </SectionCard>
+
+          <DocumentAttachmentSelector
+            value={form.attachments}
+            onChange={(nextValue) =>
+              setForm((prev) => ({
+                ...prev,
+                attachments: nextValue,
+              }))
+            }
+            locale={lang}
+            relatedModule="services"
+            title={
+              lang === "es"
+                ? "Documentos relacionados"
+                : "Related documents"
+            }
+            description={
+              lang === "es"
+                ? "Busca documentos existentes en la biblioteca y asígnalos a este servicio."
+                : "Search existing documents in the library and attach them to this service."
+            }
+          />
 
           <SectionCard
             title="SEO"
