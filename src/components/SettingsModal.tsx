@@ -41,9 +41,12 @@ import GlobalButton from "@/components/ui/GlobalButton";
 import GlobalUnsavedChangesConfirm from "@/components/ui/GlobalUnsavedChangesConfirm";
 import { useTranslation } from "@/hooks/useTranslation";
 
+type SettingValueType = "string" | "number" | "boolean";
+
 export interface SettingsModalData {
   key: string;
   value: string | number | boolean;
+  type?: SettingValueType;
   module?: string;
   description?: string;
 }
@@ -57,6 +60,45 @@ interface Props {
   onSubmit: (data: SettingsModalData) => void;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function inferTypeFromValue(
+  value: string | number | boolean
+): SettingValueType {
+  if (typeof value === "boolean") {
+    return "boolean";
+  }
+
+  if (typeof value === "number") {
+    return "number";
+  }
+
+  return "string";
+}
+
+function normalizeType(value: unknown): SettingValueType | null {
+  return value === "string" || value === "number" || value === "boolean"
+    ? value
+    : null;
+}
+
+function cloneModalData(data: SettingsModalData): SettingsModalData {
+  return {
+    key: typeof data.key === "string" ? data.key : "",
+    value:
+      typeof data.value === "string" ||
+      typeof data.value === "number" ||
+      typeof data.value === "boolean"
+        ? data.value
+        : "",
+    type: normalizeType(data.type) ?? inferTypeFromValue(data.value),
+    module: typeof data.module === "string" ? data.module : "",
+    description: typeof data.description === "string" ? data.description : "",
+  };
+}
+
 export default function SettingsModal({
   open,
   editing,
@@ -67,24 +109,28 @@ export default function SettingsModal({
 }: Props) {
   const { locale } = useTranslation();
 
-  /* ---------------------------------------------------------------------------
-   * Stable initial snapshot
-   * ------------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------------ */
+  /* Stable snapshot                                                          */
+  /* ------------------------------------------------------------------------ */
+
   const initialRef = useRef<SettingsModalData | null>(null);
+  const previousOpenRef = useRef<boolean>(false);
 
   const [form, setForm] = useState<SettingsModalData>({
     key: "",
     value: "",
+    type: "string",
     module: "",
     description: "",
   });
 
-  const [type, setType] = useState<"string" | "number" | "boolean">("string");
+  const [type, setType] = useState<SettingValueType>("string");
   const [showUnsaved, setShowUnsaved] = useState(false);
 
-  /* ---------------------------------------------------------------------------
-   * Localized text
-   * ------------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------------ */
+  /* Copy                                                                     */
+  /* ------------------------------------------------------------------------ */
+
   const t = useMemo(
     () => ({
       title: editing
@@ -104,6 +150,10 @@ export default function SettingsModal({
       description: locale === "es" ? "Descripción" : "Description",
       type: locale === "es" ? "Tipo" : "Type",
 
+      stringType: locale === "es" ? "Texto" : "String",
+      numberType: locale === "es" ? "Número" : "Number",
+      booleanType: locale === "es" ? "Booleano" : "Boolean",
+
       booleanTrue: locale === "es" ? "Verdadero" : "True",
       booleanFalse: locale === "es" ? "Falso" : "False",
 
@@ -116,81 +166,128 @@ export default function SettingsModal({
       unsavedConfirm:
         locale === "es" ? "Descartar cambios" : "Discard changes",
     }),
-    [locale, editing]
+    [editing, locale]
   );
 
-  /* ---------------------------------------------------------------------------
-   * Load initial data only when modal opens
-   * ------------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------------ */
+  /* Load initial data only on closed -> open transition                      */
+  /* ------------------------------------------------------------------------ */
+
   useEffect(() => {
-    if (!open) return;
+    const isOpening = open && !previousOpenRef.current;
 
-    initialRef.current = data;
-    setForm(data);
-    setShowUnsaved(false);
+    if (isOpening) {
+      const snapshot = cloneModalData(data);
 
-    if (typeof data.value === "boolean") setType("boolean");
-    else if (typeof data.value === "number") setType("number");
-    else setType("string");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+      initialRef.current = snapshot;
+      setForm(snapshot);
+      setType(snapshot.type ?? inferTypeFromValue(snapshot.value));
+      setShowUnsaved(false);
+    }
 
-  /* ---------------------------------------------------------------------------
-   * Unsaved changes detection
-   * ------------------------------------------------------------------------- */
+    if (!open) {
+      setShowUnsaved(false);
+    }
+
+    previousOpenRef.current = open;
+  }, [open, data]);
+
+  /* ------------------------------------------------------------------------ */
+  /* Unsaved changes detection                                                */
+  /* ------------------------------------------------------------------------ */
+
   const hasChanges = useMemo(() => {
-    if (!initialRef.current) return false;
+    if (!initialRef.current) {
+      return false;
+    }
 
     const initial = initialRef.current;
 
     return (
       form.key !== initial.key ||
       String(form.value) !== String(initial.value) ||
+      type !== (initial.type ?? inferTypeFromValue(initial.value)) ||
       (form.module ?? "") !== (initial.module ?? "") ||
       (form.description ?? "") !== (initial.description ?? "")
     );
-  }, [form]);
+  }, [form, type]);
 
-  /* ---------------------------------------------------------------------------
-   * Value normalization
-   * ------------------------------------------------------------------------- */
-  const normalizeValue = () => {
-    if (type === "number") return Number(form.value);
-    if (type === "boolean") return form.value === "true" || form.value === true;
+  /* ------------------------------------------------------------------------ */
+  /* Validation + normalization                                               */
+  /* ------------------------------------------------------------------------ */
+
+  const normalizedValue = useMemo(() => {
+    if (type === "boolean") {
+      return form.value === true || String(form.value) === "true";
+    }
+
+    if (type === "number") {
+      const parsed = Number(form.value);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    }
+
     return String(form.value);
-  };
+  }, [form.value, type]);
 
-  const isValid = () => form.key.trim() && form.value !== "";
-  const canSave = hasChanges && isValid() && !loading;
+  const isValid = useMemo(() => {
+    const keyIsValid = form.key.trim().length > 0;
 
-  /* ---------------------------------------------------------------------------
-   * Submit
-   * ------------------------------------------------------------------------- */
+    if (!keyIsValid) {
+      return false;
+    }
+
+    if (type === "boolean") {
+      return true;
+    }
+
+    if (type === "number") {
+      return typeof normalizedValue === "number" && Number.isFinite(normalizedValue);
+    }
+
+    return String(form.value).trim().length > 0;
+  }, [form.key, form.value, normalizedValue, type]);
+
+  const canSave = hasChanges && isValid && !loading;
+
+  /* ------------------------------------------------------------------------ */
+  /* Submit                                                                   */
+  /* ------------------------------------------------------------------------ */
+
   const handleSave = () => {
-    if (!canSave) return;
+    if (!canSave) {
+      return;
+    }
 
     onSubmit({
-      ...form,
-      value: normalizeValue(),
+      key: form.key.trim(),
+      value: normalizedValue,
+      type,
+      module: (form.module ?? "").trim(),
+      description: (form.description ?? "").trim(),
     });
   };
 
-  /* ---------------------------------------------------------------------------
-   * Close handling
-   * ------------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------------ */
+  /* Close handling                                                           */
+  /* ------------------------------------------------------------------------ */
+
   const requestClose = () => {
-    if (loading) return;
+    if (loading) {
+      return;
+    }
 
     if (hasChanges) {
       setShowUnsaved(true);
       return;
     }
+
     onClose();
   };
 
-  /* ---------------------------------------------------------------------------
-   * Render
-   * ------------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                   */
+  /* ------------------------------------------------------------------------ */
+
   return (
     <>
       <GlobalModal
@@ -225,7 +322,6 @@ export default function SettingsModal({
         }
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {/* Key */}
           <div>
             <label
               htmlFor="settings-key"
@@ -238,11 +334,12 @@ export default function SettingsModal({
               disabled={editing}
               className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary disabled:cursor-not-allowed disabled:opacity-60"
               value={form.key}
-              onChange={(e) => setForm({ ...form, key: e.target.value })}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, key: event.target.value }))
+              }
             />
           </div>
 
-          {/* Type */}
           <div>
             <label
               htmlFor="settings-type"
@@ -256,17 +353,16 @@ export default function SettingsModal({
               disabled={editing}
               className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary disabled:cursor-not-allowed disabled:opacity-60"
               value={type}
-              onChange={(e) =>
-                setType(e.target.value as "string" | "number" | "boolean")
+              onChange={(event) =>
+                setType(event.target.value as SettingValueType)
               }
             >
-              <option value="string">String</option>
-              <option value="number">Number</option>
-              <option value="boolean">Boolean</option>
+              <option value="string">{t.stringType}</option>
+              <option value="number">{t.numberType}</option>
+              <option value="boolean">{t.booleanType}</option>
             </select>
           </div>
 
-          {/* Value */}
           <div className="md:col-span-2">
             <label
               htmlFor="settings-value"
@@ -279,8 +375,10 @@ export default function SettingsModal({
               <select
                 id="settings-value"
                 className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
-                value={String(form.value)}
-                onChange={(e) => setForm({ ...form, value: e.target.value })}
+                value={String(form.value === true || String(form.value) === "true")}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, value: event.target.value }))
+                }
               >
                 <option value="true">{t.booleanTrue}</option>
                 <option value="false">{t.booleanFalse}</option>
@@ -288,14 +386,17 @@ export default function SettingsModal({
             ) : (
               <input
                 id="settings-value"
+                type={type === "number" ? "number" : "text"}
+                inputMode={type === "number" ? "decimal" : "text"}
                 className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
                 value={String(form.value)}
-                onChange={(e) => setForm({ ...form, value: e.target.value })}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, value: event.target.value }))
+                }
               />
             )}
           </div>
 
-          {/* Module */}
           <div>
             <label
               htmlFor="settings-module"
@@ -307,11 +408,12 @@ export default function SettingsModal({
               id="settings-module"
               className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
               value={form.module ?? ""}
-              onChange={(e) => setForm({ ...form, module: e.target.value })}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, module: event.target.value }))
+              }
             />
           </div>
 
-          {/* Description */}
           <div>
             <label
               htmlFor="settings-description"
@@ -323,8 +425,11 @@ export default function SettingsModal({
               id="settings-description"
               className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
               value={form.description ?? ""}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
               }
             />
           </div>

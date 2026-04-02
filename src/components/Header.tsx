@@ -5,12 +5,43 @@
  * 📌 Component: Header — Public Main Navigation
  * Path: src/components/Header.tsx
  * =============================================================================
+ *
+ * ES:
+ * Navegación principal pública del sitio.
+ *
+ * Responsabilidades:
+ * - Cargar branding dinámico desde /api/site-settings.
+ * - Mostrar navegación bilingüe estable.
+ * - Mantener acciones de autenticación.
+ * - Permitir cambio de idioma persistente.
+ * - Resolver correctamente navegación mixta:
+ *   - Rutas públicas normales.
+ *   - Scroll hacia secciones internas del home.
+ * - Reflejar visualmente el estado activo del menú.
+ * - Resolver el CTA global con la misma lógica robusta del menú.
+ *
+ * Contrato actual:
+ * - Inicio     -> /
+ * - Nosotros   -> #about
+ * - Servicios  -> /services
+ * - Proyectos  -> /projects
+ * - Blog       -> /blog
+ * - Contacto   -> /contact
+ *
+ * Reglas:
+ * - Sin hardcode innecesario de branding.
+ * - SiteSettings es la fuente de verdad para branding y CTA global.
+ * - No consumir contenido editorial desde HomeSettings.
+ *
+ * EN:
+ * Public main navigation component.
+ * =============================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 
 import { useTranslation } from "@/hooks/useTranslation";
@@ -34,6 +65,7 @@ type HeaderNavItem = {
   key: string;
   href: string;
   label: string;
+  isSectionLink?: boolean;
 };
 
 interface LocalizedText {
@@ -161,12 +193,62 @@ function hasLocalizedText(value: LocalizedText | null | undefined): boolean {
   return value.es.trim().length > 0 || value.en.trim().length > 0;
 }
 
+/**
+ * Hace scroll manual hacia una sección con reintentos.
+ */
+function scrollToSection(sectionId: string, attempts = 12): void {
+  const safeId = sectionId.replace(/^#/, "");
+
+  const tryScroll = (remaining: number) => {
+    const element = document.getElementById(safeId);
+
+    if (element) {
+      const headerOffset = 96;
+      const top =
+        element.getBoundingClientRect().top + window.scrollY - headerOffset;
+
+      window.scrollTo({
+        top: Math.max(top, 0),
+        behavior: "smooth",
+      });
+      return;
+    }
+
+    if (remaining <= 0) return;
+
+    window.setTimeout(() => {
+      tryScroll(remaining - 1);
+    }, 120);
+  };
+
+  tryScroll(attempts);
+}
+
+function getNavItemBaseClasses(isActive: boolean): string {
+  return [
+    "text-sm font-medium transition",
+    isActive
+      ? "text-brand-primaryStrong"
+      : "text-text-secondary hover:text-brand-primaryStrong",
+  ].join(" ");
+}
+
+function getMobileNavItemBaseClasses(isActive: boolean): string {
+  return [
+    "rounded-xl px-3 py-3 text-left text-sm font-medium transition",
+    isActive
+      ? "bg-surface-soft text-brand-primaryStrong"
+      : "text-text-secondary hover:bg-surface-soft hover:text-brand-primaryStrong",
+  ].join(" ");
+}
+
 /* -------------------------------------------------------------------------- */
 /* Component                                                                  */
 /* -------------------------------------------------------------------------- */
 
 export default function Header() {
   const router = useRouter();
+  const pathname = usePathname();
   const { locale, setLocale } = useTranslation();
   const { data: session, status } = useSession();
 
@@ -176,6 +258,7 @@ export default function Header() {
   const [siteSettings, setSiteSettings] = useState<HeaderSiteSettings>(
     HEADER_SITE_SETTINGS_DEFAULTS
   );
+  const [currentHash, setCurrentHash] = useState("");
 
   useEffect(() => {
     async function loadSiteSettings() {
@@ -200,10 +283,27 @@ export default function Header() {
     void loadSiteSettings();
   }, []);
 
-  const lang = locale === "es" ? "es" : "en";
+  useEffect(() => {
+    const syncHash = () => {
+      setCurrentHash(window.location.hash || "");
+    };
+
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+
+    return () => {
+      window.removeEventListener("hashchange", syncHash);
+    };
+  }, [pathname]);
+
+  const lang = locale === "en" ? "en" : "es";
   const isAuthenticated = status === "authenticated" && !!session?.user;
 
-  const businessName = siteSettings.identity.siteName.trim() || "Sierra Tech";
+  const businessName =
+    siteSettings.identity.siteName.trim() ||
+    siteSettings.identity.siteNameShort.trim() ||
+    "Sierra Tech";
+
   const businessLogotipo = normalizeImageSrc(siteSettings.identity.logoLight);
   const firstName = session?.user?.name?.trim()?.split(" ")[0] || "User";
 
@@ -216,8 +316,9 @@ export default function Header() {
       },
       {
         key: "about",
-        href: "/about",
+        href: "#about",
         label: lang === "es" ? "Nosotros" : "About us",
+        isSectionLink: true,
       },
       {
         key: "services",
@@ -264,6 +365,7 @@ export default function Header() {
 
   const showGlobalCta = siteSettings.globalPrimaryCta.enabled;
   const globalCtaHref = siteSettings.globalPrimaryCta.href.trim() || "/contact";
+  const globalCtaIsSectionLink = globalCtaHref.startsWith("#");
 
   useEffect(() => {
     if (isMenuOpen) {
@@ -304,6 +406,58 @@ export default function Header() {
     setLocale(safeLocale);
     router.refresh();
   };
+
+  const handleSectionNavigation = useCallback(
+    (sectionHref: string) => {
+      closeMobileMenu();
+
+      if (pathname === "/") {
+        if (window.location.hash !== sectionHref) {
+          window.history.pushState(null, "", sectionHref);
+          setCurrentHash(sectionHref);
+        }
+
+        scrollToSection(sectionHref);
+        return;
+      }
+
+      window.location.href = `/${sectionHref}`;
+    },
+    [pathname]
+  );
+
+  const handleGlobalCtaNavigation = useCallback(() => {
+    closeMobileMenu();
+
+    if (!globalCtaIsSectionLink) return;
+
+    if (pathname === "/") {
+      if (window.location.hash !== globalCtaHref) {
+        window.history.pushState(null, "", globalCtaHref);
+        setCurrentHash(globalCtaHref);
+      }
+
+      scrollToSection(globalCtaHref);
+      return;
+    }
+
+    window.location.href = `/${globalCtaHref}`;
+  }, [globalCtaHref, globalCtaIsSectionLink, pathname]);
+
+  const isNavItemActive = useCallback(
+    (item: HeaderNavItem): boolean => {
+      if (item.isSectionLink) {
+        return pathname === "/" && currentHash === item.href;
+      }
+
+      if (item.href === "/") {
+        return pathname === "/" && (currentHash === "" || currentHash === "#home");
+      }
+
+      return pathname === item.href;
+    },
+    [currentHash, pathname]
+  );
 
   return (
     <>
@@ -348,25 +502,50 @@ export default function Header() {
           </div>
 
           <nav className="hidden items-center justify-center gap-7 md:flex">
-            {navItems.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="text-sm font-medium text-text-secondary transition hover:text-brand-primaryStrong"
-              >
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = isNavItemActive(item);
+
+              return item.isSectionLink ? (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleSectionNavigation(item.href)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={getNavItemBaseClasses(isActive)}
+                >
+                  {item.label}
+                </button>
+              ) : (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={getNavItemBaseClasses(isActive)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="flex items-center justify-end gap-2 md:gap-3">
             {showGlobalCta ? (
-              <Link
-                href={globalCtaHref}
-                className="hidden rounded-full bg-brand-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white md:inline-flex"
-              >
-                {authText.quote}
-              </Link>
+              globalCtaIsSectionLink ? (
+                <button
+                  type="button"
+                  onClick={handleGlobalCtaNavigation}
+                  className="hidden rounded-full bg-brand-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white md:inline-flex"
+                >
+                  {authText.quote}
+                </button>
+              ) : (
+                <Link
+                  href={globalCtaHref}
+                  className="hidden rounded-full bg-brand-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white md:inline-flex"
+                >
+                  {authText.quote}
+                </Link>
+              )
             ) : null}
 
             {isAuthenticated ? (
@@ -489,25 +668,50 @@ export default function Header() {
         {isMenuOpen ? (
           <div className="border-t border-border bg-surface px-4 py-4 md:hidden">
             <nav className="flex flex-col gap-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  onClick={closeMobileMenu}
-                  className="rounded-xl px-3 py-3 text-sm font-medium text-text-secondary transition hover:bg-surface-soft hover:text-brand-primaryStrong"
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const isActive = isNavItemActive(item);
+
+                return item.isSectionLink ? (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleSectionNavigation(item.href)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={getMobileNavItemBaseClasses(isActive)}
+                  >
+                    {item.label}
+                  </button>
+                ) : (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    onClick={closeMobileMenu}
+                    aria-current={isActive ? "page" : undefined}
+                    className={getMobileNavItemBaseClasses(isActive)}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
 
               {showGlobalCta ? (
-                <Link
-                  href={globalCtaHref}
-                  onClick={closeMobileMenu}
-                  className="rounded-xl bg-brand-primary px-3 py-3 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white"
-                >
-                  {authText.quote}
-                </Link>
+                globalCtaIsSectionLink ? (
+                  <button
+                    type="button"
+                    onClick={handleGlobalCtaNavigation}
+                    className="rounded-xl bg-brand-primary px-3 py-3 text-left text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white"
+                  >
+                    {authText.quote}
+                  </button>
+                ) : (
+                  <Link
+                    href={globalCtaHref}
+                    onClick={closeMobileMenu}
+                    className="rounded-xl bg-brand-primary px-3 py-3 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white"
+                  >
+                    {authText.quote}
+                  </Link>
+                )
               ) : null}
 
               {!isAuthenticated ? (

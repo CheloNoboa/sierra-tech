@@ -7,25 +7,28 @@
  * =============================================================================
  *
  * ES:
- *   Página administrativa para gestionar la biblioteca de documentos.
+ *   Página administrativa para gestionar la biblioteca documental del sistema.
  *
- *   Objetivo:
- *   - Listar documentos administrables
- *   - Filtrar por estado y visibilidad
- *   - Buscar por texto
- *   - Preparar base estable para crear, editar y eliminar documentos
+ *   Responsabilidades:
+ *   - Consultar documentos desde el endpoint administrativo.
+ *   - Renderizar listado estable con búsqueda y filtros.
+ *   - Normalizar respuestas del backend de forma defensiva.
+ *   - Mostrar estados de carga, error y vacío sin romper la UI.
+ *   - Preparar una base sólida para acciones posteriores:
+ *     crear, editar, abrir archivo y eliminar.
  *
- *   Alcance de esta versión:
- *   - GET de documentos
- *   - render administrativo inicial
- *   - estructura lista para conectar modales y formularios
+ *   Decisiones de implementación:
+ *   - La carga inicial y los refetch por filtros usan el mismo flujo.
+ *   - Se evita doble ejecución inicial innecesaria.
+ *   - Se cancela la petición anterior cuando cambia el criterio de búsqueda.
+ *   - La UI no depende de que todos los campos del backend vengan perfectos.
  *
  * EN:
- *   Administrative page for managing the documents library.
+ *   Administrative page for managing the system document library.
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -37,6 +40,7 @@ import {
   Globe,
   Lock,
   Shield,
+  ExternalLink,
 } from "lucide-react";
 
 /* -------------------------------------------------------------------------- */
@@ -47,6 +51,8 @@ type Locale = "es" | "en";
 type DocumentVisibility = "public" | "private" | "internal";
 type DocumentStatus = "draft" | "published" | "archived";
 type DocumentLanguage = "es" | "en" | "both" | "other";
+type StatusFilter = "all" | DocumentStatus;
+type VisibilityFilter = "all" | DocumentVisibility;
 
 interface LocalizedText {
   es: string;
@@ -74,13 +80,13 @@ interface AdminDocument {
   uploadedAt: string;
   updatedBy: string;
   updatedByEmail: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface DocumentsApiResponse {
   ok: boolean;
-  data?: AdminDocument[];
+  data?: unknown;
   message?: string;
 }
 
@@ -113,18 +119,33 @@ function normalizeLocalizedText(value: unknown): LocalizedText {
   };
 }
 
+function normalizeDocumentLanguage(value: unknown): DocumentLanguage {
+  return value === "en" || value === "both" || value === "other" ? value : "es";
+}
+
+function normalizeDocumentVisibility(value: unknown): DocumentVisibility {
+  return value === "private" || value === "internal" ? value : "public";
+}
+
+function normalizeDocumentStatus(value: unknown): DocumentStatus {
+  return value === "draft" || value === "archived" ? value : "published";
+}
+
 function normalizeDocument(value: unknown): AdminDocument {
   const record =
     value && typeof value === "object"
       ? (value as Record<string, unknown>)
       : {};
 
+  const rawId = record._id;
+  const rawRelatedEntityId = record.relatedEntityId;
+
   return {
     _id:
-      typeof record._id === "string"
-        ? record._id
-        : record._id && typeof record._id === "object" && "toString" in record._id
-          ? String(record._id)
+      typeof rawId === "string"
+        ? rawId
+        : rawId && typeof rawId === "object" && "toString" in rawId
+          ? String(rawId)
           : "",
     title: normalizeLocalizedText(record.title),
     description: normalizeLocalizedText(record.description),
@@ -134,28 +155,17 @@ function normalizeDocument(value: unknown): AdminDocument {
     mimeType: normalizeString(record.mimeType),
     fileSizeBytes: Math.max(0, normalizeNumber(record.fileSizeBytes, 0)),
     thumbnailUrl: normalizeString(record.thumbnailUrl),
-    language:
-      record.language === "en" ||
-      record.language === "both" ||
-      record.language === "other"
-        ? record.language
-        : "es",
+    language: normalizeDocumentLanguage(record.language),
     category: normalizeString(record.category, "general"),
     relatedModule: normalizeString(record.relatedModule, "general"),
     relatedEntityId:
-      typeof record.relatedEntityId === "string"
-        ? record.relatedEntityId
-        : record.relatedEntityId && typeof record.relatedEntityId === "object"
-          ? String(record.relatedEntityId)
+      typeof rawRelatedEntityId === "string"
+        ? rawRelatedEntityId
+        : rawRelatedEntityId && typeof rawRelatedEntityId === "object"
+          ? String(rawRelatedEntityId)
           : null,
-    visibility:
-      record.visibility === "private" || record.visibility === "internal"
-        ? record.visibility
-        : "public",
-    status:
-      record.status === "draft" || record.status === "archived"
-        ? record.status
-        : "published",
+    visibility: normalizeDocumentVisibility(record.visibility),
+    status: normalizeDocumentStatus(record.status),
     order: Math.max(1, Math.floor(normalizeNumber(record.order, 1))),
     featured: normalizeBoolean(record.featured, false),
     uploadedAt: normalizeString(record.uploadedAt),
@@ -167,21 +177,31 @@ function normalizeDocument(value: unknown): AdminDocument {
 }
 
 function normalizeDocuments(value: unknown): AdminDocument[] {
-  if (!Array.isArray(value)) return [];
-  return value.map(normalizeDocument);
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(normalizeDocument)
+    .filter((document) => Boolean(document._id || document.fileUrl || document.fileName));
 }
 
-function getLocalizedTitle(title: LocalizedText, locale: Locale): string {
+function getLocalizedText(value: LocalizedText, locale: Locale): string {
   return locale === "es"
-    ? title.es || title.en || ""
-    : title.en || title.es || "";
+    ? value.es || value.en || ""
+    : value.en || value.es || "";
 }
 
 function formatDate(value: string, locale: Locale): string {
-  if (!value) return "—";
+  if (!value) {
+    return "—";
+  }
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
 
   return new Intl.DateTimeFormat(locale === "es" ? "es-EC" : "en-US", {
     year: "numeric",
@@ -191,10 +211,23 @@ function formatDate(value: string, locale: Locale): string {
 }
 
 function formatFileSize(bytes: number): string {
-  if (!bytes || bytes <= 0) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (!bytes || bytes <= 0) {
+    return "—";
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
 function getVisibilityMeta(
@@ -207,16 +240,54 @@ function getVisibilityMeta(
         label: locale === "es" ? "Privado" : "Private",
         icon: Lock,
       };
+
     case "internal":
       return {
         label: locale === "es" ? "Interno" : "Internal",
         icon: Shield,
       };
+
     default:
       return {
         label: locale === "es" ? "Público" : "Public",
         icon: Globe,
       };
+  }
+}
+
+function getStatusLabel(status: DocumentStatus, locale: Locale): string {
+  if (status === "draft") {
+    return locale === "es" ? "Borrador" : "Draft";
+  }
+
+  if (status === "archived") {
+    return locale === "es" ? "Archivado" : "Archived";
+  }
+
+  return locale === "es" ? "Publicado" : "Published";
+}
+
+function getLanguageLabel(language: DocumentLanguage, locale: Locale): string {
+  switch (language) {
+    case "en":
+      return "EN";
+    case "both":
+      return locale === "es" ? "ES / EN" : "EN / ES";
+    case "other":
+      return locale === "es" ? "Otro" : "Other";
+    default:
+      return "ES";
+  }
+}
+
+function getStatusBadgeClass(status: DocumentStatus): string {
+  switch (status) {
+    case "draft":
+      return "bg-amber-100 text-amber-700";
+    case "archived":
+      return "bg-slate-200 text-slate-700";
+    default:
+      return "bg-emerald-100 text-emerald-700";
   }
 }
 
@@ -233,12 +304,11 @@ export default function AdminDocumentsPage() {
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const [query, setQuery] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | DocumentStatus
-  >("all");
-  const [visibilityFilter, setVisibilityFilter] = useState<
-    "all" | DocumentVisibility
-  >("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [visibilityFilter, setVisibilityFilter] =
+    useState<VisibilityFilter>("all");
+
+  const initialLoadDoneRef = useRef<boolean>(false);
 
   /* ------------------------------------------------------------------------ */
   /* Copy                                                                     */
@@ -267,17 +337,19 @@ export default function AdminDocumentsPage() {
 
       allVisibility:
         locale === "es" ? "Todas las visibilidades" : "All visibilities",
+      visibilityPublic: locale === "es" ? "Público" : "Public",
+      visibilityPrivate: locale === "es" ? "Privado" : "Private",
+      visibilityInternal: locale === "es" ? "Interno" : "Internal",
 
       emptyTitle:
-        locale === "es"
-          ? "No hay documentos"
-          : "No documents available",
+        locale === "es" ? "No hay documentos" : "No documents available",
       emptyText:
         locale === "es"
           ? "Cuando agregues documentos, aparecerán aquí."
           : "Once you add documents, they will appear here.",
 
-      loading: locale === "es" ? "Cargando documentos..." : "Loading documents...",
+      loading:
+        locale === "es" ? "Cargando documentos..." : "Loading documents...",
       errorTitle:
         locale === "es"
           ? "No fue posible cargar los documentos"
@@ -288,7 +360,6 @@ export default function AdminDocumentsPage() {
       colModule: locale === "es" ? "Módulo" : "Module",
       colVisibility: locale === "es" ? "Visibilidad" : "Visibility",
       colStatus: locale === "es" ? "Estado" : "Status",
-      colSize: locale === "es" ? "Tamaño" : "Size",
       colDate: locale === "es" ? "Fecha" : "Date",
       colActions: locale === "es" ? "Acciones" : "Actions",
 
@@ -296,6 +367,8 @@ export default function AdminDocumentsPage() {
       remove: locale === "es" ? "Eliminar" : "Delete",
       openFile: locale === "es" ? "Abrir archivo" : "Open file",
       untitled: locale === "es" ? "Sin título" : "Untitled",
+      general: locale === "es" ? "general" : "general",
+      noFile: locale === "es" ? "Sin archivo" : "No file",
     };
   }, [locale]);
 
@@ -303,75 +376,101 @@ export default function AdminDocumentsPage() {
   /* Data load                                                                */
   /* ------------------------------------------------------------------------ */
 
-  const loadDocuments = async (mode: "initial" | "refresh" = "initial") => {
-    try {
-      if (mode === "initial") {
-        setLoading(true);
-      } else {
-        setRefreshing(true);
-      }
+  useEffect(() => {
+    const controller = new AbortController();
+    const isInitialLoad = !initialLoadDoneRef.current;
 
-      setErrorMessage("");
+    const run = async () => {
+      try {
+        if (isInitialLoad) {
+          setLoading(true);
+        } else {
+          setRefreshing(true);
+        }
 
-      const searchParams = new URLSearchParams();
+        setErrorMessage("");
 
-      if (query.trim()) searchParams.set("q", query.trim());
-      if (statusFilter !== "all") searchParams.set("status", statusFilter);
-      if (visibilityFilter !== "all") {
-        searchParams.set("visibility", visibilityFilter);
-      }
+        const searchParams = new URLSearchParams();
 
-      const response = await fetch(
-        `/api/admin/documents?${searchParams.toString()}`,
-        {
+        if (query.trim()) {
+          searchParams.set("q", query.trim());
+        }
+
+        if (statusFilter !== "all") {
+          searchParams.set("status", statusFilter);
+        }
+
+        if (visibilityFilter !== "all") {
+          searchParams.set("visibility", visibilityFilter);
+        }
+
+        const queryString = searchParams.toString();
+        const endpoint = queryString
+          ? `/api/admin/documents?${queryString}`
+          : "/api/admin/documents";
+
+        const response = await fetch(endpoint, {
           method: "GET",
           cache: "no-store",
+          signal: controller.signal,
+        });
+
+        const json: DocumentsApiResponse = await response.json().catch(() => ({
+          ok: false,
+          data: [],
+          message:
+            locale === "es"
+              ? "Respuesta inválida del servidor"
+              : "Invalid server response",
+        }));
+
+        if (!response.ok || !json.ok) {
+          throw new Error(
+            json.message ||
+              (locale === "es"
+                ? "No fue posible cargar los documentos"
+                : "Unable to load documents")
+          );
         }
-      );
 
-      const json: DocumentsApiResponse = await response.json().catch(() => ({
-        ok: false,
-        data: [],
-      }));
+        setDocuments(normalizeDocuments(json.data));
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
 
-      if (!response.ok || !json.ok) {
-        throw new Error(json.message || "Error loading documents");
+        console.error("[AdminDocumentsPage] loadDocuments error:", error);
+
+        setDocuments([]);
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : locale === "es"
+              ? "Error inesperado al cargar documentos"
+              : "Unexpected error loading documents"
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          initialLoadDoneRef.current = true;
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
+    };
 
-      setDocuments(normalizeDocuments(json.data));
-    } catch (error) {
-      console.error("[AdminDocumentsPage] loadDocuments error:", error);
+    const timeoutId = window.setTimeout(run, isInitialLoad ? 0 : 250);
 
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : locale === "es"
-            ? "Error inesperado al cargar documentos"
-            : "Unexpected error loading documents"
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadDocuments("initial");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [locale, query, statusFilter, visibilityFilter]);
 
   /* ------------------------------------------------------------------------ */
-  /* Filters                                                                  */
+  /* Manual refresh                                                           */
   /* ------------------------------------------------------------------------ */
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      void loadDocuments("refresh");
-    }, 250);
-
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, statusFilter, visibilityFilter]);
+  const refreshKey = `${query}|${statusFilter}|${visibilityFilter}`;
 
   /* ------------------------------------------------------------------------ */
   /* Render states                                                            */
@@ -390,7 +489,7 @@ export default function AdminDocumentsPage() {
               {Array.from({ length: 6 }).map((_, index) => (
                 <div
                   key={`documents-skeleton-${index}`}
-                  className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-100 p-4 md:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr]"
+                  className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-100 p-4 md:grid-cols-[2.4fr_1fr_1fr_1fr_1fr_140px]"
                 >
                   <div className="h-6 animate-pulse rounded bg-slate-200" />
                   <div className="h-6 animate-pulse rounded bg-slate-200" />
@@ -412,9 +511,6 @@ export default function AdminDocumentsPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 md:px-8">
       <div className="mx-auto max-w-7xl">
-        {/* ------------------------------------------------------------------ */}
-        {/* Header                                                             */}
-        {/* ------------------------------------------------------------------ */}
         <section className="mb-8">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -439,8 +535,20 @@ export default function AdminDocumentsPage() {
 
             <div className="flex flex-wrap gap-3">
               <button
+                key={refreshKey}
                 type="button"
-                onClick={() => void loadDocuments("refresh")}
+                onClick={() => {
+                  initialLoadDoneRef.current = true;
+                  setRefreshing(true);
+
+                  const nextQuery = query.trim();
+                  const nextStatus = statusFilter;
+                  const nextVisibility = visibilityFilter;
+
+                  setQuery(nextQuery);
+                  setStatusFilter(nextStatus);
+                  setVisibilityFilter(nextVisibility);
+                }}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
               >
                 <RefreshCw
@@ -460,16 +568,13 @@ export default function AdminDocumentsPage() {
           </div>
         </section>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Filters                                                            */}
-        {/* ------------------------------------------------------------------ */}
         <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="grid gap-4 lg:grid-cols-[minmax(280px,1.4fr)_220px_220px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(event) => setQuery(event.target.value)}
                 placeholder={copy.searchPlaceholder}
                 className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-lime-500"
               />
@@ -477,8 +582,8 @@ export default function AdminDocumentsPage() {
 
             <select
               value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as "all" | DocumentStatus)
+              onChange={(event) =>
+                setStatusFilter(event.target.value as StatusFilter)
               }
               className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
             >
@@ -490,24 +595,19 @@ export default function AdminDocumentsPage() {
 
             <select
               value={visibilityFilter}
-              onChange={(e) =>
-                setVisibilityFilter(
-                  e.target.value as "all" | DocumentVisibility
-                )
+              onChange={(event) =>
+                setVisibilityFilter(event.target.value as VisibilityFilter)
               }
               className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
             >
               <option value="all">{copy.allVisibility}</option>
-              <option value="public">Público</option>
-              <option value="private">Privado</option>
-              <option value="internal">Interno</option>
+              <option value="public">{copy.visibilityPublic}</option>
+              <option value="private">{copy.visibilityPrivate}</option>
+              <option value="internal">{copy.visibilityInternal}</option>
             </select>
           </div>
         </section>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Error                                                              */}
-        {/* ------------------------------------------------------------------ */}
         {errorMessage ? (
           <section className="mb-6 rounded-3xl border border-red-200 bg-red-50 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-red-700">
@@ -519,9 +619,6 @@ export default function AdminDocumentsPage() {
           </section>
         ) : null}
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Empty                                                              */}
-        {/* ------------------------------------------------------------------ */}
         {!errorMessage && documents.length === 0 ? (
           <section className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-lime-400">
@@ -548,12 +645,9 @@ export default function AdminDocumentsPage() {
           </section>
         ) : null}
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Table                                                              */}
-        {/* ------------------------------------------------------------------ */}
         {!errorMessage && documents.length > 0 ? (
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className="hidden border-b border-slate-200 bg-slate-50 px-6 py-4 md:grid md:grid-cols-[2.4fr_1fr_1fr_1fr_1fr_1fr_140px] md:gap-4">
+            <div className="hidden border-b border-slate-200 bg-slate-50 px-6 py-4 md:grid md:grid-cols-[2.4fr_1fr_1fr_1fr_1fr_140px] md:gap-4">
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {copy.colTitle}
               </div>
@@ -569,9 +663,6 @@ export default function AdminDocumentsPage() {
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {copy.colStatus}
               </div>
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {copy.colDate}
-              </div>
               <div className="text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {copy.colActions}
               </div>
@@ -580,11 +671,13 @@ export default function AdminDocumentsPage() {
             <div className="divide-y divide-slate-100">
               {documents.map((document) => {
                 const title =
-                  getLocalizedTitle(document.title, locale) || copy.untitled;
+                  getLocalizedText(document.title, locale) || copy.untitled;
+
                 const visibilityMeta = getVisibilityMeta(
                   document.visibility,
                   locale
                 );
+
                 const VisibilityIcon = visibilityMeta.icon;
 
                 return (
@@ -592,7 +685,7 @@ export default function AdminDocumentsPage() {
                     key={document._id || `${document.fileUrl}-${document.order}`}
                     className="px-6 py-5"
                   >
-                    <div className="grid gap-4 md:grid-cols-[2.4fr_1fr_1fr_1fr_1fr_1fr_140px] md:items-center">
+                    <div className="grid gap-4 md:grid-cols-[2.4fr_1fr_1fr_1fr_1fr_140px] md:items-center">
                       <div>
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 rounded-2xl bg-slate-900 p-2.5 text-lime-400">
@@ -605,7 +698,7 @@ export default function AdminDocumentsPage() {
                             </p>
 
                             <p className="mt-1 truncate text-xs text-slate-500">
-                              {document.fileName || document.fileUrl || "—"}
+                              {document.fileName || document.fileUrl || copy.noFile}
                             </p>
 
                             <div className="mt-2 flex flex-wrap gap-2">
@@ -616,11 +709,22 @@ export default function AdminDocumentsPage() {
                               ) : null}
 
                               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                                {document.category || "general"}
+                                {document.category || copy.general}
                               </span>
 
                               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                                {document.language}
+                                {getLanguageLabel(document.language, locale)}
+                              </span>
+
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 md:hidden">
+                                {formatFileSize(document.fileSizeBytes)}
+                              </span>
+
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 md:hidden">
+                                {formatDate(
+                                  document.uploadedAt || document.createdAt || document.updatedAt,
+                                  locale
+                                )}
                               </span>
                             </div>
                           </div>
@@ -632,7 +736,7 @@ export default function AdminDocumentsPage() {
                       </div>
 
                       <div className="text-sm text-slate-700">
-                        {document.relatedModule || "general"}
+                        {document.relatedModule || copy.general}
                       </div>
 
                       <div>
@@ -643,13 +747,11 @@ export default function AdminDocumentsPage() {
                       </div>
 
                       <div>
-                        <span className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
-                          {document.status}
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-medium ${getStatusBadgeClass(document.status)}`}
+                        >
+                          {getStatusLabel(document.status, locale)}
                         </span>
-                      </div>
-
-                      <div className="text-sm text-slate-700">
-                        {formatDate(document.uploadedAt, locale)}
                       </div>
 
                       <div className="flex items-center justify-end gap-2">
@@ -663,15 +765,22 @@ export default function AdminDocumentsPage() {
 
                         <button
                           type="button"
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                           title={copy.openFile}
+                          disabled={!document.fileUrl}
                           onClick={() => {
-                            if (document.fileUrl) {
-                              window.open(document.fileUrl, "_blank", "noopener,noreferrer");
+                            if (!document.fileUrl) {
+                              return;
                             }
+
+                            window.open(
+                              document.fileUrl,
+                              "_blank",
+                              "noopener,noreferrer"
+                            );
                           }}
                         >
-                          <FileText className="h-4 w-4" />
+                          <ExternalLink className="h-4 w-4" />
                         </button>
 
                         <button
@@ -685,8 +794,13 @@ export default function AdminDocumentsPage() {
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500 md:hidden">
-                      <span>{copy.colSize}: {formatFileSize(document.fileSizeBytes)}</span>
-                      <span>{copy.colDate}: {formatDate(document.uploadedAt, locale)}</span>
+                      <span>
+                        {copy.colDate}:{" "}
+                        {formatDate(
+                          document.uploadedAt || document.createdAt || document.updatedAt,
+                          locale
+                        )}
+                      </span>
                     </div>
                   </article>
                 );

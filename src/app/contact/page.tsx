@@ -24,7 +24,7 @@
  * =============================================================================
  */
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -249,10 +249,10 @@ function validateForm(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Page                                                                       */
+/* Client content                                                             */
 /* -------------------------------------------------------------------------- */
 
-export default function ContactPage() {
+function ContactPageContent() {
   const searchParams = useSearchParams();
   const { locale } = useTranslation();
 
@@ -608,5 +608,17 @@ export default function ContactPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page wrapper                                                               */
+/* -------------------------------------------------------------------------- */
+
+export default function ContactPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-white" />}>
+      <ContactPageContent />
+    </Suspense>
   );
 }

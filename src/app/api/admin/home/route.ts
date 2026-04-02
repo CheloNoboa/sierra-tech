@@ -20,6 +20,10 @@
  *   - GET garantiza existencia de documento global.
  *   - PUT normaliza estructura y persiste el payload completo.
  *   - La respuesta siempre mantiene contrato estable para la UI admin.
+ *   - El botón de ubicación del bloque de cobertura se controla mediante una
+ *     bandera explícita independiente del mapa embebido.
+ *   - Los bloques institucionales adicionales del Home también se administran
+ *     desde esta misma entidad global.
  *
  * EN:
  *   Administrative endpoint for reading and updating the structured public
@@ -59,6 +63,11 @@ interface HomeFeaturedCard {
   enabled: boolean;
 }
 
+interface WhyChooseUsItem {
+  title: LocalizedText;
+  description: LocalizedText;
+}
+
 interface HomePayload {
   hero: {
     badge: {
@@ -84,6 +93,29 @@ interface HomePayload {
     description: LocalizedText;
     note: LocalizedText;
     openMapsLabel: LocalizedText;
+    showOpenMapsLink: boolean;
+    enabled: boolean;
+  };
+
+  aboutSection: {
+    eyebrow: LocalizedText;
+    title: LocalizedText;
+    description: LocalizedText;
+    highlights: LocalizedText[];
+    enabled: boolean;
+  };
+
+  leadershipSection: {
+    name: string;
+    role: LocalizedText;
+    message: LocalizedText;
+    imageUrl: string;
+    enabled: boolean;
+  };
+
+  whyChooseUs: {
+    title: LocalizedText;
+    items: WhyChooseUsItem[];
     enabled: boolean;
   };
 
@@ -141,6 +173,29 @@ const HOME_DEFAULTS: HomePayload = {
     description: { es: "", en: "" },
     note: { es: "", en: "" },
     openMapsLabel: { es: "", en: "" },
+    showOpenMapsLink: false,
+    enabled: true,
+  },
+
+  aboutSection: {
+    eyebrow: { es: "", en: "" },
+    title: { es: "", en: "" },
+    description: { es: "", en: "" },
+    highlights: [],
+    enabled: true,
+  },
+
+  leadershipSection: {
+    name: "",
+    role: { es: "", en: "" },
+    message: { es: "", en: "" },
+    imageUrl: "",
+    enabled: true,
+  },
+
+  whyChooseUs: {
+    title: { es: "", en: "" },
+    items: [],
     enabled: true,
   },
 
@@ -193,6 +248,17 @@ function normalizeLocalizedText(value: unknown): LocalizedText {
     es: normalizeString(record.es),
     en: normalizeString(record.en),
   };
+}
+
+function normalizeLocalizedTextArray(value: unknown): LocalizedText[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): LocalizedText | null => {
+      if (!item || typeof item !== "object") return null;
+      return normalizeLocalizedText(item);
+    })
+    .filter((item): item is LocalizedText => item !== null);
 }
 
 function normalizeCta(value: unknown, fallbackEnabled = true): HomeCta {
@@ -248,6 +314,23 @@ function normalizeFeaturedCards(value: unknown): HomeFeaturedCard[] {
   return normalized;
 }
 
+function normalizeWhyChooseUsItems(value: unknown): WhyChooseUsItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): WhyChooseUsItem | null => {
+      if (!item || typeof item !== "object") return null;
+
+      const record = item as Record<string, unknown>;
+
+      return {
+        title: normalizeLocalizedText(record.title),
+        description: normalizeLocalizedText(record.description),
+      };
+    })
+    .filter((item): item is WhyChooseUsItem => item !== null);
+}
+
 function normalizeHomePayload(value: unknown): HomePayload {
   if (!value || typeof value !== "object") {
     return structuredClone(HOME_DEFAULTS);
@@ -261,6 +344,12 @@ function normalizeHomePayload(value: unknown): HomePayload {
     string,
     unknown
   >;
+  const aboutSection = (record.aboutSection ?? {}) as Record<string, unknown>;
+  const leadershipSection = (record.leadershipSection ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const whyChooseUs = (record.whyChooseUs ?? {}) as Record<string, unknown>;
   const mapSection = (record.mapSection ?? {}) as Record<string, unknown>;
 
   return {
@@ -294,9 +383,44 @@ function normalizeHomePayload(value: unknown): HomePayload {
       description: normalizeLocalizedText(coverageSection.description),
       note: normalizeLocalizedText(coverageSection.note),
       openMapsLabel: normalizeLocalizedText(coverageSection.openMapsLabel),
+      showOpenMapsLink: normalizeBoolean(
+        coverageSection.showOpenMapsLink,
+        HOME_DEFAULTS.coverageSection.showOpenMapsLink
+      ),
       enabled: normalizeBoolean(
         coverageSection.enabled,
         HOME_DEFAULTS.coverageSection.enabled
+      ),
+    },
+
+    aboutSection: {
+      eyebrow: normalizeLocalizedText(aboutSection.eyebrow),
+      title: normalizeLocalizedText(aboutSection.title),
+      description: normalizeLocalizedText(aboutSection.description),
+      highlights: normalizeLocalizedTextArray(aboutSection.highlights),
+      enabled: normalizeBoolean(
+        aboutSection.enabled,
+        HOME_DEFAULTS.aboutSection.enabled
+      ),
+    },
+
+    leadershipSection: {
+      name: normalizeString(leadershipSection.name),
+      role: normalizeLocalizedText(leadershipSection.role),
+      message: normalizeLocalizedText(leadershipSection.message),
+      imageUrl: normalizeString(leadershipSection.imageUrl),
+      enabled: normalizeBoolean(
+        leadershipSection.enabled,
+        HOME_DEFAULTS.leadershipSection.enabled
+      ),
+    },
+
+    whyChooseUs: {
+      title: normalizeLocalizedText(whyChooseUs.title),
+      items: normalizeWhyChooseUsItems(whyChooseUs.items),
+      enabled: normalizeBoolean(
+        whyChooseUs.enabled,
+        HOME_DEFAULTS.whyChooseUs.enabled
       ),
     },
 
@@ -332,16 +456,21 @@ function normalizeHomePayload(value: unknown): HomePayload {
   };
 }
 
-function toResponsePayload(doc: {
-  hero?: unknown;
-  highlightPanel?: unknown;
-  featuredCards?: unknown;
-  coverageSection?: unknown;
-  mapSection?: unknown;
-  updatedAt?: Date | string;
-  updatedBy?: string;
-  updatedByEmail?: string;
-} | null): HomePayload {
+function toResponsePayload(
+  doc: {
+    hero?: unknown;
+    highlightPanel?: unknown;
+    featuredCards?: unknown;
+    coverageSection?: unknown;
+    aboutSection?: unknown;
+    leadershipSection?: unknown;
+    whyChooseUs?: unknown;
+    mapSection?: unknown;
+    updatedAt?: Date | string;
+    updatedBy?: string;
+    updatedByEmail?: string;
+  } | null
+): HomePayload {
   if (!doc) return structuredClone(HOME_DEFAULTS);
 
   return normalizeHomePayload({
@@ -349,6 +478,9 @@ function toResponsePayload(doc: {
     highlightPanel: doc.highlightPanel,
     featuredCards: doc.featuredCards,
     coverageSection: doc.coverageSection,
+    aboutSection: doc.aboutSection,
+    leadershipSection: doc.leadershipSection,
+    whyChooseUs: doc.whyChooseUs,
     mapSection: doc.mapSection,
     updatedBy: doc.updatedBy ?? "",
     updatedByEmail: doc.updatedByEmail ?? "",
@@ -414,6 +546,9 @@ export async function GET() {
         highlightPanel: HOME_DEFAULTS.highlightPanel,
         featuredCards: HOME_DEFAULTS.featuredCards,
         coverageSection: HOME_DEFAULTS.coverageSection,
+        aboutSection: HOME_DEFAULTS.aboutSection,
+        leadershipSection: HOME_DEFAULTS.leadershipSection,
+        whyChooseUs: HOME_DEFAULTS.whyChooseUs,
         mapSection: HOME_DEFAULTS.mapSection,
         updatedBy: "",
         updatedByEmail: "",
@@ -455,6 +590,9 @@ export async function PUT(request: Request) {
       highlightPanel: normalized.highlightPanel,
       featuredCards: normalized.featuredCards,
       coverageSection: normalized.coverageSection,
+      aboutSection: normalized.aboutSection,
+      leadershipSection: normalized.leadershipSection,
+      whyChooseUs: normalized.whyChooseUs,
       mapSection: normalized.mapSection,
       updatedBy: guard.userName,
       updatedByEmail: guard.userEmail,

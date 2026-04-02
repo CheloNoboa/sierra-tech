@@ -77,13 +77,6 @@ interface ServiceClassDTO {
   order: number;
 }
 
-interface ServiceClassesResponse {
-  ok?: boolean;
-  message?: string;
-  items?: ServiceClassDTO[];
-  data?: ServiceClassDTO[];
-}
-
 interface ServiceClassItemResponse {
   ok?: boolean;
   message?: string;

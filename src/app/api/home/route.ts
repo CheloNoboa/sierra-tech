@@ -17,6 +17,8 @@
  *   - No usar textos demo como contenido real.
  *   - Si no existe configuración, devuelve estructura vacía estable.
  *   - No modifica datos.
+ *   - La visibilidad del botón de ubicación se expone como bandera explícita.
+ *   - Los bloques institucionales adicionales se exponen con contrato estable.
  *
  * EN:
  *   Public endpoint used to expose visible home-page content.
@@ -50,6 +52,11 @@ interface HomeFeaturedCard {
   enabled: boolean;
 }
 
+interface WhyChooseUsItem {
+  title: LocalizedText;
+  description: LocalizedText;
+}
+
 interface HomePayload {
   hero: {
     badge: {
@@ -72,6 +79,26 @@ interface HomePayload {
     description: LocalizedText;
     note: LocalizedText;
     openMapsLabel: LocalizedText;
+    showOpenMapsLink: boolean;
+    enabled: boolean;
+  };
+  aboutSection: {
+    eyebrow: LocalizedText;
+    title: LocalizedText;
+    description: LocalizedText;
+    highlights: LocalizedText[];
+    enabled: boolean;
+  };
+  leadershipSection: {
+    name: string;
+    role: LocalizedText;
+    message: LocalizedText;
+    imageUrl: string;
+    enabled: boolean;
+  };
+  whyChooseUs: {
+    title: LocalizedText;
+    items: WhyChooseUsItem[];
     enabled: boolean;
   };
   mapSection: {
@@ -117,6 +144,26 @@ const EMPTY_HOME_PAYLOAD: HomePayload = {
     description: { es: "", en: "" },
     note: { es: "", en: "" },
     openMapsLabel: { es: "", en: "" },
+    showOpenMapsLink: false,
+    enabled: false,
+  },
+  aboutSection: {
+    eyebrow: { es: "", en: "" },
+    title: { es: "", en: "" },
+    description: { es: "", en: "" },
+    highlights: [],
+    enabled: false,
+  },
+  leadershipSection: {
+    name: "",
+    role: { es: "", en: "" },
+    message: { es: "", en: "" },
+    imageUrl: "",
+    enabled: false,
+  },
+  whyChooseUs: {
+    title: { es: "", en: "" },
+    items: [],
     enabled: false,
   },
   mapSection: {
@@ -160,6 +207,17 @@ function normalizeLocalizedText(
     es: normalizeString(record.es, fallback.es),
     en: normalizeString(record.en, fallback.en),
   };
+}
+
+function normalizeLocalizedTextArray(value: unknown): LocalizedText[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): LocalizedText | null => {
+      if (!item || typeof item !== "object") return null;
+      return normalizeLocalizedText(item, { es: "", en: "" });
+    })
+    .filter((item): item is LocalizedText => item !== null);
 }
 
 function normalizeCta(value: unknown, fallback: HomeCta): HomeCta {
@@ -206,13 +264,38 @@ function normalizeFeaturedCards(value: unknown): HomeFeaturedCard[] {
     }));
 }
 
-function toPublicPayload(doc: {
-  hero?: unknown;
-  highlightPanel?: unknown;
-  featuredCards?: unknown;
-  coverageSection?: unknown;
-  mapSection?: unknown;
-} | null): HomePayload {
+function normalizeWhyChooseUsItems(value: unknown): WhyChooseUsItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): WhyChooseUsItem | null => {
+      if (!item || typeof item !== "object") return null;
+
+      const record = item as Record<string, unknown>;
+
+      return {
+        title: normalizeLocalizedText(record.title, { es: "", en: "" }),
+        description: normalizeLocalizedText(record.description, {
+          es: "",
+          en: "",
+        }),
+      };
+    })
+    .filter((item): item is WhyChooseUsItem => item !== null);
+}
+
+function toPublicPayload(
+  doc: {
+    hero?: unknown;
+    highlightPanel?: unknown;
+    featuredCards?: unknown;
+    coverageSection?: unknown;
+    aboutSection?: unknown;
+    leadershipSection?: unknown;
+    whyChooseUs?: unknown;
+    mapSection?: unknown;
+  } | null
+): HomePayload {
   if (!doc) return EMPTY_HOME_PAYLOAD;
 
   const hero = (doc.hero ?? {}) as Record<string, unknown>;
@@ -222,6 +305,12 @@ function toPublicPayload(doc: {
     string,
     unknown
   >;
+  const aboutSection = (doc.aboutSection ?? {}) as Record<string, unknown>;
+  const leadershipSection = (doc.leadershipSection ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const whyChooseUs = (doc.whyChooseUs ?? {}) as Record<string, unknown>;
   const mapSection = (doc.mapSection ?? {}) as Record<string, unknown>;
 
   return {
@@ -285,9 +374,68 @@ function toPublicPayload(doc: {
         coverageSection.openMapsLabel,
         EMPTY_HOME_PAYLOAD.coverageSection.openMapsLabel
       ),
+      showOpenMapsLink: normalizeBoolean(
+        coverageSection.showOpenMapsLink,
+        EMPTY_HOME_PAYLOAD.coverageSection.showOpenMapsLink
+      ),
       enabled: normalizeBoolean(
         coverageSection.enabled,
         EMPTY_HOME_PAYLOAD.coverageSection.enabled
+      ),
+    },
+
+    aboutSection: {
+      eyebrow: normalizeLocalizedText(
+        aboutSection.eyebrow,
+        EMPTY_HOME_PAYLOAD.aboutSection.eyebrow
+      ),
+      title: normalizeLocalizedText(
+        aboutSection.title,
+        EMPTY_HOME_PAYLOAD.aboutSection.title
+      ),
+      description: normalizeLocalizedText(
+        aboutSection.description,
+        EMPTY_HOME_PAYLOAD.aboutSection.description
+      ),
+      highlights: normalizeLocalizedTextArray(aboutSection.highlights),
+      enabled: normalizeBoolean(
+        aboutSection.enabled,
+        EMPTY_HOME_PAYLOAD.aboutSection.enabled
+      ),
+    },
+
+    leadershipSection: {
+      name: normalizeString(
+        leadershipSection.name,
+        EMPTY_HOME_PAYLOAD.leadershipSection.name
+      ),
+      role: normalizeLocalizedText(
+        leadershipSection.role,
+        EMPTY_HOME_PAYLOAD.leadershipSection.role
+      ),
+      message: normalizeLocalizedText(
+        leadershipSection.message,
+        EMPTY_HOME_PAYLOAD.leadershipSection.message
+      ),
+      imageUrl: normalizeString(
+        leadershipSection.imageUrl,
+        EMPTY_HOME_PAYLOAD.leadershipSection.imageUrl
+      ),
+      enabled: normalizeBoolean(
+        leadershipSection.enabled,
+        EMPTY_HOME_PAYLOAD.leadershipSection.enabled
+      ),
+    },
+
+    whyChooseUs: {
+      title: normalizeLocalizedText(
+        whyChooseUs.title,
+        EMPTY_HOME_PAYLOAD.whyChooseUs.title
+      ),
+      items: normalizeWhyChooseUsItems(whyChooseUs.items),
+      enabled: normalizeBoolean(
+        whyChooseUs.enabled,
+        EMPTY_HOME_PAYLOAD.whyChooseUs.enabled
       ),
     },
 

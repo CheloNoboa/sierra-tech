@@ -462,7 +462,6 @@ export default function RoleDataGrid() {
 
   useEffect(() => {
     void loadInitial();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

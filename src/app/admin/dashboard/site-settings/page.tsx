@@ -18,6 +18,16 @@
  *   - Bloque 1: Configuración global del sitio (SiteSettings)
  *   - Bloque 2: Contenido de portada (HomeSettings)
  *
+ *   Reglas:
+ *   - El bloque de cobertura, el botón de ubicación y el mapa son controles
+ *     independientes.
+ *   - Los labels del botón de ubicación se conservan aunque el botón esté
+ *     oculto, para permitir reutilización futura sin perder contenido cargado.
+ *   - La geolocalización del navegador solo tiene sentido si el mapa está
+ *     habilitado.
+ *   - Los bloques institucionales del Home deben permanecer completamente
+ *     administrables desde esta pantalla.
+ *
  * EN:
  *   Unified administrative screen for the Sierra Tech public website.
  * =============================================================================
@@ -65,6 +75,11 @@ interface HomeFeaturedCard {
   enabled: boolean;
 }
 
+interface WhyChooseUsItem {
+  title: LocalizedText;
+  description: LocalizedText;
+}
+
 interface HomePayload {
   hero: {
     badge: {
@@ -87,6 +102,26 @@ interface HomePayload {
     description: LocalizedText;
     note: LocalizedText;
     openMapsLabel: LocalizedText;
+    showOpenMapsLink: boolean;
+    enabled: boolean;
+  };
+  aboutSection: {
+    eyebrow: LocalizedText;
+    title: LocalizedText;
+    description: LocalizedText;
+    highlights: LocalizedText[];
+    enabled: boolean;
+  };
+  leadershipSection: {
+    name: string;
+    role: LocalizedText;
+    message: LocalizedText;
+    imageUrl: string;
+    enabled: boolean;
+  };
+  whyChooseUs: {
+    title: LocalizedText;
+    items: WhyChooseUsItem[];
     enabled: boolean;
   };
   mapSection: {
@@ -131,6 +166,26 @@ const HOME_DEFAULTS: HomePayload = {
     description: { es: "", en: "" },
     note: { es: "", en: "" },
     openMapsLabel: { es: "", en: "" },
+    showOpenMapsLink: false,
+    enabled: true,
+  },
+  aboutSection: {
+    eyebrow: { es: "", en: "" },
+    title: { es: "", en: "" },
+    description: { es: "", en: "" },
+    highlights: [],
+    enabled: true,
+  },
+  leadershipSection: {
+    name: "",
+    role: { es: "", en: "" },
+    message: { es: "", en: "" },
+    imageUrl: "",
+    enabled: true,
+  },
+  whyChooseUs: {
+    title: { es: "", en: "" },
+    items: [],
     enabled: true,
   },
   mapSection: {
@@ -178,6 +233,17 @@ function normalizeLocalizedText(
     es: normalizeString(record.es, fallback.es),
     en: normalizeString(record.en, fallback.en),
   };
+}
+
+function normalizeLocalizedTextArray(value: unknown): LocalizedText[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): LocalizedText | null => {
+      if (!item || typeof item !== "object") return null;
+      return normalizeLocalizedText(item);
+    })
+    .filter((item): item is LocalizedText => item !== null);
 }
 
 function normalizeHomeCta(value: unknown, fallbackEnabled = true): HomeCta {
@@ -230,6 +296,23 @@ function normalizeFeaturedCards(value: unknown): HomeFeaturedCard[] {
     }));
 }
 
+function normalizeWhyChooseUsItems(value: unknown): WhyChooseUsItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): WhyChooseUsItem | null => {
+      if (!item || typeof item !== "object") return null;
+
+      const record = item as Record<string, unknown>;
+
+      return {
+        title: normalizeLocalizedText(record.title),
+        description: normalizeLocalizedText(record.description),
+      };
+    })
+    .filter((item): item is WhyChooseUsItem => item !== null);
+}
+
 function normalizeHomePayload(value: unknown): HomePayload {
   if (!value || typeof value !== "object") {
     return structuredClone(HOME_DEFAULTS);
@@ -243,13 +326,22 @@ function normalizeHomePayload(value: unknown): HomePayload {
     string,
     unknown
   >;
+  const aboutSection = (record.aboutSection ?? {}) as Record<string, unknown>;
+  const leadershipSection = (record.leadershipSection ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const whyChooseUs = (record.whyChooseUs ?? {}) as Record<string, unknown>;
   const mapSection = (record.mapSection ?? {}) as Record<string, unknown>;
 
   return {
     hero: {
       badge: {
         text: normalizeLocalizedText(badge.text),
-        enabled: normalizeBoolean(badge.enabled, HOME_DEFAULTS.hero.badge.enabled),
+        enabled: normalizeBoolean(
+          badge.enabled,
+          HOME_DEFAULTS.hero.badge.enabled
+        ),
       },
       title: normalizeLocalizedText(hero.title),
       subtitle: normalizeLocalizedText(hero.subtitle),
@@ -270,9 +362,41 @@ function normalizeHomePayload(value: unknown): HomePayload {
       description: normalizeLocalizedText(coverageSection.description),
       note: normalizeLocalizedText(coverageSection.note),
       openMapsLabel: normalizeLocalizedText(coverageSection.openMapsLabel),
+      showOpenMapsLink: normalizeBoolean(
+        coverageSection.showOpenMapsLink,
+        HOME_DEFAULTS.coverageSection.showOpenMapsLink
+      ),
       enabled: normalizeBoolean(
         coverageSection.enabled,
         HOME_DEFAULTS.coverageSection.enabled
+      ),
+    },
+    aboutSection: {
+      eyebrow: normalizeLocalizedText(aboutSection.eyebrow),
+      title: normalizeLocalizedText(aboutSection.title),
+      description: normalizeLocalizedText(aboutSection.description),
+      highlights: normalizeLocalizedTextArray(aboutSection.highlights),
+      enabled: normalizeBoolean(
+        aboutSection.enabled,
+        HOME_DEFAULTS.aboutSection.enabled
+      ),
+    },
+    leadershipSection: {
+      name: normalizeString(leadershipSection.name),
+      role: normalizeLocalizedText(leadershipSection.role),
+      message: normalizeLocalizedText(leadershipSection.message),
+      imageUrl: normalizeString(leadershipSection.imageUrl),
+      enabled: normalizeBoolean(
+        leadershipSection.enabled,
+        HOME_DEFAULTS.leadershipSection.enabled
+      ),
+    },
+    whyChooseUs: {
+      title: normalizeLocalizedText(whyChooseUs.title),
+      items: normalizeWhyChooseUsItems(whyChooseUs.items),
+      enabled: normalizeBoolean(
+        whyChooseUs.enabled,
+        HOME_DEFAULTS.whyChooseUs.enabled
       ),
     },
     mapSection: {
@@ -387,12 +511,20 @@ function Toggle(props: {
   label: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-text-primary">
+    <label
+      className={`inline-flex items-center gap-3 text-sm ${
+        props.disabled
+          ? "cursor-not-allowed text-text-secondary opacity-60"
+          : "cursor-pointer text-text-primary"
+      }`}
+    >
       <input
         type="checkbox"
         checked={props.checked}
+        disabled={props.disabled}
         onChange={(e) => props.onChange(e.target.checked)}
         className="h-4 w-4 rounded border-border"
       />
@@ -883,7 +1015,8 @@ export default function SiteSettingsPage() {
       },
     }));
   }
-    function updateCoverageSectionField(
+
+  function updateCoverageSectionField(
     field: "eyebrow" | "title" | "description" | "note" | "openMapsLabel",
     localeKey: Locale,
     value: string
@@ -906,6 +1039,210 @@ export default function SiteSettingsPage() {
       coverageSection: {
         ...prev.coverageSection,
         enabled: value,
+      },
+    }));
+  }
+
+  function updateCoverageSectionShowOpenMapsLink(value: boolean): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      coverageSection: {
+        ...prev.coverageSection,
+        showOpenMapsLink: value,
+      },
+    }));
+  }
+
+  function updateAboutSectionField(
+    field: "eyebrow" | "title" | "description",
+    localeKey: Locale,
+    value: string
+  ): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      aboutSection: {
+        ...prev.aboutSection,
+        [field]: {
+          ...prev.aboutSection[field],
+          [localeKey]: value,
+        },
+      },
+    }));
+  }
+
+  function updateAboutSectionEnabled(value: boolean): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      aboutSection: {
+        ...prev.aboutSection,
+        enabled: value,
+      },
+    }));
+  }
+
+  function addAboutHighlight(): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      aboutSection: {
+        ...prev.aboutSection,
+        highlights: [
+          ...prev.aboutSection.highlights,
+          { es: "", en: "" },
+        ],
+      },
+    }));
+  }
+
+  function removeAboutHighlight(index: number): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      aboutSection: {
+        ...prev.aboutSection,
+        highlights: prev.aboutSection.highlights.filter(
+          (_, idx) => idx !== index
+        ),
+      },
+    }));
+  }
+
+  function updateAboutHighlight(
+    index: number,
+    localeKey: Locale,
+    value: string
+  ): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      aboutSection: {
+        ...prev.aboutSection,
+        highlights: prev.aboutSection.highlights.map((item, idx) =>
+          idx === index
+            ? {
+                ...item,
+                [localeKey]: value,
+              }
+            : item
+        ),
+      },
+    }));
+  }
+
+  function updateLeadershipName(value: string): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      leadershipSection: {
+        ...prev.leadershipSection,
+        name: value,
+      },
+    }));
+  }
+
+  function updateLeadershipField(
+    field: "role" | "message",
+    localeKey: Locale,
+    value: string
+  ): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      leadershipSection: {
+        ...prev.leadershipSection,
+        [field]: {
+          ...prev.leadershipSection[field],
+          [localeKey]: value,
+        },
+      },
+    }));
+  }
+
+  function updateLeadershipImageUrl(value: string): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      leadershipSection: {
+        ...prev.leadershipSection,
+        imageUrl: value,
+      },
+    }));
+  }
+
+  function updateLeadershipEnabled(value: boolean): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      leadershipSection: {
+        ...prev.leadershipSection,
+        enabled: value,
+      },
+    }));
+  }
+
+  function updateWhyChooseUsTitle(localeKey: Locale, value: string): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      whyChooseUs: {
+        ...prev.whyChooseUs,
+        title: {
+          ...prev.whyChooseUs.title,
+          [localeKey]: value,
+        },
+      },
+    }));
+  }
+
+  function updateWhyChooseUsEnabled(value: boolean): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      whyChooseUs: {
+        ...prev.whyChooseUs,
+        enabled: value,
+      },
+    }));
+  }
+
+  function addWhyChooseUsItem(): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      whyChooseUs: {
+        ...prev.whyChooseUs,
+        items: [
+          ...prev.whyChooseUs.items,
+          {
+            title: { es: "", en: "" },
+            description: { es: "", en: "" },
+          },
+        ],
+      },
+    }));
+  }
+
+  function removeWhyChooseUsItem(index: number): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      whyChooseUs: {
+        ...prev.whyChooseUs,
+        items: prev.whyChooseUs.items.filter((_, idx) => idx !== index),
+      },
+    }));
+  }
+
+  function updateWhyChooseUsItemField(
+    index: number,
+    field: "title" | "description",
+    localeKey: Locale,
+    value: string
+  ): void {
+    setHomeForm((prev) => ({
+      ...prev,
+      whyChooseUs: {
+        ...prev.whyChooseUs,
+        items: prev.whyChooseUs.items.map((item, idx) =>
+          idx === index
+            ? {
+                ...item,
+                [field]: {
+                  ...item[field],
+                  [localeKey]: value,
+                },
+              }
+            : item
+        ),
       },
     }));
   }
@@ -1676,8 +2013,8 @@ export default function SiteSettingsPage() {
         title={lang === "es" ? "Contenido de portada" : "Homepage content"}
         subtitle={
           lang === "es"
-            ? "Hero principal, destaque, cards, bloque de cobertura y mapa del Home."
-            : "Main hero, highlight panel, cards, coverage block and homepage map."
+            ? "Hero principal, destaque, cards, cobertura, bloques institucionales y mapa del Home."
+            : "Main hero, highlight panel, cards, coverage, institutional blocks and homepage map."
         }
       />
 
@@ -2020,11 +2357,23 @@ export default function SiteSettingsPage() {
             : "Editorial content for the homepage coverage block."
         }
       >
-        <Toggle
-          label={lang === "es" ? "Mostrar bloque" : "Show section"}
-          checked={homeForm.coverageSection.enabled}
-          onChange={updateCoverageSectionEnabled}
-        />
+        <div className="flex flex-wrap gap-6">
+          <Toggle
+            label={lang === "es" ? "Mostrar bloque" : "Show section"}
+            checked={homeForm.coverageSection.enabled}
+            onChange={updateCoverageSectionEnabled}
+          />
+
+          <Toggle
+            label={
+              lang === "es"
+                ? "Mostrar botón de ubicación"
+                : "Show location button"
+            }
+            checked={homeForm.coverageSection.showOpenMapsLink}
+            onChange={updateCoverageSectionShowOpenMapsLink}
+          />
+        </div>
 
         <div className="grid gap-5 md:grid-cols-2">
           <div>
@@ -2114,35 +2463,394 @@ export default function SiteSettingsPage() {
           </div>
         </div>
 
+        {homeForm.coverageSection.showOpenMapsLink ? (
+          <div className="grid gap-5 md:grid-cols-2">
+            <div>
+              <FieldLabel>Open Maps Label ES</FieldLabel>
+              <TextInput
+                value={homeForm.coverageSection.openMapsLabel.es}
+                onChange={(e) =>
+                  updateCoverageSectionField(
+                    "openMapsLabel",
+                    "es",
+                    e.target.value
+                  )
+                }
+              />
+            </div>
+
+            <div>
+              <FieldLabel>Open Maps Label EN</FieldLabel>
+              <TextInput
+                value={homeForm.coverageSection.openMapsLabel.en}
+                onChange={(e) =>
+                  updateCoverageSectionField(
+                    "openMapsLabel",
+                    "en",
+                    e.target.value
+                  )
+                }
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-background px-4 py-4 text-sm text-text-secondary">
+            {lang === "es"
+              ? "El botón de ubicación está oculto. Los labels se conservan internamente para uso futuro."
+              : "The location button is hidden. Labels are preserved internally for future use."}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title={lang === "es" ? "Nosotros" : "About us"}
+        subtitle={
+          lang === "es"
+            ? "Bloque institucional para explicar quiénes son y qué hacen."
+            : "Institutional block to explain who they are and what they do."
+        }
+      >
+        <Toggle
+          label={lang === "es" ? "Mostrar sección" : "Show section"}
+          checked={homeForm.aboutSection.enabled}
+          onChange={updateAboutSectionEnabled}
+        />
+
         <div className="grid gap-5 md:grid-cols-2">
           <div>
-            <FieldLabel>Open Maps Label ES</FieldLabel>
+            <FieldLabel>Eyebrow ES</FieldLabel>
             <TextInput
-              value={homeForm.coverageSection.openMapsLabel.es}
+              value={homeForm.aboutSection.eyebrow.es}
               onChange={(e) =>
-                updateCoverageSectionField(
-                  "openMapsLabel",
-                  "es",
-                  e.target.value
-                )
+                updateAboutSectionField("eyebrow", "es", e.target.value)
               }
             />
           </div>
 
           <div>
-            <FieldLabel>Open Maps Label EN</FieldLabel>
+            <FieldLabel>Eyebrow EN</FieldLabel>
             <TextInput
-              value={homeForm.coverageSection.openMapsLabel.en}
+              value={homeForm.aboutSection.eyebrow.en}
               onChange={(e) =>
-                updateCoverageSectionField(
-                  "openMapsLabel",
-                  "en",
-                  e.target.value
-                )
+                updateAboutSectionField("eyebrow", "en", e.target.value)
               }
             />
           </div>
         </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <FieldLabel>Título ES</FieldLabel>
+            <TextArea
+              value={homeForm.aboutSection.title.es}
+              onChange={(e) =>
+                updateAboutSectionField("title", "es", e.target.value)
+              }
+            />
+          </div>
+
+          <div>
+            <FieldLabel>Title EN</FieldLabel>
+            <TextArea
+              value={homeForm.aboutSection.title.en}
+              onChange={(e) =>
+                updateAboutSectionField("title", "en", e.target.value)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <FieldLabel>Descripción ES</FieldLabel>
+            <TextArea
+              value={homeForm.aboutSection.description.es}
+              onChange={(e) =>
+                updateAboutSectionField("description", "es", e.target.value)
+              }
+            />
+          </div>
+
+          <div>
+            <FieldLabel>Description EN</FieldLabel>
+            <TextArea
+              value={homeForm.aboutSection.description.en}
+              onChange={(e) =>
+                updateAboutSectionField("description", "en", e.target.value)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-start">
+          <ActionButton onClick={addAboutHighlight}>
+            {lang === "es" ? "Agregar highlight" : "Add highlight"}
+          </ActionButton>
+        </div>
+
+        {homeForm.aboutSection.highlights.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-background px-4 py-5 text-sm text-text-secondary">
+            {lang === "es"
+              ? "Aún no hay highlights en Nosotros."
+              : "There are no highlights in About yet."}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {homeForm.aboutSection.highlights.map((item, index) => (
+              <div
+                key={`about-highlight-${index}`}
+                className="rounded-xl border border-border bg-background p-4"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-text-primary">
+                    {lang === "es"
+                      ? `Highlight ${index + 1}`
+                      : `Highlight ${index + 1}`}
+                  </div>
+
+                  <ActionButton onClick={() => removeAboutHighlight(index)}>
+                    {lang === "es" ? "Eliminar" : "Remove"}
+                  </ActionButton>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <FieldLabel>Texto ES</FieldLabel>
+                    <TextArea
+                      value={item.es}
+                      onChange={(e) =>
+                        updateAboutHighlight(index, "es", e.target.value)
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel>Text EN</FieldLabel>
+                    <TextArea
+                      value={item.en}
+                      onChange={(e) =>
+                        updateAboutHighlight(index, "en", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title={lang === "es" ? "Liderazgo / Visión" : "Leadership / Vision"}
+        subtitle={
+          lang === "es"
+            ? "Bloque para presentar liderazgo institucional y mensaje directivo."
+            : "Block to present institutional leadership and executive message."
+        }
+      >
+        <Toggle
+          label={lang === "es" ? "Mostrar sección" : "Show section"}
+          checked={homeForm.leadershipSection.enabled}
+          onChange={updateLeadershipEnabled}
+        />
+
+        <div>
+          <FieldLabel>{lang === "es" ? "Nombre" : "Name"}</FieldLabel>
+          <TextInput
+            value={homeForm.leadershipSection.name}
+            onChange={(e) => updateLeadershipName(e.target.value)}
+          />
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <FieldLabel>{lang === "es" ? "Cargo ES" : "Role ES"}</FieldLabel>
+            <TextInput
+              value={homeForm.leadershipSection.role.es}
+              onChange={(e) =>
+                updateLeadershipField("role", "es", e.target.value)
+              }
+            />
+          </div>
+
+          <div>
+            <FieldLabel>{lang === "es" ? "Cargo EN" : "Role EN"}</FieldLabel>
+            <TextInput
+              value={homeForm.leadershipSection.role.en}
+              onChange={(e) =>
+                updateLeadershipField("role", "en", e.target.value)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <FieldLabel>
+              {lang === "es" ? "Mensaje ES" : "Message ES"}
+            </FieldLabel>
+            <TextArea
+              value={homeForm.leadershipSection.message.es}
+              onChange={(e) =>
+                updateLeadershipField("message", "es", e.target.value)
+              }
+            />
+          </div>
+
+          <div>
+            <FieldLabel>
+              {lang === "es" ? "Mensaje EN" : "Message EN"}
+            </FieldLabel>
+            <TextArea
+              value={homeForm.leadershipSection.message.en}
+              onChange={(e) =>
+                updateLeadershipField("message", "en", e.target.value)
+              }
+            />
+          </div>
+        </div>
+
+        <div>
+          <FieldLabel>
+            {lang === "es" ? "URL de imagen" : "Image URL"}
+          </FieldLabel>
+          <TextInput
+            value={homeForm.leadershipSection.imageUrl}
+            onChange={(e) => updateLeadershipImageUrl(e.target.value)}
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title={lang === "es" ? "Por qué elegirnos" : "Why choose us"}
+        subtitle={
+          lang === "es"
+            ? "Razones estructuradas para reforzar confianza y diferenciación."
+            : "Structured reasons to reinforce trust and differentiation."
+        }
+      >
+        <Toggle
+          label={lang === "es" ? "Mostrar sección" : "Show section"}
+          checked={homeForm.whyChooseUs.enabled}
+          onChange={updateWhyChooseUsEnabled}
+        />
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <FieldLabel>Título ES</FieldLabel>
+            <TextInput
+              value={homeForm.whyChooseUs.title.es}
+              onChange={(e) => updateWhyChooseUsTitle("es", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <FieldLabel>Title EN</FieldLabel>
+            <TextInput
+              value={homeForm.whyChooseUs.title.en}
+              onChange={(e) => updateWhyChooseUsTitle("en", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-start">
+          <ActionButton onClick={addWhyChooseUsItem}>
+            {lang === "es" ? "Agregar razón" : "Add reason"}
+          </ActionButton>
+        </div>
+
+        {homeForm.whyChooseUs.items.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-background px-4 py-5 text-sm text-text-secondary">
+            {lang === "es"
+              ? "Aún no hay razones configuradas."
+              : "There are no configured reasons yet."}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {homeForm.whyChooseUs.items.map((item, index) => (
+              <div
+                key={`why-choose-us-${index}`}
+                className="rounded-xl border border-border bg-background p-4"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-text-primary">
+                    {lang === "es"
+                      ? `Razón ${index + 1}`
+                      : `Reason ${index + 1}`}
+                  </div>
+
+                  <ActionButton onClick={() => removeWhyChooseUsItem(index)}>
+                    {lang === "es" ? "Eliminar" : "Remove"}
+                  </ActionButton>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <FieldLabel>Título ES</FieldLabel>
+                    <TextInput
+                      value={item.title.es}
+                      onChange={(e) =>
+                        updateWhyChooseUsItemField(
+                          index,
+                          "title",
+                          "es",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel>Title EN</FieldLabel>
+                    <TextInput
+                      value={item.title.en}
+                      onChange={(e) =>
+                        updateWhyChooseUsItemField(
+                          index,
+                          "title",
+                          "en",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-5 md:grid-cols-2">
+                  <div>
+                    <FieldLabel>Descripción ES</FieldLabel>
+                    <TextArea
+                      value={item.description.es}
+                      onChange={(e) =>
+                        updateWhyChooseUsItemField(
+                          index,
+                          "description",
+                          "es",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel>Description EN</FieldLabel>
+                    <TextArea
+                      value={item.description.en}
+                      onChange={(e) =>
+                        updateWhyChooseUsItemField(
+                          index,
+                          "description",
+                          "en",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -2167,11 +2875,20 @@ export default function SiteSettingsPage() {
                 : "Use browser geolocation"
             }
             checked={homeForm.mapSection.useBrowserGeolocation}
+            disabled={!homeForm.mapSection.enabled}
             onChange={(value) =>
               updateMapSectionField("useBrowserGeolocation", value)
             }
           />
         </div>
+
+        {!homeForm.mapSection.enabled ? (
+          <div className="rounded-xl border border-dashed border-border bg-background px-4 py-4 text-sm text-text-secondary">
+            {lang === "es"
+              ? "El mapa está oculto. La geolocalización del navegador no tendrá efecto mientras esta sección permanezca desactivada."
+              : "The map is hidden. Browser geolocation will have no effect while this section remains disabled."}
+          </div>
+        ) : null}
 
         <div className="grid gap-5 md:grid-cols-3">
           <div>

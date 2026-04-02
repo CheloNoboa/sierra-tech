@@ -50,25 +50,6 @@ import { getPublicSiteSettings } from "@/lib/siteSettings";
 /* Metadata                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/**
- * ============================================================================
- * generateMetadata
- * ============================================================================
- * ES:
- * - Obtiene SiteSettings desde servidor.
- * - Aplica metadata SEO global del sitio.
- * - Prioriza contenido configurado por admin.
- * - Usa el idioma por defecto configurado en SiteSettings.
- * - Si faltan datos, usa valores seguros por defecto.
- *
- * EN:
- * - Fetches SiteSettings on the server.
- * - Applies global SEO metadata.
- * - Prioritizes admin-configured content.
- * - Uses the default locale configured in SiteSettings.
- * - Falls back to safe defaults when data is missing.
- * ============================================================================
- */
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getPublicSiteSettings();
 
@@ -130,31 +111,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
-        {/* Material Icons */}
         <link
           href="https://fonts.googleapis.com/icon?family=Material+Icons"
           rel="stylesheet"
         />
 
-        {/*
-          Google Maps
-          ----------------------------------------------------------------------
-          ES:
-          - Se mantiene temporalmente aquí porque la base actual ya lo usa.
-          - Más adelante conviene moverlo solo a los módulos que realmente lo
-            necesiten.
-          *
-          EN:
-          - Kept here temporarily because the current base already uses it.
-          - Later it should be moved to the specific modules that actually need it.
-        */}
         <Script
           src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}&libraries=places,marker&v=weekly`}
           strategy="afterInteractive"
         />
       </head>
 
-      <body className="flex min-h-screen flex-col bg-background text-text-primary antialiased">
+      <body className="flex min-h-screen flex-col bg-white text-text-primary antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

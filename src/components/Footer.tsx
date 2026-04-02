@@ -7,26 +7,38 @@
  * =============================================================================
  *
  * ES:
- * - Footer público corporativo del proyecto Sierra Tech.
- * - Consume configuración global únicamente desde /api/site-settings.
- * - Usa SiteSettings como fuente de verdad para branding, contacto,
- *   footer y redes sociales.
- * - Preserva navegación básica, enlaces legales e idioma.
+ * Footer público corporativo del sitio.
+ *
+ * Responsabilidades:
+ * - Consumir branding y contacto desde /api/site-settings.
+ * - Exponer navegación pública coherente con el Header.
+ * - Mostrar enlaces legales configurables.
+ * - Mostrar redes sociales disponibles.
+ * - Permitir cambio de idioma persistente.
+ * - Reflejar visualmente el estado activo de la navegación pública.
+ *
+ * Contrato actual:
+ * - Inicio     -> /
+ * - Nosotros   -> #about
+ * - Servicios  -> /services
+ * - Proyectos  -> /projects
+ * - Blog       -> /blog
+ * - Contacto   -> /contact
  *
  * Reglas:
- * - El Footer no debe leer contenido editorial de HomeSettings.
- * - No usar hooks legacy.
- * - Si la API pública falla, mantener fallback visual seguro.
+ * - El Footer no consume contenido editorial de HomeSettings.
+ * - No usar hardcodes de terceros dentro de la base del componente.
+ * - Si falla la API pública, mantener fallback seguro.
  *
  * EN:
- * - Public corporate footer for the Sierra Tech project.
- * - Reads global settings only from /api/site-settings.
+ * Public footer component.
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
 import { useTranslation } from "@/hooks/useTranslation";
 import { ROUTES } from "@/constants/routes";
@@ -53,6 +65,13 @@ interface LocalizedText {
   es: string;
   en: string;
 }
+
+type FooterNavItem = {
+  key: string;
+  href: string;
+  label: string;
+  isSectionLink?: boolean;
+};
 
 interface FooterSiteSettings {
   identity: {
@@ -215,20 +234,56 @@ function normalizeSiteSettings(payload: unknown): FooterSiteSettings {
   };
 }
 
+function scrollToSection(sectionId: string, attempts = 12): void {
+  const safeId = sectionId.replace(/^#/, "");
+
+  const tryScroll = (remaining: number) => {
+    const element = document.getElementById(safeId);
+
+    if (element) {
+      const headerOffset = 96;
+      const top =
+        element.getBoundingClientRect().top + window.scrollY - headerOffset;
+
+      window.scrollTo({
+        top: Math.max(top, 0),
+        behavior: "smooth",
+      });
+      return;
+    }
+
+    if (remaining <= 0) return;
+
+    window.setTimeout(() => {
+      tryScroll(remaining - 1);
+    }, 120);
+  };
+
+  tryScroll(attempts);
+}
+
+function getFooterNavItemClasses(isActive: boolean): string {
+  return [
+    "transition-colors",
+    isActive
+      ? "text-brand-primaryStrong"
+      : "hover:text-brand-primaryStrong",
+  ].join(" ");
+}
+
 /* -------------------------------------------------------------------------- */
 /* Component                                                                  */
 /* -------------------------------------------------------------------------- */
 
 export default function Footer() {
+  const pathname = usePathname();
+  const router = useRouter();
   const { locale, setLocale } = useTranslation();
 
   const [siteSettings, setSiteSettings] = useState<FooterSiteSettings>(
     FOOTER_SITE_SETTINGS_DEFAULTS
   );
-
-  /* ---------------------------------------------------------------------- */
-  /* Data loading                                                            */
-  /* ---------------------------------------------------------------------- */
+  const [currentHash, setCurrentHash] = useState("");
 
   useEffect(() => {
     async function loadSiteSettings() {
@@ -253,13 +308,25 @@ export default function Footer() {
     void loadSiteSettings();
   }, []);
 
-  /* ---------------------------------------------------------------------- */
-  /* Derived state                                                           */
-  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    const syncHash = () => {
+      setCurrentHash(window.location.hash || "");
+    };
 
-  const lang = locale === "es" ? "es" : "en";
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
 
-  const businessName = siteSettings.identity.siteName.trim() || "Sierra Tech";
+    return () => {
+      window.removeEventListener("hashchange", syncHash);
+    };
+  }, [pathname]);
+
+  const lang = locale === "en" ? "en" : "es";
+
+  const businessName =
+    siteSettings.identity.siteName.trim() ||
+    siteSettings.identity.siteNameShort.trim() ||
+    "Sierra Tech";
 
   const businessLogotipo = useMemo(() => {
     return normalizeImageSrc(siteSettings.identity.logoLight);
@@ -291,13 +358,51 @@ export default function Footer() {
       about: lang === "es" ? "Nosotros" : "About us",
       services: lang === "es" ? "Servicios" : "Services",
       projects: lang === "es" ? "Proyectos" : "Projects",
+      blog: "Blog",
       contact: lang === "es" ? "Contacto" : "Contact",
       privacy: lang === "es" ? "Privacidad" : "Privacy",
       terms: lang === "es" ? "Términos" : "Terms",
       cookies: "Cookies",
-      designedBy: lang === "es" ? "Diseñado por" : "Designed by",
+      language: lang === "es" ? "Idioma" : "Language",
     }),
     [lang]
+  );
+
+  const navItems: FooterNavItem[] = useMemo(
+    () => [
+      {
+        key: "home",
+        href: "/",
+        label: footerText.home,
+      },
+      {
+        key: "about",
+        href: "#about",
+        label: footerText.about,
+        isSectionLink: true,
+      },
+      {
+        key: "services",
+        href: "/services",
+        label: footerText.services,
+      },
+      {
+        key: "projects",
+        href: "/projects",
+        label: footerText.projects,
+      },
+      {
+        key: "blog",
+        href: "/blog",
+        label: footerText.blog,
+      },
+      {
+        key: "contact",
+        href: "/contact",
+        label: footerText.contact,
+      },
+    ],
+    [footerText]
   );
 
   const locationLabel = useMemo(() => {
@@ -313,16 +418,51 @@ export default function Footer() {
   const socialLinks = siteSettings.socialLinks;
   const contact = siteSettings.contact;
 
-  /* ---------------------------------------------------------------------- */
-  /* Render                                                                  */
-  /* ---------------------------------------------------------------------- */
+  const handleLocaleChange = (nextLocale: "es" | "en"): void => {
+    document.cookie = `locale=${nextLocale}; path=/; max-age=31536000; samesite=lax`;
+    document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=31536000; samesite=lax`;
+
+    setLocale(nextLocale);
+    router.refresh();
+  };
+
+  const handleSectionNavigation = useCallback(
+    (sectionHref: string) => {
+      if (pathname === "/") {
+        if (window.location.hash !== sectionHref) {
+          window.history.pushState(null, "", sectionHref);
+          setCurrentHash(sectionHref);
+        }
+
+        scrollToSection(sectionHref);
+        return;
+      }
+
+      window.location.href = `/${sectionHref}`;
+    },
+    [pathname]
+  );
+
+  const isNavItemActive = useCallback(
+    (item: FooterNavItem): boolean => {
+      if (item.isSectionLink) {
+        return pathname === "/" && currentHash === item.href;
+      }
+
+      if (item.href === "/") {
+        return pathname === "/" && (currentHash === "" || currentHash === "#home");
+      }
+
+      return pathname === item.href;
+    },
+    [currentHash, pathname]
+  );
 
   return (
     <footer className="w-full border-t border-border bg-surface py-10 text-sm text-text-secondary">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4">
         {/* TOP */}
         <div className="flex flex-col items-center justify-between gap-6 md:flex-row md:items-start">
-          {/* Brand / summary */}
           <div className="max-w-md text-center md:text-left">
             <div className="flex items-center justify-center gap-3 md:justify-start">
               {businessLogotipo ? (
@@ -370,56 +510,36 @@ export default function Footer() {
             ) : null}
           </div>
 
-          {/* Navigation */}
           <nav className="flex flex-wrap items-center justify-center gap-3 text-center md:justify-end">
-            <a
-              href="#home"
-              className="transition-colors hover:text-brand-primaryStrong"
-            >
-              {footerText.home}
-            </a>
+            {navItems.map((item) => {
+              const isActive = isNavItemActive(item);
 
-            <span className="hidden text-border md:inline">·</span>
-
-            <a
-              href="#about"
-              className="transition-colors hover:text-brand-primaryStrong"
-            >
-              {footerText.about}
-            </a>
-
-            <span className="hidden text-border md:inline">·</span>
-
-            <a
-              href="#services"
-              className="transition-colors hover:text-brand-primaryStrong"
-            >
-              {footerText.services}
-            </a>
-
-            <span className="hidden text-border md:inline">·</span>
-
-            <a
-              href="#projects"
-              className="transition-colors hover:text-brand-primaryStrong"
-            >
-              {footerText.projects}
-            </a>
-
-            <span className="hidden text-border md:inline">·</span>
-
-            <a
-              href="#contact"
-              className="transition-colors hover:text-brand-primaryStrong"
-            >
-              {footerText.contact}
-            </a>
+              return item.isSectionLink ? (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleSectionNavigation(item.href)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={getFooterNavItemClasses(isActive)}
+                >
+                  {item.label}
+                </button>
+              ) : (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={getFooterNavItemClasses(isActive)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
 
         {/* MIDDLE */}
         <div className="flex flex-col items-center justify-between gap-5 border-t border-border pt-6 md:flex-row">
-          {/* Legal */}
           <div className="flex flex-wrap items-center justify-center gap-3">
             {legalLinksEnabled ? (
               <>
@@ -454,11 +574,12 @@ export default function Footer() {
             ) : null}
           </div>
 
-          {/* Language */}
           <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">{footerText.language}</span>
+
             <button
               type="button"
-              onClick={() => setLocale("es")}
+              onClick={() => handleLocaleChange("es")}
               className={`rounded px-3 py-1.5 transition ${
                 locale === "es"
                   ? "bg-brand-primary text-text-primary"
@@ -472,7 +593,7 @@ export default function Footer() {
 
             <button
               type="button"
-              onClick={() => setLocale("en")}
+              onClick={() => handleLocaleChange("en")}
               className={`rounded px-3 py-1.5 transition ${
                 locale === "en"
                   ? "bg-brand-primary text-text-primary"
@@ -490,29 +611,6 @@ export default function Footer() {
             {copyrightText}
           </div>
 
-          <div className="group flex items-center justify-center gap-2 text-xs text-text-muted">
-            <span>{footerText.designedBy}</span>
-
-            <a
-              href="https://futuratech.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 transition"
-            >
-              <Image
-                src="/images/LogoCortoFuturaTech.png"
-                alt="FuturaTech Logo"
-                width={20}
-                height={10}
-                className="opacity-80 transition-transform group-hover:scale-105 group-hover:opacity-100"
-                priority
-              />
-              <span className="font-semibold text-brand-primaryStrong">
-                FuturaTech ©
-              </span>
-            </a>
-          </div>
-
           <div className="flex items-center justify-center gap-4">
             {socialLinks.facebook ? (
               <a
@@ -520,6 +618,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-brand-primaryStrong"
+                aria-label="Facebook"
               >
                 <Facebook size={20} />
               </a>
@@ -531,6 +630,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-brand-primaryStrong"
+                aria-label="Instagram"
               >
                 <Instagram size={20} />
               </a>
@@ -542,6 +642,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-brand-primaryStrong"
+                aria-label="X"
               >
                 <Twitter size={20} />
               </a>
@@ -553,6 +654,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-brand-primaryStrong"
+                aria-label="YouTube"
               >
                 <Youtube size={20} />
               </a>
@@ -564,6 +666,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-brand-primaryStrong"
+                aria-label="LinkedIn"
               >
                 <Linkedin size={20} />
               </a>
