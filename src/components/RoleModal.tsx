@@ -7,42 +7,39 @@
  * =============================================================================
  *
  * ES:
- * - Modal administrativo para crear y editar roles del sistema.
- * - Permite definir:
- *   - código del rol
- *   - nombre en español
- *   - nombre en inglés
- *   - conjunto de permisos asociados
+ * Modal administrativo para crear y editar roles del sistema.
  *
  * Responsabilidades:
- * - Normalizar el shape de `role.permissions` antes de usarlo en UI.
- * - Renderizar permisos agrupados por módulo.
- * - Permitir selección individual de permisos.
- * - Permitir selección masiva por módulo.
- * - Tratar el rol superadmin como wildcard `"*"`.
- * - Validar datos mínimos antes de persistir.
- * - Enviar al API el payload final esperado para creación o actualización.
+ * - Renderizar formulario de rol con:
+ *   - código
+ *   - nombre en español
+ *   - nombre en inglés
+ *   - permisos agrupados por módulo
+ * - Normalizar el shape recibido antes de usarlo en UI.
+ * - Validar campos mínimos antes de persistir.
+ * - Detectar cambios reales para habilitar/deshabilitar Guardar.
+ * - Proteger la salida cuando existan cambios sin guardar.
+ * - Persistir usando upsert local desde el padre.
  *
  * Reglas:
- * - El sistema opera por permission codes (`string`), nunca por `_id`.
+ * - Usa `GlobalModal` como base común del sistema.
+ * - No usa `any`.
+ * - El sistema trabaja con permission codes (`string`), no con ids.
  * - El wildcard `"*"` representa superadmin.
  * - Si el rol es superadmin:
- *   - la UI muestra todos los permisos marcados
+ *   - todos los permisos se muestran activos
  *   - los checks quedan deshabilitados
  *   - el payload persistido siempre es `["*"]`
- * - Los roles normales persisten únicamente los permission codes seleccionados.
+ * - La X se oculta para mantener consistencia con otros modales de edición.
  *
  * EN:
- * - Administrative modal for creating and editing system roles.
- * - Normalizes incoming permissions, renders grouped permissions,
- *   supports per-module selection, validates required fields and
- *   persists the final role payload expected by the API.
+ * Administrative modal for creating and editing system roles.
  * =============================================================================
  */
 
 import { useEffect, useMemo, useState } from "react";
-import GlobalModal from "@/components/ui/GlobalModal";
 import GlobalButton from "@/components/ui/GlobalButton";
+import GlobalModal from "@/components/ui/GlobalModal";
 import GlobalUnsavedChangesConfirm from "@/components/ui/GlobalUnsavedChangesConfirm";
 import { useToast } from "@/components/ui/GlobalToastProvider";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -50,6 +47,8 @@ import { useTranslation } from "@/hooks/useTranslation";
 /* =============================================================================
  * Types
  * ============================================================================= */
+
+type Locale = "es" | "en";
 
 export interface PermissionGrouped {
   module: string;
@@ -60,21 +59,19 @@ export interface PermissionGrouped {
   }[];
 }
 
+export interface RoleSavedShape {
+  id: string;
+  code: string;
+  name_es: string;
+  name_en: string;
+  permissions: string[];
+}
+
 export interface RoleModalShape {
   id?: string;
   code: string;
   name_es: string;
   name_en: string;
-
-  /**
-   * ES:
-   * - En runtime puede llegar como string[] o como documentos poblados.
-   * - Se normaliza internamente a `string[]` antes de renderizar o guardar.
-   *
-   * EN:
-   * - At runtime this may arrive either as string[] or populated documents.
-   * - It is normalized internally to `string[]` before render or save.
-   */
   permissions: unknown;
 }
 
@@ -86,10 +83,10 @@ interface RoleFormValues {
 }
 
 interface RoleModalProps {
-  role: RoleModalShape;
+  role?: RoleModalShape | null;
   permissions: PermissionGrouped[];
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (savedRole: RoleSavedShape) => void | Promise<void>;
 }
 
 /* =============================================================================
@@ -126,15 +123,93 @@ function normalizePermissionCodes(raw: unknown): string[] {
   return Array.from(new Set(out));
 }
 
-function buildInitialForm(role: RoleModalShape): RoleFormValues {
-  const codes = normalizePermissionCodes(role.permissions);
+function normalizeIncomingRole(role?: RoleModalShape | null): RoleModalShape {
+  return {
+    id: role?.id,
+    code: typeof role?.code === "string" ? role.code : "",
+    name_es: typeof role?.name_es === "string" ? role.name_es : "",
+    name_en: typeof role?.name_en === "string" ? role.name_en : "",
+    permissions: Array.isArray(role?.permissions) ? role.permissions : [],
+  };
+}
+
+function buildInitialForm(role?: RoleModalShape | null): RoleFormValues {
+  const safeRole = normalizeIncomingRole(role);
 
   return {
-    code: typeof role.code === "string" ? role.code : "",
-    name_es: typeof role.name_es === "string" ? role.name_es : "",
-    name_en: typeof role.name_en === "string" ? role.name_en : "",
-    permissions: codes,
+    code: safeRole.code,
+    name_es: safeRole.name_es,
+    name_en: safeRole.name_en,
+    permissions: normalizePermissionCodes(safeRole.permissions),
   };
+}
+
+function sortStrings(values: string[]): string[] {
+  return [...values].sort((a, b) => a.localeCompare(b));
+}
+
+function areFormsEqual(a: RoleFormValues, b: RoleFormValues): boolean {
+  return (
+    a.code === b.code &&
+    a.name_es === b.name_es &&
+    a.name_en === b.name_en &&
+    JSON.stringify(sortStrings(a.permissions)) ===
+      JSON.stringify(sortStrings(b.permissions))
+  );
+}
+
+function normalizeSavedRole(
+  raw: unknown,
+  fallback: {
+    id?: string;
+    code: string;
+    name_es: string;
+    name_en: string;
+    permissions: string[];
+  }
+): RoleSavedShape | null {
+  if (isRecord(raw)) {
+    const source = isRecord(raw.item)
+      ? raw.item
+      : isRecord(raw.role)
+        ? raw.role
+        : isRecord(raw.data)
+          ? raw.data
+          : raw;
+
+    const id = asString(source.id) ?? asString(source._id) ?? fallback.id ?? "";
+    const code = asString(source.code) ?? fallback.code;
+    const name_es = asString(source.name_es) ?? fallback.name_es;
+    const name_en = asString(source.name_en) ?? fallback.name_en;
+
+    const permissionsFromResponse = normalizePermissionCodes(source.permissions);
+    const permissions =
+      permissionsFromResponse.length > 0
+        ? permissionsFromResponse
+        : fallback.permissions;
+
+    if (id && code) {
+      return {
+        id,
+        code,
+        name_es,
+        name_en,
+        permissions,
+      };
+    }
+  }
+
+  if (fallback.id && fallback.code) {
+    return {
+      id: fallback.id,
+      code: fallback.code,
+      name_es: fallback.name_es,
+      name_en: fallback.name_en,
+      permissions: fallback.permissions,
+    };
+  }
+
+  return null;
 }
 
 /* =============================================================================
@@ -149,7 +224,9 @@ export default function RoleModal({
 }: RoleModalProps) {
   const toast = useToast();
   const { locale } = useTranslation();
-  const lang: "es" | "en" = locale === "es" ? "es" : "en";
+  const lang: Locale = locale === "es" ? "es" : "en";
+
+  const safeRole = useMemo(() => normalizeIncomingRole(role), [role]);
 
   const t = useMemo(
     () => ({
@@ -159,6 +236,7 @@ export default function RoleModal({
       code: lang === "es" ? "Código" : "Code",
       nameEs: lang === "es" ? "Nombre (ES)" : "Name (ES)",
       nameEn: lang === "es" ? "Nombre (EN)" : "Name (EN)",
+      permissions: lang === "es" ? "Permisos" : "Permissions",
 
       placeholderCode:
         lang === "es" ? "Ej: admin, ventas..." : "Ex: admin, sales...",
@@ -207,9 +285,9 @@ export default function RoleModal({
   const [showUnsaved, setShowUnsaved] = useState(false);
 
   const isSuperadminRole = useMemo(() => {
-    const codes = normalizePermissionCodes(role.permissions);
+    const codes = normalizePermissionCodes(safeRole.permissions);
     return codes.includes("*");
-  }, [role.permissions]);
+  }, [safeRole.permissions]);
 
   useEffect(() => {
     if (isSuperadminRole) {
@@ -218,30 +296,43 @@ export default function RoleModal({
       );
 
       const expandedForm: RoleFormValues = {
-        code: typeof role.code === "string" ? role.code : "",
-        name_es: typeof role.name_es === "string" ? role.name_es : "",
-        name_en: typeof role.name_en === "string" ? role.name_en : "",
+        code: safeRole.code,
+        name_es: safeRole.name_es,
+        name_en: safeRole.name_en,
         permissions: Array.from(new Set(allCodes)),
       };
 
       setForm(expandedForm);
       setInitialForm(expandedForm);
+      setShowUnsaved(false);
       return;
     }
 
-    const built = buildInitialForm(role);
+    const built = buildInitialForm(safeRole);
     setForm(built);
     setInitialForm(built);
-  }, [role, permissions, isSuperadminRole]);
+    setShowUnsaved(false);
+  }, [safeRole, permissions, isSuperadminRole]);
 
-  const hasChanges =
-    initialForm !== null && JSON.stringify(initialForm) !== JSON.stringify(form);
+  const hasChanges = initialForm !== null && !areFormsEqual(initialForm, form);
+
+  const isValid = (): boolean => {
+    if (!form.code.trim()) return false;
+    if (!form.name_es.trim()) return false;
+    if (!form.name_en.trim()) return false;
+    return true;
+  };
+
+  const canSave = hasChanges && isValid() && !saving;
 
   const requestClose = () => {
+    if (saving) return;
+
     if (hasChanges) {
       setShowUnsaved(true);
       return;
     }
+
     onClose();
   };
 
@@ -250,6 +341,7 @@ export default function RoleModal({
 
     setForm((prev) => {
       const exists = prev.permissions.includes(code);
+
       return {
         ...prev,
         permissions: exists
@@ -281,13 +373,6 @@ export default function RoleModal({
     });
   };
 
-  const isValid = () => {
-    if (!form.code.trim()) return false;
-    if (!form.name_es.trim()) return false;
-    if (!form.name_en.trim()) return false;
-    return true;
-  };
-
   const handleSave = async () => {
     if (!isValid()) {
       if (!form.code.trim()) toast.error(t.codeRequired);
@@ -300,13 +385,13 @@ export default function RoleModal({
 
     try {
       const res = await fetch("/api/admin/roles", {
-        method: role.id ? "PUT" : "POST",
+        method: safeRole.id ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           "accept-language": lang,
         },
         body: JSON.stringify({
-          id: role.id,
+          id: safeRole.id,
           code: form.code.trim(),
           name_es: form.name_es.trim(),
           name_en: form.name_en.trim(),
@@ -323,9 +408,22 @@ export default function RoleModal({
         return;
       }
 
-      toast.success(role.id ? t.updateSuccess : t.createSuccess);
-      await onSaved();
-      onClose();
+      const savedRole = normalizeSavedRole(json, {
+        id: safeRole.id,
+        code: form.code.trim(),
+        name_es: form.name_es.trim(),
+        name_en: form.name_en.trim(),
+        permissions: isSuperadminRole ? ["*"] : form.permissions,
+      });
+
+      if (!savedRole) {
+        toast.error(t.saveError);
+        return;
+      }
+
+      await onSaved(savedRole);
+      toast.success(safeRole.id ? t.updateSuccess : t.createSuccess);
+      setShowUnsaved(false);
     } catch {
       toast.error(t.saveError);
     } finally {
@@ -338,11 +436,34 @@ export default function RoleModal({
       <GlobalModal
         open={true}
         onClose={requestClose}
-        title={role.id ? t.titleEdit : t.titleCreate}
-        size="lg"
+        title={safeRole.id ? t.titleEdit : t.titleCreate}
+        widthClass="max-w-5xl"
+        showCloseButton={false}
+        footer={
+          <div className="flex justify-end gap-2">
+            <GlobalButton
+              variant="secondary"
+              size="sm"
+              className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
+              onClick={requestClose}
+              disabled={saving}
+            >
+              {t.cancel}
+            </GlobalButton>
+
+            <GlobalButton
+              variant="primary"
+              size="sm"
+              className="bg-brand-primary text-text-primary hover:bg-brand-primaryStrong hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canSave}
+              onClick={() => void handleSave()}
+            >
+              {saving ? t.saving : t.save}
+            </GlobalButton>
+          </div>
+        }
       >
         <div className="flex flex-col gap-5">
-          {/* Código */}
           <div>
             <label
               htmlFor="role-code"
@@ -358,12 +479,14 @@ export default function RoleModal({
               className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
               value={form.code}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, code: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  code: e.target.value,
+                }))
               }
             />
           </div>
 
-          {/* Nombres ES / EN */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label
@@ -380,7 +503,10 @@ export default function RoleModal({
                 className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
                 value={form.name_es}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, name_es: e.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    name_es: e.target.value,
+                  }))
                 }
               />
             </div>
@@ -400,97 +526,84 @@ export default function RoleModal({
                 className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
                 value={form.name_en}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, name_en: e.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    name_en: e.target.value,
+                  }))
                 }
               />
             </div>
           </div>
 
-          {/* Permisos */}
-          <div className="max-h-[420px] overflow-auto rounded-xl border border-border bg-surface-soft p-4">
-            {permissions.map((group) => {
-              const moduleCodes = group.permissions.map((p) => p.code);
+          <div>
+            <div className="mb-2 text-xs font-medium text-text-secondary">
+              {t.permissions}
+            </div>
 
-              const allSelected = isSuperadminRole
-                ? true
-                : moduleCodes.length > 0 &&
-                  moduleCodes.every((c) => form.permissions.includes(c));
+            <div className="max-h-[420px] overflow-auto rounded-xl border border-border bg-surface-soft p-4">
+              {permissions.map((group) => {
+                const moduleCodes = group.permissions.map((p) => p.code);
 
-              return (
-                <div
-                  key={group.module}
-                  className="mb-4 rounded-lg border border-border bg-surface p-3 last:mb-0"
-                >
-                  <label
-                    htmlFor={`module-${group.module}`}
-                    className="mb-2 flex cursor-pointer items-center gap-2 text-brand-primaryStrong"
+                const allSelected = isSuperadminRole
+                  ? true
+                  : moduleCodes.length > 0 &&
+                    moduleCodes.every((c) => form.permissions.includes(c));
+
+                return (
+                  <div
+                    key={group.module}
+                    className="mb-4 rounded-lg border border-border bg-surface p-3 last:mb-0"
                   >
-                    <input
-                      id={`module-${group.module}`}
-                      name={`module-${group.module}`}
-                      type="checkbox"
-                      checked={allSelected}
-                      disabled={isSuperadminRole}
-                      onChange={() => toggleModule(group)}
-                      className="h-4 w-4"
-                    />
-                    <span className="text-sm font-semibold uppercase tracking-wide">
-                      {group.module}
-                    </span>
-                  </label>
+                    <label
+                      htmlFor={`module-${group.module}`}
+                      className="mb-2 flex cursor-pointer items-center gap-2 text-brand-primaryStrong"
+                    >
+                      <input
+                        id={`module-${group.module}`}
+                        name={`module-${group.module}`}
+                        type="checkbox"
+                        checked={allSelected}
+                        disabled={isSuperadminRole}
+                        onChange={() => toggleModule(group)}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm font-semibold uppercase tracking-wide">
+                        {group.module}
+                      </span>
+                    </label>
 
-                  <div className="ml-6 space-y-2">
-                    {group.permissions.map((perm) => {
-                      const checked =
-                        isSuperadminRole || form.permissions.includes(perm.code);
+                    <div className="ml-6 space-y-2">
+                      {group.permissions.map((perm) => {
+                        const checked =
+                          isSuperadminRole ||
+                          form.permissions.includes(perm.code);
 
-                      return (
-                        <label
-                          key={perm.code}
-                          htmlFor={`perm-${perm.code}`}
-                          className="flex cursor-pointer items-center gap-2 text-sm text-text-secondary"
-                        >
-                          <input
-                            id={`perm-${perm.code}`}
-                            name={`perm-${perm.code}`}
-                            type="checkbox"
-                            checked={checked}
-                            disabled={isSuperadminRole}
-                            onChange={() => togglePerm(perm.code)}
-                            className="h-4 w-4"
-                          />
-                          <span>
-                            {lang === "es" ? perm.name_es : perm.name_en}
-                          </span>
-                        </label>
-                      );
-                    })}
+                        return (
+                          <label
+                            key={perm.code}
+                            htmlFor={`perm-${perm.code}`}
+                            className="flex cursor-pointer items-center gap-2 text-sm text-text-secondary"
+                          >
+                            <input
+                              id={`perm-${perm.code}`}
+                              name={`perm-${perm.code}`}
+                              type="checkbox"
+                              checked={checked}
+                              disabled={isSuperadminRole}
+                              onChange={() => togglePerm(perm.code)}
+                              className="h-4 w-4"
+                            />
+                            <span>
+                              {lang === "es" ? perm.name_es : perm.name_en}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Botones */}
-          <div className="flex justify-end gap-2 pt-1">
-            <GlobalButton
-              variant="secondary"
-              size="sm"
-              className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
-              onClick={requestClose}
-            >
-              {t.cancel}
-            </GlobalButton>
-
-            <GlobalButton
-              variant="primary"
-              size="sm"
-              className="bg-brand-primary text-text-primary hover:bg-brand-primaryStrong hover:text-white"
-              disabled={!isValid() || saving}
-              onClick={handleSave}
-            >
-              {saving ? t.saving : t.save}
-            </GlobalButton>
+                );
+              })}
+            </div>
           </div>
         </div>
       </GlobalModal>

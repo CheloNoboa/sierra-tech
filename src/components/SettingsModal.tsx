@@ -51,6 +51,7 @@ export interface SettingsModalData {
 interface Props {
   open: boolean;
   editing: boolean;
+  loading?: boolean;
   data: SettingsModalData;
   onClose: () => void;
   onSubmit: (data: SettingsModalData) => void;
@@ -59,6 +60,7 @@ interface Props {
 export default function SettingsModal({
   open,
   editing,
+  loading = false,
   data,
   onClose,
   onSubmit,
@@ -125,6 +127,7 @@ export default function SettingsModal({
 
     initialRef.current = data;
     setForm(data);
+    setShowUnsaved(false);
 
     if (typeof data.value === "boolean") setType("boolean");
     else if (typeof data.value === "number") setType("number");
@@ -158,12 +161,13 @@ export default function SettingsModal({
   };
 
   const isValid = () => form.key.trim() && form.value !== "";
+  const canSave = hasChanges && isValid() && !loading;
 
   /* ---------------------------------------------------------------------------
    * Submit
    * ------------------------------------------------------------------------- */
   const handleSave = () => {
-    if (!isValid()) return;
+    if (!canSave) return;
 
     onSubmit({
       ...form,
@@ -175,6 +179,8 @@ export default function SettingsModal({
    * Close handling
    * ------------------------------------------------------------------------- */
   const requestClose = () => {
+    if (loading) return;
+
     if (hasChanges) {
       setShowUnsaved(true);
       return;
@@ -192,6 +198,7 @@ export default function SettingsModal({
         onClose={requestClose}
         title={t.title}
         size="lg"
+        showCloseButton={false}
         footer={
           <div className="flex justify-end gap-3">
             <GlobalButton
@@ -199,6 +206,7 @@ export default function SettingsModal({
               size="sm"
               className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
               onClick={requestClose}
+              disabled={loading}
             >
               {t.cancel}
             </GlobalButton>
@@ -207,8 +215,9 @@ export default function SettingsModal({
               variant="primary"
               size="sm"
               className="bg-brand-primary text-text-primary hover:bg-brand-primaryStrong hover:text-white"
-              disabled={!isValid()}
+              disabled={!canSave}
               onClick={handleSave}
+              loading={loading}
             >
               {t.save}
             </GlobalButton>

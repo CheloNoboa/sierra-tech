@@ -14,19 +14,21 @@
  *
  * REGLAS
  * - Si se pasa `size`, tiene prioridad sobre `widthClass`.
- * - title es opcional.
- * - footer es opcional y permanece visible.
+ * - `title` es opcional.
+ * - `footer` es opcional y permanece visible.
  * - El body hace scroll interno cuando el contenido es alto.
+ * - `showCloseButton` permite ocultar la X cuando el flujo lo requiera.
+ * - La tecla Escape ejecuta `onClose` mientras el modal está abierto.
  *
  * EN:
  * - Reusable base modal for the whole platform.
  * - Re-renders on language changes to refresh dynamic text.
  * - Supports semantic sizes without breaking widthClass compatibility.
- * - Aligned with Sierra Tech light corporate visual identity.
+ * - Escape key triggers `onClose` while the modal is open.
  * =============================================================================
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -44,6 +46,7 @@ export interface GlobalModalProps {
   footer?: React.ReactNode;
   widthClass?: string;
   size?: GlobalModalSize;
+  showCloseButton?: boolean;
 }
 
 /* =============================================================================
@@ -75,10 +78,28 @@ export default function GlobalModal({
   footer,
   widthClass = "max-w-lg",
   size,
+  showCloseButton = true,
 }: GlobalModalProps) {
   const { locale } = useTranslation();
 
   const localeKey = locale === "es" ? "es" : "en";
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -112,27 +133,33 @@ export default function GlobalModal({
           <div className="flex items-center justify-between border-b border-border px-6 pb-4 pt-6">
             <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-1 text-text-muted transition hover:bg-surface-soft hover:text-text-primary"
-              aria-label="Close"
-              title="Close"
-            >
-              <X size={18} />
-            </button>
+            {showCloseButton ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md p-1 text-text-muted transition hover:bg-surface-soft hover:text-text-primary"
+                aria-label="Close"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            ) : (
+              <div className="h-8 w-8 shrink-0" aria-hidden="true" />
+            )}
           </div>
         ) : (
           <div className="flex justify-end px-6 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-1 text-text-muted transition hover:bg-surface-soft hover:text-text-primary"
-              aria-label="Close"
-              title="Close"
-            >
-              <X size={18} />
-            </button>
+            {showCloseButton ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md p-1 text-text-muted transition hover:bg-surface-soft hover:text-text-primary"
+                aria-label="Close"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            ) : null}
           </div>
         )}
 

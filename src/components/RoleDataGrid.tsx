@@ -21,6 +21,7 @@
  * - Mantener estado de filtros, paginación y selección.
  * - Traducir labels y mensajes según locale actual.
  * - Entregar a RoleModal el shape de datos esperado.
+ * - Evitar doble parpadeo del datagrid al guardar o eliminar.
  *
  * Reglas:
  * - No usa `any`.
@@ -28,6 +29,10 @@
  *   genera diagnóstico explícito para facilitar soporte técnico.
  * - La paginación puede tomar su valor inicial desde SystemSettings
  *   usando la clave `recordsPerPageRoles`.
+ * - La carga visual del grid se usa solo en:
+ *   1) carga inicial
+ *   2) refresh manual
+ * - Guardar / eliminar actualizan el estado local sin recargar toda la grilla.
  *
  * EN:
  * - Administrative grid for managing system roles.
@@ -37,7 +42,7 @@
  * =============================================================================
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -57,6 +62,7 @@ import { useToast } from "@/components/ui/GlobalToastProvider";
 import RoleModal, {
   type PermissionGrouped,
   type RoleModalShape,
+  type RoleSavedShape,
 } from "@/components/RoleModal";
 
 /* =============================================================================
@@ -181,9 +187,10 @@ async function fetchJsonStrict(
 function groupPermissions(perms: PermissionDTO[]): PermissionGrouped[] {
   const map = new Map<string, PermissionGrouped>();
 
-  perms.forEach((p) => {
+  perms.forEach((p: PermissionDTO) => {
     const mod = safeStr(p.module) || "general";
     const existing = map.get(mod);
+
     if (existing) {
       existing.permissions.push({
         code: p.code,
@@ -204,12 +211,20 @@ function groupPermissions(perms: PermissionDTO[]): PermissionGrouped[] {
     }
   });
 
-  const grouped = Array.from(map.values()).sort((a, b) =>
-    a.module.localeCompare(b.module)
+  const grouped = Array.from(map.values()).sort(
+    (a: PermissionGrouped, b: PermissionGrouped) =>
+      a.module.localeCompare(b.module)
   );
-  grouped.forEach((g) =>
-    g.permissions.sort((a, b) => a.code.localeCompare(b.code))
+
+  grouped.forEach((g: PermissionGrouped) =>
+    g.permissions.sort(
+      (
+        a: { code: string; name_es: string; name_en: string },
+        b: { code: string; name_es: string; name_en: string }
+      ) => a.code.localeCompare(b.code)
+    )
   );
+
   return grouped;
 }
 
@@ -231,6 +246,28 @@ function toModalShape(r: RoleDTO | null): RoleModalShape {
     name_en: r.name_en,
     permissions: r.permissions,
   };
+}
+
+function upsertRole(prev: RoleDTO[], saved: RoleSavedShape): RoleDTO[] {
+  const normalized: RoleDTO = {
+    id: saved.id,
+    code: saved.code,
+    name_es: saved.name_es,
+    name_en: saved.name_en,
+    permissions: saved.permissions,
+  };
+
+  const exists = prev.some((r: RoleDTO) => r.id === normalized.id);
+
+  if (!exists) {
+    return [...prev, normalized].sort((a: RoleDTO, b: RoleDTO) =>
+      a.code.localeCompare(b.code)
+    );
+  }
+
+  return prev
+    .map((r: RoleDTO) => (r.id === normalized.id ? normalized : r))
+    .sort((a: RoleDTO, b: RoleDTO) => a.code.localeCompare(b.code));
 }
 
 /* =============================================================================
@@ -331,6 +368,17 @@ export default function RoleDataGrid() {
     [lang]
   );
 
+  const toastRef = useRef(toast);
+  const textRef = useRef(t);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
+
+  useEffect(() => {
+    textRef.current = t;
+  }, [t]);
+
   const [roles, setRoles] = useState<RoleDTO[]>([]);
   const [permissionsGrouped, setPermissionsGrouped] = useState<
     PermissionGrouped[]
@@ -350,7 +398,7 @@ export default function RoleDataGrid() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleDTO | null>(null);
 
-  const loadInitial = useCallback(async () => {
+  const loadInitial = async (): Promise<void> => {
     setLoading(true);
 
     try {
@@ -378,30 +426,29 @@ export default function RoleDataGrid() {
       setPermissionsGrouped(groupPermissions(permsJson));
 
       const perPageCfg = settingsJson.find(
-        (s) => s.key === "recordsPerPageRoles"
+        (s: SystemSettingDTO) => s.key === "recordsPerPageRoles"
       );
+
       if (perPageCfg) {
         const parsed = Number(perPageCfg.value);
-        if (!Number.isNaN(parsed) && parsed > 0) setRecordsPerPage(parsed);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          setRecordsPerPage(parsed);
+        }
       }
 
       setPage(1);
       setSelectedIds([]);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : t.loadError;
+      const msg =
+        e instanceof Error ? e.message : textRef.current.loadError;
       console.error("[RoleDataGrid] loadInitial failed:", msg);
-      toast.error(msg);
+      toastRef.current.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [toast, t.loadError]);
+  };
 
-  useEffect(() => {
-    void loadInitial();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const refreshRoles = async () => {
+  const refreshRolesSilent = async (): Promise<void> => {
     try {
       const r = await fetchJsonStrict("/api/admin/roles");
       if (!r.ok) return;
@@ -414,10 +461,15 @@ export default function RoleDataGrid() {
   };
 
   useEffect(() => {
+    void loadInitial();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     setPage(1);
   }, [searchCode, searchName]);
 
-  const filtered = roles.filter((r) => {
+  const filtered = roles.filter((r: RoleDTO) => {
     const matchCode =
       !searchCode || r.code.toLowerCase().includes(searchCode.toLowerCase());
 
@@ -443,21 +495,26 @@ export default function RoleDataGrid() {
     totalResults === 0 ? 0 : (currentPage - 1) * recordsPerPage + 1;
   const pageTo = Math.min(totalResults, currentPage * recordsPerPage);
 
-  const pageIds = paginated.map((r) => r.id);
+  const pageIds = paginated.map((r: RoleDTO) => r.id);
   const allSelected =
-    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+    pageIds.length > 0 &&
+    pageIds.every((id: string) => selectedIds.includes(id));
 
   const toggleSelectAll = () => {
     if (allSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+      setSelectedIds((prev: string[]) =>
+        prev.filter((id: string) => !pageIds.includes(id))
+      );
     } else {
-      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+      setSelectedIds((prev: string[]) =>
+        Array.from(new Set([...prev, ...pageIds]))
+      );
     }
   };
 
   const toggleOne = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    setSelectedIds((prev: string[]) =>
+      prev.includes(id) ? prev.filter((x: string) => x !== id) : [...prev, id]
     );
   };
 
@@ -468,6 +525,7 @@ export default function RoleDataGrid() {
       credentials: "include",
       cache: "no-store",
     });
+
     return res.ok;
   };
 
@@ -478,33 +536,54 @@ export default function RoleDataGrid() {
 
     try {
       if (selectedIds.length === 1) {
-        const ok = await deleteOne(selectedIds[0]);
-        if (!ok) toast.error(t.deleteError);
-        else toast.success(t.deleteSuccess);
+        const targetId = selectedIds[0];
+        const ok = await deleteOne(targetId);
+
+        if (!ok) {
+          toastRef.current.error(textRef.current.deleteError);
+        } else {
+          setRoles((prev: RoleDTO[]) =>
+            prev.filter((r: RoleDTO) => r.id !== targetId)
+          );
+          setSelectedIds([]);
+          setShowDeleteModal(false);
+          toastRef.current.success(textRef.current.deleteSuccess);
+        }
       } else {
         let success = 0;
         let fail = 0;
+        const deletedIds: string[] = [];
 
         for (const id of selectedIds) {
           const ok = await deleteOne(id);
-          if (ok) success++;
-          else fail++;
+          if (ok) {
+            success++;
+            deletedIds.push(id);
+          } else {
+            fail++;
+          }
         }
 
+        if (deletedIds.length > 0) {
+          setRoles((prev: RoleDTO[]) =>
+            prev.filter((r: RoleDTO) => !deletedIds.includes(r.id))
+          );
+        }
+
+        setSelectedIds([]);
+        setShowDeleteModal(false);
+
         if (fail === 0) {
-          toast.success(
+          toastRef.current.success(
             lang === "es" ? `Se eliminaron ${success}.` : `${success} deleted.`
           );
         } else {
-          toast.error(t.bulkSummary(success, fail));
+          toastRef.current.error(textRef.current.bulkSummary(success, fail));
+          await refreshRolesSilent();
         }
       }
-
-      await refreshRoles();
-      setSelectedIds([]);
-      setShowDeleteModal(false);
     } catch {
-      toast.error(t.deleteError);
+      toastRef.current.error(textRef.current.deleteError);
     } finally {
       setBulkDeleting(false);
     }
@@ -520,8 +599,10 @@ export default function RoleDataGrid() {
     setModalOpen(true);
   };
 
-  const handleSaved = async () => {
-    await refreshRoles();
+  const handleSaved = async (savedRole: RoleSavedShape) => {
+    setRoles((prev: RoleDTO[]) => upsertRole(prev, savedRole));
+    setModalOpen(false);
+    setEditingRole(null);
   };
 
   return (
@@ -644,7 +725,7 @@ export default function RoleDataGrid() {
                 size="sm"
                 className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
                 disabled={currentPage === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage((p: number) => Math.max(1, p - 1))}
               >
                 ‹
               </GlobalButton>
@@ -656,7 +737,7 @@ export default function RoleDataGrid() {
                 size="sm"
                 className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
                 disabled={currentPage === totalPages || totalResults === 0}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setPage((p: number) => Math.min(totalPages, p + 1))}
               >
                 ›
               </GlobalButton>
@@ -723,7 +804,7 @@ export default function RoleDataGrid() {
                 </td>
               </tr>
             ) : (
-              paginated.map((r, idx) => {
+              paginated.map((r: RoleDTO, idx: number) => {
                 const checked = selectedIds.includes(r.id);
 
                 return (
@@ -765,7 +846,8 @@ export default function RoleDataGrid() {
                       {t.permsCount(
                         r.code === "superadmin"
                           ? permissionsGrouped.reduce(
-                              (acc, g) => acc + g.permissions.length,
+                              (acc: number, g: PermissionGrouped) =>
+                                acc + g.permissions.length,
                               0
                             )
                           : r.permissions.length
@@ -817,7 +899,7 @@ export default function RoleDataGrid() {
         onConfirm={() => void deleteSelectedRoles()}
       />
 
-      {modalOpen && (
+      {modalOpen ? (
         <RoleModal
           role={toModalShape(editingRole)}
           permissions={permissionsGrouped}
@@ -827,7 +909,7 @@ export default function RoleDataGrid() {
           }}
           onSaved={handleSaved}
         />
-      )}
+      ) : null}
     </>
   );
 }

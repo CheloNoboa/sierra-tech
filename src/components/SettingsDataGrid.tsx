@@ -119,6 +119,47 @@ const EMPTY_SETTING: SettingsModalData = {
   description: "",
 };
 
+function coerceSettingValue(value: unknown): SettingValue {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return value;
+  if (typeof value === "boolean") return value;
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function normalizeSetting(x: SystemSetting): SystemSetting {
+  return {
+    _id: x._id,
+    key: safeString(x.key),
+    value: coerceSettingValue((x as { value?: unknown }).value),
+    module:
+      isObj(x) && "module" in x
+        ? typeof (x as { module?: unknown }).module === "string"
+          ? (x as { module?: string }).module
+          : null
+        : null,
+    description:
+      isObj(x) && "description" in x
+        ? safeString((x as { description?: unknown }).description)
+        : "",
+  };
+}
+
+function upsertSetting(prev: SystemSetting[], saved: SystemSetting): SystemSetting[] {
+  const exists =
+    !!saved._id && prev.some((item) => item._id === saved._id);
+
+  if (!exists) {
+    return [saved, ...prev];
+  }
+
+  return prev.map((item) => (item._id === saved._id ? saved : item));
+}
+
 export default function SettingsDataGrid() {
   const { locale } = useTranslation();
   const toast = useToast();
@@ -249,6 +290,7 @@ export default function SettingsDataGrid() {
 
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [page, setPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
@@ -277,17 +319,6 @@ export default function SettingsDataGrid() {
     if (type === "number") return Number(value);
     if (type === "boolean") return value === "true" || value === true;
     return String(value);
-  };
-
-  const coerceSettingValue = (value: unknown): SettingValue => {
-    if (typeof value === "string") return value;
-    if (typeof value === "number") return value;
-    if (typeof value === "boolean") return value;
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
   };
 
   function toModalData(s: SystemSetting): SettingsModalData {
@@ -320,21 +351,7 @@ export default function SettingsDataGrid() {
 
       const raw = (json as ApiOk<SystemSetting[]>).data;
 
-      const data: SystemSetting[] = raw.map((x) => ({
-        _id: x._id,
-        key: safeString(x.key),
-        value: coerceSettingValue((x as { value?: unknown }).value),
-        module:
-          isObj(x) && "module" in x
-            ? typeof (x as { module?: unknown }).module === "string"
-              ? (x as { module?: string }).module
-              : null
-            : null,
-        description:
-          isObj(x) && "description" in x
-            ? safeString((x as { description?: unknown }).description)
-            : "",
-      }));
+      const data: SystemSetting[] = raw.map(normalizeSetting);
 
       setSettings(data);
 
@@ -357,51 +374,21 @@ export default function SettingsDataGrid() {
     }
   }, [locale, toast, t.loadError]);
 
-  /* =============================================================================
-   * Soft refresh
-   * ============================================================================= */
-
-  const refreshSettings = async () => {
-    try {
-      const res = await fetch("/api/admin/settings", {
-        headers: { "accept-language": locale },
-      });
-
-      const json: unknown = await res.json().catch(() => null);
-      if (!res.ok || !isApiOk<SystemSetting[]>(json)) return;
-
-      const raw = (json as ApiOk<SystemSetting[]>).data;
-
-      const data: SystemSetting[] = raw.map((x) => ({
-        _id: x._id,
-        key: safeString(x.key),
-        value: coerceSettingValue((x as { value?: unknown }).value),
-        module:
-          isObj(x) && "module" in x
-            ? typeof (x as { module?: unknown }).module === "string"
-              ? (x as { module?: string }).module
-              : null
-            : null,
-        description:
-          isObj(x) && "description" in x
-            ? safeString((x as { description?: unknown }).description)
-            : "",
-      }));
-
-      setSettings(data);
-    } catch {
-      /* no-op */
-    }
-  };
-
   useEffect(() => {
     void loadSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadSettings]);
 
   useEffect(() => {
     setPage(1);
   }, [searchKey, searchModule]);
+
+  useEffect(() => {
+    const validIds = new Set(
+      settings.map((s) => s._id).filter((id): id is string => !!id)
+    );
+
+    setSelectedIds((prev) => prev.filter((id) => validIds.has(id)));
+  }, [settings]);
 
   /* =============================================================================
    * Submit
@@ -415,6 +402,8 @@ export default function SettingsDataGrid() {
     const keyTrim = safeString(data.key).trim();
 
     try {
+      setSaving(true);
+
       const res = await fetch("/api/admin/settings", {
         method: isEditing ? "PUT" : "POST",
         headers: {
@@ -431,23 +420,26 @@ export default function SettingsDataGrid() {
 
       const json: unknown = await res.json().catch(() => null);
 
-      if (!res.ok || !isApiOk<unknown>(json)) {
+      if (!res.ok || !isApiOk<SystemSetting>(json)) {
         toast.error(isEditing ? t.updateError : t.createError);
         return;
       }
 
+      const saved = normalizeSetting((json as ApiOk<SystemSetting>).data);
+
       toast.success(isEditing ? t.updateSuccess : t.createSuccess);
 
+      setSettings((prev) => upsertSetting(prev, saved));
       setModalOpen(false);
       setEditing(null);
-
-      await refreshSettings();
 
       if (BRANDING_KEYS.has(keyTrim)) {
         notifyBrandingUpdated();
       }
     } catch {
       toast.error(isEditing ? t.updateError : t.createError);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -472,8 +464,10 @@ export default function SettingsDataGrid() {
   const deleteSelectedSettings = async () => {
     if (selectedIds.length === 0) return;
 
+    const idsToDelete = [...selectedIds];
+
     const selectedBrandingHit = settings.some(
-      (s) => s._id && selectedIds.includes(s._id) && BRANDING_KEYS.has(s.key)
+      (s) => s._id && idsToDelete.includes(s._id) && BRANDING_KEYS.has(s.key)
     );
 
     setBulkDeleting(true);
@@ -482,16 +476,28 @@ export default function SettingsDataGrid() {
       let success = 0;
       let fail = 0;
 
-      for (const id of selectedIds) {
+      for (const id of idsToDelete) {
         if (await deleteOne(id)) success++;
         else fail++;
+      }
+
+      if (success > 0) {
+        const deletedSet = new Set(idsToDelete);
+
+        setSettings((prev) =>
+          prev.filter((s) => !s._id || !deletedSet.has(s._id))
+        );
+        setSelectedIds((prev) => prev.filter((id) => !deletedSet.has(id)));
+
+        if (editing?._id && deletedSet.has(editing._id)) {
+          setEditing(null);
+          setModalOpen(false);
+        }
       }
 
       if (fail === 0) toast.success(t.deleteSuccess);
       else toast.error(t.bulkSummary(success, fail));
 
-      await refreshSettings();
-      setSelectedIds([]);
       setShowDeleteModal(false);
 
       if (selectedBrandingHit && success > 0) {
@@ -851,10 +857,13 @@ export default function SettingsDataGrid() {
       <SettingsModal
         open={modalOpen}
         editing={!!editing}
+        loading={saving}
         data={editing ? toModalData(editing) : EMPTY_SETTING}
         onClose={() => {
-          setModalOpen(false);
-          setEditing(null);
+          if (!saving) {
+            setModalOpen(false);
+            setEditing(null);
+          }
         }}
         onSubmit={handleSubmit}
       />

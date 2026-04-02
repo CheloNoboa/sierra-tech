@@ -8,26 +8,30 @@
  *
  * ES:
  * - Grilla administrativa para gestión completa de usuarios.
- * - Permite:
- *   - filtrar por nombre y teléfono
- *   - paginar resultados
- *   - crear y editar mediante UserModal
- *   - eliminar registros de forma individual o masiva
+ * - Implementa el mismo patrón UX esperado para módulos modernos:
+ *   - carga inicial estable
+ *   - refresh manual suave
+ *   - creación/edición con upsert local
+ *   - eliminación local sin recarga global
+ *   - control de selección, filtros y paginación sin parpadeo
  *
  * Responsabilidades:
  * - Obtener usuarios, roles y configuraciones requeridas para el módulo.
- * - Mantener filtros, paginación, selección y estado de modal.
+ * - Mantener filtros, paginación, selección y estado del modal.
  * - Resolver etiquetas bilingües según locale actual.
  * - Formatear visualmente el teléfono para la grilla.
+ * - Sincronizar cambios locales después de crear, editar o eliminar.
  *
  * Reglas:
  * - Esta base reusable no maneja sucursales.
  * - No consulta `/api/admin/branches`.
  * - No renderiza columna de sucursal.
+ * - No usa recarga global para reflejar cambios.
  *
  * EN:
  * - Administrative grid for system users.
- * - Handles filters, pagination, modal editing and delete actions.
+ * - Uses a modern local-state pattern:
+ *   stable load, soft refresh, local upsert and local delete without reload.
  * =============================================================================
  */
 
@@ -113,6 +117,16 @@ function formatPhoneForGrid(phone?: string | null): string {
   }
 }
 
+function upsertUser(prev: UserDTO[], saved: UserDTO): UserDTO[] {
+  const exists = prev.some((item) => item._id === saved._id);
+
+  if (!exists) {
+    return [saved, ...prev];
+  }
+
+  return prev.map((item) => (item._id === saved._id ? saved : item));
+}
+
 /* =============================================================================
  * Main component
  * ============================================================================= */
@@ -139,6 +153,7 @@ export default function UsersDataGrid() {
       filterPhone:
         locale === "es" ? "Buscar por teléfono..." : "Search by phone...",
 
+      email: "Email",
       name: locale === "es" ? "Nombre" : "Name",
       role: locale === "es" ? "Rol" : "Role",
       phone: locale === "es" ? "Teléfono" : "Phone",
@@ -204,6 +219,7 @@ export default function UsersDataGrid() {
   const [users, setUsers] = useState<UserDTO[]>([]);
   const [roles, setRoles] = useState<RoleDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [searchName, setSearchName] = useState("");
   const [searchPhone, setSearchPhone] = useState("");
@@ -270,36 +286,41 @@ export default function UsersDataGrid() {
     } finally {
       setLoading(false);
     }
-  }, [toast, t.loadError]);
+  }, [t.loadError, toast]);
 
   useEffect(() => {
     void loadInitial();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadInitial]);
 
   /* =============================================================================
    * Soft refresh
    * ============================================================================= */
 
-  const refreshUsers = async () => {
+  const refreshUsers = useCallback(async () => {
     try {
+      setRefreshing(true);
+
       const res = await fetch("/api/admin/users", { cache: "no-store" });
-      if (res.ok) {
-        const raw = await safeJson(res);
-        setUsers(normalizeArray<UserDTO>(raw, ["users", "data"]));
-      }
+      if (!res.ok) throw new Error("Users refresh failed");
+
+      const raw = await safeJson(res);
+      const nextUsers = normalizeArray<UserDTO>(raw, ["users", "data"]);
+      setUsers(nextUsers);
 
       if (roles.length === 0) {
         const roleRes = await fetch("/api/admin/roles", { cache: "no-store" });
+
         if (roleRes.ok) {
-          const raw = await safeJson(roleRes);
-          setRoles(normalizeArray<RoleDTO>(raw, ["roles", "data"]));
+          const rolesRaw = await safeJson(roleRes);
+          setRoles(normalizeArray<RoleDTO>(rolesRaw, ["roles", "data"]));
         }
       }
     } catch {
-      // no-op
+      toast.error(t.loadError);
+    } finally {
+      setRefreshing(false);
     }
-  };
+  }, [roles.length, t.loadError, toast]);
 
   /* =============================================================================
    * Filters + pagination
@@ -325,30 +346,46 @@ export default function UsersDataGrid() {
     }
   };
 
-  const filtered = users.filter((user) => {
-    const matchName =
-      !searchName || user.name.toLowerCase().includes(searchName.toLowerCase());
+  const filtered = useMemo(() => {
+    return users.filter((user) => {
+      const matchName =
+        !searchName ||
+        user.name.toLowerCase().includes(searchName.toLowerCase());
 
-    const matchPhone = filterByPhone(user.phone, searchPhone);
+      const matchPhone = filterByPhone(user.phone, searchPhone);
 
-    return matchName && matchPhone;
-  });
+      return matchName && matchPhone;
+    });
+  }, [searchName, searchPhone, users]);
 
   const total = filtered.length;
   const totalPages = total > 0 ? Math.ceil(total / recordsPerPage) : 1;
   const currentPage = Math.min(page, totalPages);
 
-  const paginated = filtered.slice(
-    (currentPage - 1) * recordsPerPage,
-    currentPage * recordsPerPage
-  );
+  const paginated = useMemo(() => {
+    return filtered.slice(
+      (currentPage - 1) * recordsPerPage,
+      currentPage * recordsPerPage
+    );
+  }, [currentPage, filtered, recordsPerPage]);
 
   const from = total === 0 ? 0 : (currentPage - 1) * recordsPerPage + 1;
   const to = Math.min(total, currentPage * recordsPerPage);
 
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   /* =============================================================================
    * Selection
    * ============================================================================= */
+
+  useEffect(() => {
+    const validIds = new Set(users.map((user) => user._id));
+    setSelectedIds((prev) => prev.filter((id) => validIds.has(id)));
+  }, [users]);
 
   const pageIds = paginated.map((user) => user._id);
   const allSelected =
@@ -370,10 +407,35 @@ export default function UsersDataGrid() {
   };
 
   /* =============================================================================
+   * Modal actions
+   * ============================================================================= */
+
+  const handleCreate = () => {
+    setEditing(null);
+    setModalOpen(true);
+  };
+
+  const handleEdit = (user: UserDTO) => {
+    setEditing(user);
+    setModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setModalOpen(false);
+    setEditing(null);
+  };
+
+  const handleUserSaved = (savedUser: UserDTO) => {
+    setUsers((prev) => upsertUser(prev, savedUser));
+    setModalOpen(false);
+    setEditing(null);
+  };
+
+  /* =============================================================================
    * Delete
    * ============================================================================= */
 
-  const deleteOne = async (id: string): Promise<boolean> => {
+  const deleteOneRequest = async (id: string): Promise<boolean> => {
     const res = await fetch(`/api/admin/users?id=${id}`, {
       method: "DELETE",
       headers: { "x-lang": locale },
@@ -390,11 +452,18 @@ export default function UsersDataGrid() {
     try {
       let ok = 0;
       let fail = 0;
+      const idsToDelete = [...selectedIds];
 
-      for (const id of selectedIds) {
-        const deleted = await deleteOne(id);
-        if (deleted) ok++;
-        else fail++;
+      for (const id of idsToDelete) {
+        const deleted = await deleteOneRequest(id);
+        if (deleted) ok += 1;
+        else fail += 1;
+      }
+
+      if (ok > 0) {
+        const deletedSet = new Set(idsToDelete);
+        setUsers((prev) => prev.filter((user) => !deletedSet.has(user._id)));
+        setSelectedIds((prev) => prev.filter((id) => !deletedSet.has(id)));
       }
 
       if (fail === 0) {
@@ -403,9 +472,7 @@ export default function UsersDataGrid() {
         toast.error(t.bulkSummary(ok, fail));
       }
 
-      await refreshUsers();
       setShowDeleteModal(false);
-      setSelectedIds([]);
     } catch {
       toast.error(t.deleteError);
     } finally {
@@ -428,16 +495,10 @@ export default function UsersDataGrid() {
             <GlobalButton
               variant="secondary"
               size="sm"
-              loading={loading}
+              loading={refreshing}
               leftIcon={<RefreshCw size={14} />}
               className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
-              onClick={() => {
-                setSearchName("");
-                setSearchPhone("");
-                setSelectedIds([]);
-                setPage(1);
-                void loadInitial();
-              }}
+              onClick={() => void refreshUsers()}
             >
               {t.refresh}
             </GlobalButton>
@@ -458,10 +519,7 @@ export default function UsersDataGrid() {
               size="sm"
               leftIcon={<Plus size={14} />}
               className="bg-brand-primary text-text-primary hover:bg-brand-primaryStrong hover:text-white"
-              onClick={() => {
-                setEditing(null);
-                setModalOpen(true);
-              }}
+              onClick={handleCreate}
             >
               {t.newUser}
             </GlobalButton>
@@ -589,7 +647,7 @@ export default function UsersDataGrid() {
               </th>
 
               <th className="px-3 py-3">{t.name}</th>
-              <th className="px-3 py-3">Email</th>
+              <th className="px-3 py-3">{t.email}</th>
               <th className="px-3 py-3">{t.role}</th>
               <th className="px-3 py-3">{t.phone}</th>
               <th className="px-3 py-3 text-right">{t.actions}</th>
@@ -668,10 +726,7 @@ export default function UsersDataGrid() {
                           type="button"
                           aria-label={`Editar usuario ${user.name}`}
                           className="rounded-md border border-border bg-surface p-1.5 text-text-primary transition hover:bg-surface-soft"
-                          onClick={() => {
-                            setEditing(user);
-                            setModalOpen(true);
-                          }}
+                          onClick={() => handleEdit(user)}
                         >
                           <Edit3 size={16} />
                         </button>
@@ -714,13 +769,8 @@ export default function UsersDataGrid() {
         isOpen={modalOpen}
         user={editing}
         roles={roles}
-        onClose={() => {
-          setModalOpen(false);
-          setEditing(null);
-        }}
-        onSaved={async () => {
-          await refreshUsers();
-        }}
+        onClose={handleModalClose}
+        onSaved={handleUserSaved}
       />
     </>
   );

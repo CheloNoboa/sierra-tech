@@ -22,17 +22,17 @@
  * - Validar contraseñas únicamente cuando se crea un usuario.
  * - Confirmar cierre cuando existen cambios sin guardar.
  * - Enviar payload final al endpoint administrativo de usuarios.
+ * - Devolver al padre el usuario persistido para upsert local sin reload.
  *
  * Reglas:
  * - Esta base reusable no maneja sucursales.
  * - No envía `branchId` al backend.
  * - En edición no se envían contraseñas.
- * - Si el formulario no es válido, no se persiste.
+ * - El botón guardar solo se habilita si hay cambios reales.
  *
  * EN:
  * - Administrative modal for creating or editing system users.
- * - Supports E.164 phone integration, create/edit flows, unsaved changes
- *   confirmation and API persistence for users.
+ * - Returns the persisted user to the parent for local upsert.
  * =============================================================================
  */
 
@@ -65,6 +65,18 @@ const DEFAULT_PHONE: PhoneValue = {
   e164: "+1",
 };
 
+function isObj(x: unknown): x is Record<string, unknown> {
+  return !!x && typeof x === "object" && !Array.isArray(x);
+}
+
+function getString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function getBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function phoneValueFromE164(phone?: string | null): PhoneValue {
   if (!phone) return DEFAULT_PHONE;
 
@@ -80,16 +92,97 @@ function phoneValueFromE164(phone?: string | null): PhoneValue {
   };
 }
 
-function buildInitialForm(user: UserDTO | null, roles: RoleDTO[]): UserFormValues {
+function buildInitialForm(
+  user: UserDTO | null,
+  roles: RoleDTO[]
+): UserFormValues {
   return {
     name: user?.name ?? "",
     email: user?.email ?? "",
     role: user?.role ?? (roles.length > 0 ? roles[0].code : ""),
-    phone: phoneValueFromE164(user?.phone),
+    phone: phoneValueFromE164(user?.phone ?? null),
     active: user?.active ?? true,
     password: "",
     confirmPassword: "",
   };
+}
+
+function serializeForm(values: UserFormValues): string {
+  return JSON.stringify({
+    name: values.name.trim(),
+    email: values.email.trim(),
+    role: values.role,
+    phone: values.phone.e164,
+    active: values.active,
+    password: values.password,
+    confirmPassword: values.confirmPassword,
+  });
+}
+
+function isUserDTO(value: unknown): value is UserDTO {
+  if (!isObj(value)) return false;
+  if (typeof value._id !== "string") return false;
+  if (typeof value.name !== "string") return false;
+  if (typeof value.email !== "string") return false;
+  if (typeof value.role !== "string") return false;
+  if (typeof value.active !== "boolean") return false;
+
+  if (
+    value.phone !== undefined &&
+    value.phone !== null &&
+    typeof value.phone !== "string"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function extractSavedUserCandidate(raw: unknown): unknown {
+  if (!isObj(raw)) return null;
+
+  if (isObj(raw.user)) return raw.user;
+  if (isObj(raw.data)) return raw.data;
+  if (isObj(raw.item)) return raw.item;
+
+  return raw;
+}
+
+function normalizeSavedUser(
+  raw: unknown,
+  context: {
+    existingUser: UserDTO | null;
+    values: UserFormValues;
+  }
+): UserDTO | null {
+  const candidate = extractSavedUserCandidate(raw);
+
+  if (isUserDTO(candidate)) {
+    return candidate;
+  }
+
+  if (context.existingUser) {
+    const source = isObj(candidate) ? candidate : null;
+
+    const merged: UserDTO = {
+      ...context.existingUser,
+      _id: getString(source?._id) || context.existingUser._id,
+      name: getString(source?.name) || context.values.name.trim(),
+      email: getString(source?.email) || context.values.email.trim(),
+      role: getString(source?.role) || context.values.role,
+      phone:
+        typeof source?.phone === "string"
+          ? source.phone
+          : source?.phone === null
+            ? null
+            : context.values.phone.e164,
+      active: getBoolean(source?.active, context.values.active),
+    };
+
+    return merged;
+  }
+
+  return null;
 }
 
 /* =============================================================================
@@ -101,7 +194,7 @@ interface UserModalProps {
   user: UserDTO | null;
   roles: RoleDTO[];
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (savedUser: UserDTO) => void;
 }
 
 export default function UserModal({
@@ -158,6 +251,12 @@ export default function UserModal({
           ? "Usuario actualizado correctamente."
           : "User updated successfully.",
 
+      genericError: locale === "es" ? "Error al guardar." : "Error saving.",
+      invalidSavedUser:
+        locale === "es"
+          ? "El backend no devolvió un usuario válido para actualizar la grilla."
+          : "The backend did not return a valid user for grid update.",
+
       showPassword:
         locale === "es" ? "Mostrar contraseña" : "Show password",
       hidePassword:
@@ -175,7 +274,7 @@ export default function UserModal({
   );
 
   const [form, setForm] = useState<UserFormValues>(buildInitialForm(user, roles));
-  const [initialForm, setInitialForm] = useState<UserFormValues | null>(null);
+  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
 
   const [saving, setSaving] = useState(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
@@ -188,23 +287,15 @@ export default function UserModal({
 
     const built = buildInitialForm(user, roles);
     setForm(built);
-    setInitialForm(built);
+    setInitialSnapshot(serializeForm(built));
     setShowPass(false);
     setShowConfirm(false);
+    setShowUnsaved(false);
   }, [isOpen, user, roles]);
 
   if (!isOpen) return null;
 
-  const hasChanges =
-    initialForm && JSON.stringify(initialForm) !== JSON.stringify(form);
-
-  const requestClose = () => {
-    if (hasChanges) {
-      setShowUnsaved(true);
-      return;
-    }
-    onClose();
-  };
+  const hasChanges = serializeForm(form) !== initialSnapshot;
 
   const isFormValid = (): boolean => {
     if (!form.name.trim()) return false;
@@ -227,13 +318,19 @@ export default function UserModal({
     return true;
   };
 
-  const handleSave = async () => {
-    if (!isFormValid()) {
-      if (!isEditing && form.password !== form.confirmPassword) {
-        toast.error(t.mismatch);
-      }
+  const canSave = hasChanges && isFormValid() && !saving;
+
+  const requestClose = () => {
+    if (hasChanges) {
+      setShowUnsaved(true);
       return;
     }
+
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!canSave) return;
 
     try {
       setSaving(true);
@@ -260,19 +357,33 @@ export default function UserModal({
       });
 
       const json = (await res.json().catch(() => null)) as
-        | { error?: string; message?: string }
+        | {
+            error?: string;
+            message?: string;
+            user?: unknown;
+            data?: unknown;
+            item?: unknown;
+          }
         | null;
 
       if (!res.ok) {
-        toast.error(json?.error ?? json?.message ?? "Error");
+        toast.error(json?.error ?? json?.message ?? t.genericError);
+        return;
+      }
+
+      const savedUser = normalizeSavedUser(json, {
+        existingUser: user,
+        values: form,
+      });
+
+      if (!savedUser) {
+        toast.error(t.invalidSavedUser);
         return;
       }
 
       toast.success(json?.message ?? (isEditing ? t.updatedOk : t.createdOk));
-
-      await onSaved();
+      onSaved(savedUser);
       setShowUnsaved(false);
-      onClose();
     } finally {
       setSaving(false);
     }
@@ -285,6 +396,7 @@ export default function UserModal({
         onClose={requestClose}
         title={isEditing ? t.editUser : t.newUser}
         size="lg"
+        showCloseButton={false}
         footer={
           <div className="flex justify-end gap-3">
             <GlobalButton
@@ -300,7 +412,7 @@ export default function UserModal({
               variant="primary"
               size="sm"
               className="bg-brand-primary text-text-primary hover:bg-brand-primaryStrong hover:text-white"
-              disabled={!isFormValid() || saving}
+              disabled={!canSave}
               onClick={() => void handleSave()}
             >
               {saving ? t.saving : t.save}
@@ -309,7 +421,6 @@ export default function UserModal({
         }
       >
         <div className="grid grid-cols-2 gap-4">
-          {/* NAME */}
           <div className="col-span-2">
             <label
               htmlFor="user-name"
@@ -329,7 +440,6 @@ export default function UserModal({
             />
           </div>
 
-          {/* EMAIL */}
           <div className="col-span-2">
             <label
               htmlFor="user-email"
@@ -350,7 +460,6 @@ export default function UserModal({
             />
           </div>
 
-          {/* ROLE */}
           <div className="col-span-2">
             <label
               htmlFor="user-role"
@@ -375,7 +484,6 @@ export default function UserModal({
             </select>
           </div>
 
-          {/* ACTIVE */}
           <div className="col-span-2 mt-1 flex items-center gap-2 rounded-lg border border-border bg-surface-soft px-3 py-2">
             <input
               id="user-active"
@@ -398,7 +506,6 @@ export default function UserModal({
             </label>
           </div>
 
-          {/* PHONE */}
           <div className="col-span-2">
             <label
               htmlFor="user-phone"
@@ -420,7 +527,6 @@ export default function UserModal({
             </div>
           </div>
 
-          {/* PASSWORD — create only */}
           {!isEditing && (
             <>
               <div>
