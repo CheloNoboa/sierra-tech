@@ -7,28 +7,14 @@
  * =============================================================================
  *
  * ES:
- * - Sidebar administrativo dinámico basado en permisos reales del usuario.
- * - Conserva navegación para Políticas y módulos de Sistema.
- * - Agrega acceso a módulos CMS estructurados del sitio público.
- * - Alineado con el sistema visual centralizado de Sierra Tech.
- *
- * Responsabilidades:
- * - Mostrar navegación administrativa según permisos efectivos.
- * - Resolver estado activo según la ruta actual.
- * - Mantener soporte de idioma desde el panel.
- * - Adaptarse al modo expandido o colapsado del sidebar.
- *
- * Reglas:
- * - Si el usuario tiene `*`, puede ver todos los módulos.
- * - Si no tiene `*`, cada grupo depende de permisos por prefijo.
- * - El sidebar no autoriza acceso al sistema; solo renderiza navegación.
- * - La posición vertical debe respetar la altura real del header global.
- *
- * EN:
- * - Dynamic admin sidebar based on real user permissions.
- * - Keeps navigation for Policies and System modules.
- * - Adds access to structured CMS modules for the public website.
- * - Aligned with the Sierra Tech centralized design system.
+ * Sidebar administrativo dinámico basado en permisos reales del usuario.
+ * Incluye acceso a:
+ * - Sitio público
+ * - Servicios
+ * - Clases de servicio
+ * - Solicitudes de contacto
+ * - Políticas
+ * - Sistema
  * =============================================================================
  */
 
@@ -46,7 +32,9 @@ import {
   FileText,
   Globe2,
   LayoutDashboard,
+  ListOrdered,
   LogOut,
+  Mail,
   MonitorSmartphone,
   Scale,
   Settings,
@@ -112,6 +100,10 @@ export default function AdminSidebar() {
     cms: locale === "es" ? "Sitio Web" : "Website",
     publicSite: locale === "es" ? "Sitio Público" : "Public Website",
     services: locale === "es" ? "Servicios" : "Services",
+    serviceClasses:
+      locale === "es" ? "Clases de servicio" : "Service classes",
+    contactRequests:
+      locale === "es" ? "Solicitudes de contacto" : "Contact requests",
 
     policies: locale === "es" ? "Políticas" : "Policies",
     system: locale === "es" ? "Sistema" : "System",
@@ -140,6 +132,12 @@ export default function AdminSidebar() {
     pathname.startsWith("/admin/dashboard/home");
 
   const isServicesActive = pathname.startsWith("/admin/dashboard/services");
+  const isServiceClassesActive = pathname.startsWith(
+    "/admin/dashboard/service-classes"
+  );
+  const isContactRequestsActive = pathname.startsWith(
+    "/admin/dashboard/contact-requests"
+  );
 
   const isPrivacyActive = pathname.startsWith("/admin/dashboard/privacy");
   const isTermsActive = pathname.startsWith("/admin/dashboard/terms");
@@ -160,6 +158,8 @@ export default function AdminSidebar() {
     canAccessModule(permissions, "home") ||
     canAccessModule(permissions, "site-settings") ||
     canAccessModule(permissions, "services") ||
+    canAccessModule(permissions, "service-classes") ||
+    canAccessModule(permissions, "contact-requests") ||
     canAccessModule(permissions, "cms");
 
   const canViewPolicies =
@@ -188,9 +188,6 @@ export default function AdminSidebar() {
       `}
     >
       <div className="flex h-full flex-col justify-between">
-        {/* ------------------------------------------------------------------ */}
-        {/* Sidebar Header                                                      */}
-        {/* ------------------------------------------------------------------ */}
         <div className="border-b border-border bg-surface px-4 py-4">
           <div className="flex items-center gap-3 rounded-xl bg-surface-soft px-3 py-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface">
@@ -205,9 +202,6 @@ export default function AdminSidebar() {
           </div>
         </div>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Navigation                                                          */}
-        {/* ------------------------------------------------------------------ */}
         <nav className="flex-1 space-y-5 p-4 text-sm">
           {canViewCms && (
             <div className="space-y-1.5">
@@ -242,6 +236,36 @@ export default function AdminSidebar() {
                 >
                   <Wrench size={18} className={iconClass(isServicesActive)} />
                   <span className={textVisibility}>{t.services}</span>
+                </Link>
+              )}
+
+              {(isSuperAdmin ||
+                canAccessModule(permissions, "service-classes") ||
+                canAccessModule(permissions, "cms")) && (
+                <Link
+                  href="/admin/dashboard/service-classes"
+                  className={linkClass(isServiceClassesActive)}
+                >
+                  <ListOrdered
+                    size={18}
+                    className={iconClass(isServiceClassesActive)}
+                  />
+                  <span className={textVisibility}>{t.serviceClasses}</span>
+                </Link>
+              )}
+
+              {(isSuperAdmin ||
+                canAccessModule(permissions, "contact-requests") ||
+                canAccessModule(permissions, "cms")) && (
+                <Link
+                  href="/admin/dashboard/contact-requests"
+                  className={linkClass(isContactRequestsActive)}
+                >
+                  <Mail
+                    size={18}
+                    className={iconClass(isContactRequestsActive)}
+                  />
+                  <span className={textVisibility}>{t.contactRequests}</span>
                 </Link>
               )}
             </div>
@@ -343,9 +367,6 @@ export default function AdminSidebar() {
           )}
         </nav>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Footer                                                              */}
-        {/* ------------------------------------------------------------------ */}
         <div className="space-y-4 border-t border-border bg-surface p-4">
           <div className="rounded-xl border border-border bg-surface-soft p-3">
             <div className="flex items-center justify-between gap-2">
