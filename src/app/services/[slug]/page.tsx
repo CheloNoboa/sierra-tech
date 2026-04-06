@@ -35,6 +35,7 @@ import { Types } from "mongoose";
 import { connectToDB } from "@/lib/connectToDB";
 import Service from "@/models/Service";
 import Document from "@/models/Document";
+import { resolveAssetUrl } from "@/lib/resolveAssetUrl";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -85,6 +86,7 @@ interface PublicAttachmentItem {
   type: string;
   language: DocumentLanguage;
   fileUrl: string;
+  thumbnailUrl: string;
 }
 
 interface PageProps {
@@ -292,7 +294,8 @@ function normalizePublicAttachmentDocument(
   if (!documentId) return null;
 
   const localizedTitle = normalizeLocalizedText(record.title);
-  const fileUrl = normalizeString(record.fileUrl);
+  const fileUrl = resolveAssetUrl(normalizeString(record.fileUrl));
+  const thumbnailUrl = resolveAssetUrl(normalizeString(record.thumbnailUrl));
 
   if (!fileUrl) return null;
 
@@ -305,6 +308,7 @@ function normalizePublicAttachmentDocument(
     type: normalizeString(record.type) || "file",
     language: normalizeDocumentLanguage(record.language),
     fileUrl,
+    thumbnailUrl,
   };
 }
 
@@ -347,10 +351,6 @@ function formatCategoryLabel(value: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function isExternalUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url.trim());
 }
 
 function renderNotFound(text: {
@@ -507,6 +507,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
             type: 1,
             language: 1,
             fileUrl: 1,
+            thumbnailUrl: 1,
           })
           .lean()
       : [];
@@ -556,12 +557,13 @@ export default async function ServiceDetailPage({ params }: PageProps) {
 
           <div className="mt-10 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-100 shadow-sm">
             <div className="relative aspect-[16/8] w-full">
-              {service.coverImage ? (
+              {resolveAssetUrl(service.coverImage) ? (
                 <Image
-                  src={service.coverImage}
+                  src={resolveAssetUrl(service.coverImage)}
                   alt={title || "Service image"}
                   fill
                   sizes="100vw"
+                  unoptimized
                   className="object-cover"
                   priority
                 />
@@ -625,23 +627,9 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                 className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
               >
                 <div className="relative aspect-[16/11] bg-slate-100">
-                  {isExternalUrl(item.url) ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={item.url}
-                        alt={
-                          getLocalizedText(item.alt, locale) ||
-                          title ||
-                          "Gallery image"
-                        }
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    </>
-                  ) : (
+                  {resolveAssetUrl(item.url) ? (
                     <Image
-                      src={item.url}
+                      src={resolveAssetUrl(item.url)}
                       alt={
                         getLocalizedText(item.alt, locale) ||
                         title ||
@@ -649,8 +637,11 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                       }
                       fill
                       sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                      unoptimized
                       className="object-cover"
                     />
+                  ) : (
+                    <div className="h-full w-full bg-slate-200" />
                   )}
                 </div>
               </article>
@@ -675,8 +666,21 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                 className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-lime-300 hover:bg-lime-50/30"
               >
                 <div className="flex min-w-0 items-center gap-4">
-                  <div className="rounded-2xl bg-slate-900 p-3 text-lime-400">
-                    <FileText className="h-5 w-5" />
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                    {attachment.thumbnailUrl ? (
+                      <Image
+                        src={attachment.thumbnailUrl}
+                        alt={attachment.title || text.document}
+                        width={64}
+                        height={64}
+                        unoptimized
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="rounded-2xl bg-slate-900 p-3 text-lime-400">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                    )}
                   </div>
 
                   <div className="min-w-0">

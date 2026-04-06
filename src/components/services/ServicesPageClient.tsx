@@ -156,11 +156,33 @@ function formatCategoryLabel(value: string | undefined): string {
     .join(" ");
 }
 
+function resolveImageSrc(value: string | undefined): string {
+  const normalized = normalizeString(value);
+
+  if (!normalized) return "";
+
+  if (normalized.startsWith("admin/")) {
+    return `/api/admin/uploads/view?key=${encodeURIComponent(normalized)}`;
+  }
+
+  return normalized;
+}
+
 function getServiceExcerpt(service: PublicService, locale: Locale): string {
   const summary = getLocalizedText(service.summary, locale);
   const description = getLocalizedText(service.description, locale);
 
   return summary || description || "";
+}
+
+function isServicesScrollHref(value: string): boolean {
+  const normalized = normalizeString(value).toLowerCase();
+
+  return (
+    normalized === "#services" ||
+    normalized === "/services#services" ||
+    normalized === "/services"
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -220,6 +242,8 @@ export default function ServicesPageClient({
 
   const primaryCtaHref = normalizeString(pageHeader.primaryCtaHref) || "/contact";
   const secondaryCtaHref = normalizeString(pageHeader.secondaryCtaHref);
+  const secondaryCtaShouldScroll =
+    !secondaryCtaHref || isServicesScrollHref(secondaryCtaHref);
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
@@ -253,15 +277,7 @@ export default function ServicesPageClient({
                 <ArrowRight className="h-4 w-4" />
               </Link>
 
-              {secondaryCtaHref ? (
-                <Link
-                  href={secondaryCtaHref}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
-                >
-                  {secondaryCtaLabel}
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              ) : (
+              {secondaryCtaShouldScroll ? (
                 <button
                   type="button"
                   onClick={handleExploreServices}
@@ -270,6 +286,14 @@ export default function ServicesPageClient({
                   {secondaryCtaLabel}
                   <ArrowRight className="h-4 w-4" />
                 </button>
+              ) : (
+                <Link
+                  href={secondaryCtaHref}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+                >
+                  {secondaryCtaLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               )}
             </div>
           </div>
@@ -307,8 +331,9 @@ export default function ServicesPageClient({
       </section>
 
       <section
+        id="services"
         ref={servicesSectionRef}
-        className="mx-auto max-w-7xl px-6 py-14 md:px-10"
+        className="mx-auto max-w-7xl scroll-mt-28 px-6 py-14 md:px-10"
       >
         <h2 className="text-3xl font-semibold text-slate-950 md:text-4xl">
           {copy.sectionTitle}
@@ -342,12 +367,13 @@ export default function ServicesPageClient({
                 >
                   <Link href={`/services/${service.slug}`} className="block h-full">
                     <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
-                      {service.coverImage ? (
+                      {resolveImageSrc(service.coverImage) ? (
                         <Image
-                          src={service.coverImage}
+                          src={resolveImageSrc(service.coverImage)}
                           alt={title || "Service image"}
                           fill
                           sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                          unoptimized
                           className="object-cover transition duration-500 group-hover:scale-[1.04]"
                         />
                       ) : (

@@ -56,6 +56,13 @@ import DocumentAttachmentSelector, {
   type ServiceAttachmentItem,
 } from "@/components/admin/documents/DocumentAttachmentSelector";
 
+import Image from "next/image";
+import {
+  uploadAdminFile,
+  type UploadedAdminFile,
+} from "@/lib/adminUploadsClient";
+import { resolveAssetUrl } from "@/lib/resolveAssetUrl";
+
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -479,6 +486,10 @@ export default function ServicesPage() {
   const [services, setServices] = useState<ServiceListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [uploadingCoverImage, setUploadingCoverImage] = useState(false);
+  const [uploadingSeoImage, setUploadingSeoImage] = useState(false);
+  const [uploadingGalleryIndex, setUploadingGalleryIndex] = useState<number | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1425,12 +1436,98 @@ export default function ServicesPage() {
 
             <div>
               <FieldLabel>Cover Image</FieldLabel>
-              <TextInput
-                value={form.coverImage}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, coverImage: e.target.value }))
-                }
-              />
+
+              <div className="space-y-3">
+                <TextInput
+                  value={form.coverImage}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, coverImage: e.target.value }))
+                  }
+                  placeholder="admin/services/covers/..."
+                />
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp,.svg"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        if (!file) return;
+
+                        try {
+                          setUploadingCoverImage(true);
+
+                          const result = await uploadAdminFile(file, "services/covers");
+
+                          if (!result.ok || !result.file) {
+                            toast.error(
+                              lang === "es"
+                                ? result.message || "No se pudo subir la imagen principal."
+                                : result.message || "Could not upload the cover image."
+                            );
+                            return;
+                          }
+
+                          const uploadedFile: UploadedAdminFile = result.file;
+
+                          setForm((prev) => ({
+                            ...prev,
+                            coverImage: uploadedFile.fileKey,
+                          }));
+
+                          toast.success(
+                            lang === "es"
+                              ? "Imagen principal subida correctamente."
+                              : "Cover image uploaded successfully."
+                          );
+                        } catch (error) {
+                          console.error("[ServicesPage] Cover image upload error:", error);
+
+                          toast.error(
+                            lang === "es"
+                              ? "Ocurrió un error al subir la imagen principal."
+                              : "An error occurred while uploading the cover image."
+                          );
+                        } finally {
+                          setUploadingCoverImage(false);
+                          e.target.value = "";
+                        }
+                      }}
+                      disabled={uploadingCoverImage || saving}
+                    />
+                    {uploadingCoverImage
+                      ? lang === "es"
+                        ? "Subiendo..."
+                        : "Uploading..."
+                      : lang === "es"
+                        ? "Subir imagen principal"
+                        : "Upload cover image"}
+                  </label>
+
+                  {form.coverImage ? (
+                    <span className="text-xs text-text-secondary">{form.coverImage}</span>
+                  ) : null}
+                </div>
+
+                {form.coverImage ? (
+                  <div className="rounded-xl border border-border bg-background p-4">
+                    <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                      {lang === "es" ? "Vista previa" : "Preview"}
+                    </div>
+
+                    <Image
+                      src={resolveAssetUrl(form.coverImage)}
+                      alt="Service cover preview"
+                      width={480}
+                      height={280}
+                      unoptimized
+                      className="max-h-56 w-auto rounded-lg object-contain"
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
           </SectionCard>
 
@@ -1523,8 +1620,86 @@ export default function ServicesPage() {
                           onChange={(e) =>
                             updateGalleryUrl(index, e.target.value)
                           }
-                          placeholder="/assets/services/example.jpg"
+                          placeholder="admin/services/gallery/..."
                         />
+
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                            <input
+                              type="file"
+                              accept=".png,.jpg,.jpeg,.webp,.svg"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0] ?? null;
+                                if (!file) return;
+
+                                try {
+                                  setUploadingGalleryIndex(index);
+
+                                  const result = await uploadAdminFile(file, "services/gallery");
+
+                                  if (!result.ok || !result.file) {
+                                    toast.error(
+                                      lang === "es"
+                                        ? result.message || "No se pudo subir la imagen de galería."
+                                        : result.message || "Could not upload the gallery image."
+                                    );
+                                    return;
+                                  }
+
+                                  const uploadedFile: UploadedAdminFile = result.file;
+                                  updateGalleryUrl(index, uploadedFile.fileKey);
+
+                                  toast.success(
+                                    lang === "es"
+                                      ? "Imagen de galería subida correctamente."
+                                      : "Gallery image uploaded successfully."
+                                  );
+                                } catch (error) {
+                                  console.error("[ServicesPage] Gallery image upload error:", error);
+
+                                  toast.error(
+                                    lang === "es"
+                                      ? "Ocurrió un error al subir la imagen de galería."
+                                      : "An error occurred while uploading the gallery image."
+                                  );
+                                } finally {
+                                  setUploadingGalleryIndex(null);
+                                  e.target.value = "";
+                                }
+                              }}
+                              disabled={uploadingGalleryIndex === index || saving}
+                            />
+                            {uploadingGalleryIndex === index
+                              ? lang === "es"
+                                ? "Subiendo..."
+                                : "Uploading..."
+                              : lang === "es"
+                                ? "Subir imagen"
+                                : "Upload image"}
+                          </label>
+
+                          {item.url ? (
+                            <span className="text-xs text-text-secondary">{item.url}</span>
+                          ) : null}
+                        </div>
+
+                        {item.url ? (
+                          <div className="mt-3 rounded-xl border border-border bg-background p-4">
+                            <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                              {lang === "es" ? "Vista previa" : "Preview"}
+                            </div>
+
+                            <Image
+                              src={resolveAssetUrl(item.url)}
+                              alt={item.alt[lang] || `Gallery image ${index + 1}`}
+                              width={420}
+                              height={240}
+                              unoptimized
+                              className="max-h-48 w-auto rounded-lg object-contain"
+                            />
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
@@ -1754,15 +1929,104 @@ export default function ServicesPage() {
 
             <div>
               <FieldLabel>SEO Image</FieldLabel>
-              <TextInput
-                value={form.seo.image}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    seo: { ...prev.seo, image: e.target.value },
-                  }))
-                }
-              />
+
+              <div className="space-y-3">
+                <TextInput
+                  value={form.seo.image}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      seo: { ...prev.seo, image: e.target.value },
+                    }))
+                  }
+                  placeholder="admin/services/seo/..."
+                />
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp,.svg"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        if (!file) return;
+
+                        try {
+                          setUploadingSeoImage(true);
+
+                          const result = await uploadAdminFile(file, "services/seo");
+
+                          if (!result.ok || !result.file) {
+                            toast.error(
+                              lang === "es"
+                                ? result.message || "No se pudo subir la imagen SEO."
+                                : result.message || "Could not upload the SEO image."
+                            );
+                            return;
+                          }
+
+                          const uploadedFile: UploadedAdminFile = result.file;
+
+                          setForm((prev) => ({
+                            ...prev,
+                            seo: {
+                              ...prev.seo,
+                              image: uploadedFile.fileKey,
+                            },
+                          }));
+
+                          toast.success(
+                            lang === "es"
+                              ? "Imagen SEO subida correctamente."
+                              : "SEO image uploaded successfully."
+                          );
+                        } catch (error) {
+                          console.error("[ServicesPage] SEO image upload error:", error);
+
+                          toast.error(
+                            lang === "es"
+                              ? "Ocurrió un error al subir la imagen SEO."
+                              : "An error occurred while uploading the SEO image."
+                          );
+                        } finally {
+                          setUploadingSeoImage(false);
+                          e.target.value = "";
+                        }
+                      }}
+                      disabled={uploadingSeoImage || saving}
+                    />
+                    {uploadingSeoImage
+                      ? lang === "es"
+                        ? "Subiendo..."
+                        : "Uploading..."
+                      : lang === "es"
+                        ? "Subir imagen SEO"
+                        : "Upload SEO image"}
+                  </label>
+
+                  {form.seo.image ? (
+                    <span className="text-xs text-text-secondary">{form.seo.image}</span>
+                  ) : null}
+                </div>
+
+                {form.seo.image ? (
+                  <div className="rounded-xl border border-border bg-background p-4">
+                    <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                      {lang === "es" ? "Vista previa" : "Preview"}
+                    </div>
+
+                    <Image
+                      src={resolveAssetUrl(form.seo.image)}
+                      alt="SEO image preview"
+                      width={420}
+                      height={240}
+                      unoptimized
+                      className="max-h-48 w-auto rounded-lg object-contain"
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
           </SectionCard>
 

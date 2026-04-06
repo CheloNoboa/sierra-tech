@@ -32,6 +32,8 @@
  * - Sin hardcode innecesario de branding.
  * - SiteSettings es la fuente de verdad para branding y CTA global.
  * - No consumir contenido editorial desde HomeSettings.
+ * - Si el logo almacenado es un fileKey privado (`admin/...`), debe resolverse
+ *   al endpoint interno de lectura segura.
  *
  * EN:
  * Public main navigation component.
@@ -45,6 +47,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 
 import { useTranslation } from "@/hooks/useTranslation";
+import {
+  getPublicBranding,
+  listenBrandingUpdates,
+} from "@/lib/publicBranding";
 
 import {
   HiOutlineBars3,
@@ -91,11 +97,6 @@ interface HeaderSiteSettings {
 /* Safe defaults                                                              */
 /* -------------------------------------------------------------------------- */
 
-const EMPTY_LOCALIZED_TEXT: LocalizedText = {
-  es: "",
-  en: "",
-};
-
 const HEADER_SITE_SETTINGS_DEFAULTS: HeaderSiteSettings = {
   identity: {
     siteName: "",
@@ -113,75 +114,40 @@ const HEADER_SITE_SETTINGS_DEFAULTS: HeaderSiteSettings = {
   },
 };
 
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function normalizeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function normalizeBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function normalizeLocalizedText(
-  value: unknown,
-  fallback: LocalizedText = EMPTY_LOCALIZED_TEXT
-): LocalizedText {
-  if (!value || typeof value !== "object") return fallback;
-
-  const record = value as Record<string, unknown>;
-
-  return {
-    es: normalizeString(record.es, fallback.es),
-    en: normalizeString(record.en, fallback.en),
-  };
-}
-
+/**
+ * -----------------------------------------------------------------------------
+ * Normaliza una referencia de imagen para branding público.
+ *
+ * Reglas:
+ * - Si está vacía, devuelve string vacío.
+ * - Si es una URL absoluta, la conserva.
+ * - Si es una ruta relativa del proyecto, la conserva.
+ * - Si es un fileKey privado de admin (`admin/...`), lo transforma al endpoint
+ *   interno de lectura segura para poder usarlo en el frontend público.
+ * -----------------------------------------------------------------------------
+ */
 function normalizeImageSrc(value: string | undefined | null): string {
   const raw = value?.trim() ?? "";
-  if (!raw) return "";
+
+  if (!raw) {
+    return "";
+  }
 
   const normalized = raw.replace(/\\/g, "/");
 
-  if (normalized.startsWith("/")) return normalized;
-
-  try {
-    return new URL(normalized).toString();
-  } catch {
-    return "";
-  }
-}
-
-function normalizeSiteSettings(payload: unknown): HeaderSiteSettings {
-  if (!payload || typeof payload !== "object") {
-    return HEADER_SITE_SETTINGS_DEFAULTS;
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
   }
 
-  const record = payload as Record<string, unknown>;
-  const identity = (record.identity ?? {}) as Record<string, unknown>;
-  const globalPrimaryCta = (record.globalPrimaryCta ?? {}) as Record<
-    string,
-    unknown
-  >;
+  if (normalized.startsWith("/")) {
+    return normalized;
+  }
 
-  return {
-    identity: {
-      siteName: normalizeString(identity.siteName),
-      siteNameShort: normalizeString(identity.siteNameShort),
-      logoLight: normalizeString(identity.logoLight),
-      logoDark: normalizeString(identity.logoDark),
-    },
-    globalPrimaryCta: {
-      label: normalizeLocalizedText(globalPrimaryCta.label, {
-        es: "Solicitar cotización",
-        en: "Request a quote",
-      }),
-      href: normalizeString(globalPrimaryCta.href, "/contact"),
-      enabled: normalizeBoolean(globalPrimaryCta.enabled, true),
-    },
-  };
+  if (normalized.startsWith("admin/")) {
+    return `/api/admin/uploads/view?key=${encodeURIComponent(normalized)}`;
+  }
+
+  return "";
 }
 
 function getLocalizedText(value: LocalizedText, locale: "es" | "en"): string {
@@ -189,7 +155,10 @@ function getLocalizedText(value: LocalizedText, locale: "es" | "en"): string {
 }
 
 function hasLocalizedText(value: LocalizedText | null | undefined): boolean {
-  if (!value) return false;
+  if (!value) {
+    return false;
+  }
+
   return value.es.trim().length > 0 || value.en.trim().length > 0;
 }
 
@@ -214,7 +183,9 @@ function scrollToSection(sectionId: string, attempts = 12): void {
       return;
     }
 
-    if (remaining <= 0) return;
+    if (remaining <= 0) {
+      return;
+    }
 
     window.setTimeout(() => {
       tryScroll(remaining - 1);
@@ -263,17 +234,17 @@ export default function Header() {
   useEffect(() => {
     async function loadSiteSettings() {
       try {
-        const response = await fetch("/api/site-settings", {
-          method: "GET",
-          cache: "no-store",
-        });
+        const branding = await getPublicBranding();
 
-        if (!response.ok) {
-          throw new Error(`HTTP_${response.status}`);
-        }
-
-        const payload: unknown = await response.json().catch(() => null);
-        setSiteSettings(normalizeSiteSettings(payload));
+        setSiteSettings((prev) => ({
+          ...prev,
+          identity: {
+            siteName: branding.siteName,
+            siteNameShort: branding.siteNameShort,
+            logoLight: branding.logoLight,
+            logoDark: branding.logoDark,
+          },
+        }));
       } catch (error) {
         console.error("[Header] Error loading site settings:", error);
         setSiteSettings(HEADER_SITE_SETTINGS_DEFAULTS);
@@ -281,6 +252,32 @@ export default function Header() {
     }
 
     void loadSiteSettings();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = listenBrandingUpdates(() => {
+      async function reloadBranding() {
+        try {
+          const branding = await getPublicBranding();
+
+          setSiteSettings((prev) => ({
+            ...prev,
+            identity: {
+              siteName: branding.siteName,
+              siteNameShort: branding.siteNameShort,
+              logoLight: branding.logoLight,
+              logoDark: branding.logoDark,
+            },
+          }));
+        } catch (error) {
+          console.error("[Header] Branding sync error:", error);
+        }
+      }
+
+      void reloadBranding();
+    });
+
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -429,7 +426,9 @@ export default function Header() {
   const handleGlobalCtaNavigation = useCallback(() => {
     closeMobileMenu();
 
-    if (!globalCtaIsSectionLink) return;
+    if (!globalCtaIsSectionLink) {
+      return;
+    }
 
     if (pathname === "/") {
       if (window.location.hash !== globalCtaHref) {
@@ -490,6 +489,7 @@ export default function Header() {
                   height={54}
                   className="h-[42px] w-auto object-contain md:h-[54px]"
                   priority
+                  unoptimized
                 />
               ) : (
                 <div className="h-[42px] w-[42px] rounded-md border border-border bg-surface-soft md:h-[54px] md:w-[54px]" />

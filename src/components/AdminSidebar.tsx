@@ -8,13 +8,20 @@
  *
  * ES:
  * Sidebar administrativo dinámico basado en permisos reales del usuario.
- * Incluye acceso a:
- * - Sitio público
- * - Servicios
- * - Clases de servicio
- * - Solicitudes de contacto
- * - Políticas
- * - Sistema
+ *
+ * Responsabilidades:
+ * - Renderizar navegación administrativa agrupada por módulos.
+ * - Mostrar únicamente opciones permitidas según rol/permisos.
+ * - Mantener estado visual activo según la ruta actual.
+ * - Exponer selector de idioma y acción de cierre de sesión.
+ *
+ * Reglas:
+ * - `*` concede acceso total.
+ * - La visibilidad por módulo se resuelve por prefijo de permiso.
+ * - El sidebar no contiene lógica de negocio de cada módulo.
+ *
+ * EN:
+ * Dynamic administrative sidebar driven by the user's real permissions.
  * =============================================================================
  */
 
@@ -26,6 +33,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import { useTranslation } from "@/hooks/useTranslation";
 
 import {
+  Building2,
   Clock,
   Cookie,
   DatabaseBackup,
@@ -40,6 +48,7 @@ import {
   Settings,
   UserCircle2,
   UserCog,
+  Users,
   Wrench,
 } from "lucide-react";
 
@@ -105,6 +114,13 @@ export default function AdminSidebar() {
     contactRequests:
       locale === "es" ? "Solicitudes de contacto" : "Contact requests",
 
+    crm: locale === "es" ? "Organizaciones" : "Organizations",
+    organizations: locale === "es" ? "Organizaciones" : "Organizations",
+    organizationUsers:
+      locale === "es"
+        ? "Usuarios de organización"
+        : "Organization users",
+
     policies: locale === "es" ? "Políticas" : "Policies",
     system: locale === "es" ? "Sistema" : "System",
 
@@ -139,6 +155,13 @@ export default function AdminSidebar() {
     "/admin/dashboard/contact-requests"
   );
 
+  const isOrganizationsActive = pathname.startsWith(
+    "/admin/dashboard/organizations"
+  );
+  const isOrganizationUsersActive = pathname.startsWith(
+    "/admin/dashboard/organization-users"
+  );
+
   const isPrivacyActive = pathname.startsWith("/admin/dashboard/privacy");
   const isTermsActive = pathname.startsWith("/admin/dashboard/terms");
   const isCookiesActive = pathname.startsWith("/admin/dashboard/cookies");
@@ -161,6 +184,11 @@ export default function AdminSidebar() {
     canAccessModule(permissions, "service-classes") ||
     canAccessModule(permissions, "contact-requests") ||
     canAccessModule(permissions, "cms");
+
+  const canViewOrganizations =
+    isSuperAdmin ||
+    canAccessModule(permissions, "organizations") ||
+    canAccessModule(permissions, "organization-users");
 
   const canViewPolicies =
     isSuperAdmin || canAccessModule(permissions, "policies");
@@ -266,6 +294,43 @@ export default function AdminSidebar() {
                     className={iconClass(isContactRequestsActive)}
                   />
                   <span className={textVisibility}>{t.contactRequests}</span>
+                </Link>
+              )}
+            </div>
+          )}
+
+          {canViewOrganizations && (
+            <div className="space-y-1.5">
+              <p
+                className={`px-1 text-[11px] uppercase tracking-[0.14em] text-text-muted ${textVisibility}`}
+              >
+                {t.crm}
+              </p>
+
+              {(isSuperAdmin || canAccessModule(permissions, "organizations")) && (
+                <Link
+                  href="/admin/dashboard/organizations"
+                  className={linkClass(isOrganizationsActive)}
+                >
+                  <Building2
+                    size={18}
+                    className={iconClass(isOrganizationsActive)}
+                  />
+                  <span className={textVisibility}>{t.organizations}</span>
+                </Link>
+              )}
+
+              {(isSuperAdmin ||
+                canAccessModule(permissions, "organization-users")) && (
+                <Link
+                  href="/admin/dashboard/organization-users"
+                  className={linkClass(isOrganizationUsersActive)}
+                >
+                  <Users
+                    size={18}
+                    className={iconClass(isOrganizationUsersActive)}
+                  />
+                  <span className={textVisibility}>{t.organizationUsers}</span>
                 </Link>
               )}
             </div>

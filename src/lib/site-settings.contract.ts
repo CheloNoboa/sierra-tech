@@ -47,14 +47,6 @@ export interface SiteSettingsPayload {
     country: string;
   };
 
-  coverage: {
-    label: LocalizedText;
-    googleMapsUrl: string;
-    googleMapsEmbedUrl: string;
-    lat: number | null;
-    lng: number | null;
-  };
-
   socialLinks: {
     facebook: string;
     instagram: string;
@@ -111,14 +103,6 @@ export const SITE_SETTINGS_DEFAULTS: SiteSettingsPayload = {
     addressLine2: "",
     city: "",
     country: "",
-  },
-
-  coverage: {
-    label: { es: "", en: "" },
-    googleMapsUrl: "",
-    googleMapsEmbedUrl: "",
-    lat: null,
-    lng: null,
   },
 
   socialLinks: {

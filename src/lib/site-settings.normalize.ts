@@ -79,7 +79,6 @@ export function normalizeSiteSettingsPayload(
   const record = payload as Record<string, unknown>;
   const identity = (record.identity ?? {}) as Record<string, unknown>;
   const contact = (record.contact ?? {}) as Record<string, unknown>;
-  const coverage = (record.coverage ?? {}) as Record<string, unknown>;
   const socialLinks = (record.socialLinks ?? {}) as Record<string, unknown>;
   const globalPrimaryCta =
     (record.globalPrimaryCta ?? {}) as Record<string, unknown>;
@@ -113,17 +112,6 @@ export function normalizeSiteSettingsPayload(
       addressLine2: normalizeString(contact.addressLine2),
       city: normalizeString(contact.city),
       country: normalizeString(contact.country),
-    },
-
-    coverage: {
-      label: normalizeLocalizedText(
-        coverage.label,
-        SITE_SETTINGS_DEFAULTS.coverage.label
-      ),
-      googleMapsUrl: normalizeString(coverage.googleMapsUrl),
-      googleMapsEmbedUrl: normalizeString(coverage.googleMapsEmbedUrl),
-      lat: normalizeNumber(coverage.lat, null),
-      lng: normalizeNumber(coverage.lng, null),
     },
 
     socialLinks: {

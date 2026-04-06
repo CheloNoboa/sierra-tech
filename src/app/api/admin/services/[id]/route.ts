@@ -219,7 +219,16 @@ function normalizeAttachments(value: unknown): ServiceAttachmentRef[] {
       if (!item || typeof item !== "object") return null;
 
       const record = item as Record<string, unknown>;
-      const documentId = normalizeString(record.documentId);
+      const rawDocumentId = record.documentId;
+
+      const documentId =
+        typeof rawDocumentId === "string"
+          ? rawDocumentId.trim()
+          : rawDocumentId &&
+              typeof rawDocumentId === "object" &&
+              "toString" in rawDocumentId
+            ? String(rawDocumentId).trim()
+            : "";
 
       if (!documentId || !Types.ObjectId.isValid(documentId)) return null;
 

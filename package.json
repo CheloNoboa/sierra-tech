@@ -23,6 +23,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1023.0",
     "@fortawesome/fontawesome-free": "^7.1.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@stripe/react-stripe-js": "^5.6.1",

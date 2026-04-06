@@ -40,11 +40,43 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "./globals.css";
-import "@fortawesome/fontawesome-free/css/all.min.css";
 
 import Script from "next/script";
 import Providers from "./providers";
 import { getPublicSiteSettings } from "@/lib/siteSettings";
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * -----------------------------------------------------------------------------
+ * Resuelve una URL pública utilizable por metadata o por el documento HTML.
+ *
+ * Reglas:
+ * - Si el valor ya es una URL absoluta, se usa tal cual.
+ * - Si el valor es un fileKey privado de admin, se transforma al endpoint
+ *   interno de lectura segura.
+ * - Si el valor está vacío, devuelve undefined.
+ * -----------------------------------------------------------------------------
+ */
+function resolveAssetUrl(value: string): string | undefined {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("admin/")) {
+    return `/api/admin/uploads/view?key=${encodeURIComponent(trimmed)}`;
+  }
+
+  return trimmed;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Metadata                                                                   */
@@ -71,8 +103,8 @@ export async function generateMetadata(): Promise<Metadata> {
         settings.identity.tagline.es.trim() ||
         siteName;
 
-  const ogImage = settings.seo.defaultOgImage.trim() || undefined;
-  const favicon = settings.identity.favicon.trim() || undefined;
+  const ogImage = resolveAssetUrl(settings.seo.defaultOgImage);
+  const favicon = resolveAssetUrl(settings.identity.favicon);
 
   return {
     metadataBase: new URL(
@@ -107,13 +139,30 @@ export async function generateMetadata(): Promise<Metadata> {
 /* Root layout                                                                */
 /* -------------------------------------------------------------------------- */
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const settings = await getPublicSiteSettings();
+
+  const defaultLocale = settings.i18n.defaultLocale === "en" ? "en" : "es";
+
   return (
-    <html lang="es" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html
+      lang={defaultLocale}
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
       <head>
         <link
           href="https://fonts.googleapis.com/icon?family=Material+Icons"
           rel="stylesheet"
+        />
+
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         />
 
         <Script

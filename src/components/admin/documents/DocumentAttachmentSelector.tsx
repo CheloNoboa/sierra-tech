@@ -52,6 +52,11 @@ import {
   Save,
   Pencil,
 } from "lucide-react";
+import {
+  uploadAdminFile,
+  type UploadedAdminFile,
+} from "@/lib/adminUploadsClient";
+import { resolveAssetUrl } from "@/lib/resolveAssetUrl";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -376,6 +381,7 @@ function isLikelyUrlOrPublicPath(value: string): boolean {
   if (!trimmed) return false;
 
   if (trimmed.startsWith("/")) return true;
+  if (trimmed.startsWith("admin/")) return true;
 
   try {
     const url = new URL(trimmed);
@@ -477,6 +483,29 @@ function toQuickFormState(document: AdminDocumentListItem): QuickDocumentFormSta
   };
 }
 
+function inferDocumentTypeFromUploadedFile(
+  file: UploadedAdminFile
+): DocumentType {
+  const mime = file.mimeType.toLowerCase();
+  const extension = file.extension.toLowerCase();
+
+  if (
+    mime === "image/png" ||
+    mime === "image/jpeg" ||
+    mime === "image/webp" ||
+    mime === "image/svg+xml" ||
+    extension === "png" ||
+    extension === "jpg" ||
+    extension === "jpeg" ||
+    extension === "webp" ||
+    extension === "svg"
+  ) {
+    return "image";
+  }
+
+  return "pdf";
+}
+
 function getDocumentLanguageLabel(
   value: DocumentLanguage,
   locale: Locale
@@ -569,6 +598,9 @@ export default function DocumentAttachmentSelector({
   );
   const [quickErrors, setQuickErrors] = useState<QuickDocumentErrors>({});
   const [quickErrorMessage, setQuickErrorMessage] = useState<string>("");
+
+  const [uploadingDocumentFile, setUploadingDocumentFile] = useState(false);
+  const [uploadingThumbnailFile, setUploadingThumbnailFile] = useState(false);
 
   const copy = useMemo(() => {
     return {
@@ -809,6 +841,98 @@ export default function DocumentAttachmentSelector({
       },
     }));
   };
+
+  async function handleQuickDocumentFileUpload(
+    event: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> {
+    const selectedFile = event.target.files?.[0] ?? null;
+
+    if (!selectedFile) {
+      return;
+    }
+
+    try {
+      setUploadingDocumentFile(true);
+      setQuickErrorMessage("");
+
+      const result = await uploadAdminFile(selectedFile, "documents/files");
+
+      if (!result.ok || !result.file) {
+        setQuickErrorMessage(
+          result.message ||
+            (locale === "es"
+              ? "No se pudo subir el documento."
+              : "Could not upload the document.")
+        );
+        return;
+      }
+
+      const uploadedFile = result.file;
+
+      setQuickForm((prev) => ({
+        ...prev,
+        fileUrl: uploadedFile.fileKey,
+        fileName: uploadedFile.originalName || uploadedFile.fileName,
+        type: inferDocumentTypeFromUploadedFile(uploadedFile),
+      }));
+    } catch (error) {
+      console.error("[DocumentAttachmentSelector] document upload error:", error);
+
+      setQuickErrorMessage(
+        locale === "es"
+          ? "Ocurrió un error al subir el documento."
+          : "An error occurred while uploading the document."
+      );
+    } finally {
+      setUploadingDocumentFile(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleQuickThumbnailUpload(
+    event: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> {
+    const selectedFile = event.target.files?.[0] ?? null;
+
+    if (!selectedFile) {
+      return;
+    }
+
+    try {
+      setUploadingThumbnailFile(true);
+      setQuickErrorMessage("");
+
+      const result = await uploadAdminFile(selectedFile, "documents/thumbnails");
+
+      if (!result.ok || !result.file) {
+        setQuickErrorMessage(
+          result.message ||
+            (locale === "es"
+              ? "No se pudo subir la miniatura."
+              : "Could not upload the thumbnail.")
+        );
+        return;
+      }
+
+      const uploadedFile = result.file;
+
+      setQuickForm((prev) => ({
+        ...prev,
+        thumbnailUrl: uploadedFile.fileKey,
+      }));
+    } catch (error) {
+      console.error("[DocumentAttachmentSelector] thumbnail upload error:", error);
+
+      setQuickErrorMessage(
+        locale === "es"
+          ? "Ocurrió un error al subir la miniatura."
+          : "An error occurred while uploading the thumbnail."
+      );
+    } finally {
+      setUploadingThumbnailFile(false);
+      event.target.value = "";
+    }
+  }
 
   const handleQuickSave = async (): Promise<void> => {
     setQuickErrorMessage("");
@@ -1256,27 +1380,97 @@ export default function DocumentAttachmentSelector({
             <label className="mb-2 block text-sm font-medium text-slate-700">
               {copy.fileUrl}
             </label>
-            <input
-              value={quickForm.fileUrl}
-              onChange={(e) => handleQuickChange("fileUrl", e.target.value)}
-              placeholder={copy.placeholderFileUrl}
-              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
-            />
-            {quickErrors.fileUrl ? (
-              <p className="mt-2 text-xs text-red-600">{quickErrors.fileUrl}</p>
-            ) : null}
+
+            <div className="space-y-3">
+              <input
+                value={quickForm.fileUrl}
+                onChange={(e) => handleQuickChange("fileUrl", e.target.value)}
+                placeholder={copy.placeholderFileUrl}
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50">
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.svg"
+                    className="hidden"
+                    onChange={(e) => void handleQuickDocumentFileUpload(e)}
+                    disabled={quickSaving || uploadingDocumentFile}
+                  />
+                  {uploadingDocumentFile
+                    ? locale === "es"
+                      ? "Subiendo documento..."
+                      : "Uploading document..."
+                    : locale === "es"
+                      ? "Subir documento"
+                      : "Upload document"}
+                </label>
+
+                {quickForm.fileUrl ? (
+                  <span className="text-xs text-slate-500">{quickForm.fileUrl}</span>
+                ) : null}
+              </div>
+
+              {quickErrors.fileUrl ? (
+                <p className="text-xs text-red-600">{quickErrors.fileUrl}</p>
+              ) : null}
+            </div>
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               {copy.thumbnailUrl}
             </label>
-            <input
-              value={quickForm.thumbnailUrl}
-              onChange={(e) => handleQuickChange("thumbnailUrl", e.target.value)}
-              placeholder={copy.placeholderThumb}
-              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
-            />
+
+            <div className="space-y-3">
+              <input
+                value={quickForm.thumbnailUrl}
+                onChange={(e) => handleQuickChange("thumbnailUrl", e.target.value)}
+                placeholder={copy.placeholderThumb}
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50">
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,.svg"
+                    className="hidden"
+                    onChange={(e) => void handleQuickThumbnailUpload(e)}
+                    disabled={quickSaving || uploadingThumbnailFile}
+                  />
+                  {uploadingThumbnailFile
+                    ? locale === "es"
+                      ? "Subiendo miniatura..."
+                      : "Uploading thumbnail..."
+                    : locale === "es"
+                      ? "Subir miniatura"
+                      : "Upload thumbnail"}
+                </label>
+
+                {quickForm.thumbnailUrl ? (
+                  <span className="text-xs text-slate-500">
+                    {quickForm.thumbnailUrl}
+                  </span>
+                ) : null}
+              </div>
+
+              {quickForm.thumbnailUrl ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+                    {locale === "es" ? "Vista previa" : "Preview"}
+                  </div>
+
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resolveAssetUrl(quickForm.thumbnailUrl)}
+                    alt="Document thumbnail preview"
+                    className="max-h-40 w-auto rounded-lg object-contain"
+                  />
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">

@@ -87,6 +87,18 @@ function normalizeLocalizedText(
   };
 }
 
+function resolvePublicAssetUrl(value: unknown): string {
+  const raw = normalizeString(value);
+
+  if (!raw) return "";
+
+  if (raw.startsWith("admin/")) {
+    return `/api/admin/uploads/view?key=${encodeURIComponent(raw)}`;
+  }
+
+  return raw;
+}
+
 function normalizePageHeader(value: unknown): ServicesPageHeader {
   if (!value || typeof value !== "object") {
     return structuredClone(EMPTY_PAGE_HEADER);
@@ -150,7 +162,7 @@ function normalizeServices(value: unknown): PublicService[] {
         title: normalizeLocalizedText(record?.title),
         summary: normalizeLocalizedText(record?.summary),
         description: normalizeLocalizedText(record?.description),
-        coverImage: normalizeString(record?.coverImage),
+        coverImage: resolvePublicAssetUrl(record?.coverImage),
         category: normalizeString(record?.category),
         order: normalizeNumber(record?.order, index + 1),
       };

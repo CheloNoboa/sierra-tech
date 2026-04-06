@@ -109,17 +109,6 @@ const SiteSettingsSchema = new Schema(
       country: { type: String, default: "" },
     },
 
-    coverage: {
-      label: {
-        type: LocalizedTextSchema,
-        default: () => ({ es: "", en: "" }),
-      },
-      googleMapsUrl: { type: String, default: "" },
-      googleMapsEmbedUrl: { type: String, default: "" },
-      lat: { type: Number, default: null },
-      lng: { type: Number, default: null },
-    },
-
     socialLinks: {
       type: SocialLinksSchema,
       default: () => ({

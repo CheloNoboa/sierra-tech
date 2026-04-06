@@ -35,7 +35,7 @@
  * =============================================================================
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -334,49 +334,50 @@ export default function SettingsDataGrid() {
    * Load settings
    * ============================================================================= */
 
-  const loadSettings = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const res = await fetch("/api/admin/settings", {
-        headers: { "accept-language": locale },
-      });
-
-      const json: unknown = await res.json().catch(() => null);
-
-      if (!res.ok || !isApiOk<SystemSetting[]>(json)) {
-        toast.error(t.loadError);
-        return;
-      }
-
-      const raw = (json as ApiOk<SystemSetting[]>).data;
-
-      const data: SystemSetting[] = raw.map(normalizeSetting);
-
-      setSettings(data);
-
-      const perPage = data.find(
-        (x) => x.key === "recordsPerPageConfiguration"
-      );
-      if (perPage) {
-        const parsed = Number(perPage.value);
-        if (!Number.isNaN(parsed) && parsed > 0) {
-          setRecordsPerPage(parsed);
-        }
-      }
-
-      setPage(1);
-      setSelectedIds([]);
-    } catch {
-      toast.error(t.loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [locale, toast, t.loadError]);
-
   useEffect(() => {
-    void loadSettings();
-  }, [loadSettings]);
+    async function runInitialLoad() {
+      try {
+        setLoading(true);
+
+        const res = await fetch("/api/admin/settings", {
+          headers: { "accept-language": locale },
+        });
+
+        const json: unknown = await res.json().catch(() => null);
+
+        if (!res.ok || !isApiOk<SystemSetting[]>(json)) {
+          toast.error(t.loadError);
+          return;
+        }
+
+        const raw = (json as ApiOk<SystemSetting[]>).data;
+
+        const data: SystemSetting[] = raw.map(normalizeSetting);
+
+        setSettings(data);
+
+        const perPage = data.find(
+          (x) => x.key === "recordsPerPageConfiguration"
+        );
+
+        if (perPage) {
+          const parsed = Number(perPage.value);
+          if (!Number.isNaN(parsed) && parsed > 0) {
+            setRecordsPerPage(parsed);
+          }
+        }
+
+        setPage(1);
+        setSelectedIds([]);
+      } catch {
+        toast.error(t.loadError);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void runInitialLoad();
+  }, [locale, toast, t.loadError]);
 
   useEffect(() => {
     setPage(1);
@@ -579,12 +580,45 @@ export default function SettingsDataGrid() {
               leftIcon={<RefreshCw size={14} />}
               loading={loading}
               className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
-              onClick={() => {
-                setSearchKey("");
-                setSearchModule("");
-                setPage(1);
-                setSelectedIds([]);
-                void loadSettings();
+              onClick={async () => {
+                try {
+                  setSearchKey("");
+                  setSearchModule("");
+                  setPage(1);
+                  setSelectedIds([]);
+                  setLoading(true);
+
+                  const res = await fetch("/api/admin/settings", {
+                    headers: { "accept-language": locale },
+                  });
+
+                  const json: unknown = await res.json().catch(() => null);
+
+                  if (!res.ok || !isApiOk<SystemSetting[]>(json)) {
+                    toast.error(t.loadError);
+                    return;
+                  }
+
+                  const raw = (json as ApiOk<SystemSetting[]>).data;
+                  const data: SystemSetting[] = raw.map(normalizeSetting);
+
+                  setSettings(data);
+
+                  const perPage = data.find(
+                    (x) => x.key === "recordsPerPageConfiguration"
+                  );
+
+                  if (perPage) {
+                    const parsed = Number(perPage.value);
+                    if (!Number.isNaN(parsed) && parsed > 0) {
+                      setRecordsPerPage(parsed);
+                    }
+                  }
+                } catch {
+                  toast.error(t.loadError);
+                } finally {
+                  setLoading(false);
+                }
               }}
             >
               {t.refresh}

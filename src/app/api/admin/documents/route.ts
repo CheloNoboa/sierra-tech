@@ -174,6 +174,18 @@ function normalizeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+function normalizeStoredAssetPath(value: unknown): string {
+  const raw = normalizeString(value);
+
+  if (!raw) return "";
+
+  if (raw.startsWith("admin/")) {
+    return raw;
+  }
+
+  return raw;
+}
+
 function normalizeNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -245,9 +257,9 @@ function normalizePayload(body: unknown): NormalizedDocumentPayload {
     title: normalizeLocalizedText(record.title),
     description: normalizeLocalizedText(record.description),
     type: normalizeDocumentType(record.type),
-    fileUrl: normalizeString(record.fileUrl),
+    fileUrl: normalizeStoredAssetPath(record.fileUrl),
     fileName: normalizeString(record.fileName),
-    thumbnailUrl: normalizeString(record.thumbnailUrl),
+    thumbnailUrl: normalizeStoredAssetPath(record.thumbnailUrl),
     language: normalizeLanguage(record.language),
     category: normalizeDocumentCategory(record.category),
     relatedModule: normalizeRelatedModule(record.relatedModule),
@@ -269,6 +281,24 @@ function validatePayload(payload: NormalizedDocumentPayload): string | null {
 
   if (!payload.fileUrl) {
     return "Document fileUrl is required";
+  }
+
+  const fileUrl = payload.fileUrl.trim();
+
+  const isPublicPath = fileUrl.startsWith("/");
+  const isStoredAdminAsset = fileUrl.startsWith("admin/");
+
+  let isHttpUrl = false;
+
+  try {
+    const url = new URL(fileUrl);
+    isHttpUrl = url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    isHttpUrl = false;
+  }
+
+  if (!isPublicPath && !isStoredAdminAsset && !isHttpUrl) {
+    return "Document fileUrl must be a valid URL, public path, or admin asset path";
   }
 
   return null;
@@ -298,6 +328,10 @@ function inferMimeType(type: string, fileUrl: string): string {
 
   if (lowerUrl.endsWith(".webp")) {
     return "image/webp";
+  }
+
+  if (lowerUrl.endsWith(".svg")) {
+    return "image/svg+xml";
   }
 
   if (type === "image") {
@@ -445,7 +479,11 @@ export async function POST(req: NextRequest) {
       description: payload.description,
       type: payload.type,
       fileUrl: payload.fileUrl,
-      fileName: payload.fileName || payload.fileUrl.split("/").pop() || "",
+      fileName:
+        payload.fileName ||
+        payload.fileUrl.split("/").pop() ||
+        payload.fileUrl.split("\\").pop() ||
+        "",
       mimeType: inferMimeType(payload.type, payload.fileUrl),
       fileSizeBytes: 0,
       thumbnailUrl: payload.thumbnailUrl,

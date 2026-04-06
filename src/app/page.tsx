@@ -47,6 +47,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
+import {
+  getPublicBranding,
+  listenBrandingUpdates,
+} from "@/lib/publicBranding";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -135,10 +139,8 @@ interface SiteSettingsPublic {
   identity: {
     siteName: string;
     siteNameShort: string;
-    tagline: LocalizedText;
     logoLight: string;
     logoDark: string;
-    favicon: string;
   };
 }
 
@@ -218,10 +220,8 @@ const EMPTY_SITE_SETTINGS: SiteSettingsPublic = {
   identity: {
     siteName: "",
     siteNameShort: "",
-    tagline: { es: "", en: "" },
     logoLight: "",
     logoDark: "",
-    favicon: "",
   },
 };
 
@@ -409,35 +409,26 @@ function normalizeHomePayload(payload: unknown): HomePayload {
   };
 }
 
-function normalizeSiteSettings(payload: unknown): SiteSettingsPublic {
-  if (!payload || typeof payload !== "object") return EMPTY_SITE_SETTINGS;
-
-  const record = payload as Record<string, unknown>;
-  const identity = (record.identity ?? {}) as Record<string, unknown>;
-
-  return {
-    identity: {
-      siteName: normalizeString(identity.siteName),
-      siteNameShort: normalizeString(identity.siteNameShort),
-      tagline: normalizeLocalizedText(identity.tagline),
-      logoLight: normalizeString(identity.logoLight),
-      logoDark: normalizeString(identity.logoDark),
-      favicon: normalizeString(identity.favicon),
-    },
-  };
-}
-
 function normalizeImageSrc(value: string | null | undefined): string {
   const trimmed = value?.trim() ?? "";
-  if (!trimmed) return "";
 
-  if (trimmed.startsWith("/")) return trimmed;
-
-  try {
-    return new URL(trimmed).toString();
-  } catch {
+  if (!trimmed) {
     return "";
   }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/")) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("admin/")) {
+    return `/api/admin/uploads/view?key=${encodeURIComponent(trimmed)}`;
+  }
+
+  return "";
 }
 
 function getLocalizedText(value: LocalizedText, locale: Locale): string {
@@ -494,19 +485,16 @@ export default function HomePage() {
 
     async function loadSiteSettings() {
       try {
-        const response = await fetch("/api/site-settings", {
-          method: "GET",
-          cache: "no-store",
+        const branding = await getPublicBranding();
+
+        setSiteSettings({
+          identity: {
+            siteName: branding.siteName,
+            siteNameShort: branding.siteNameShort,
+            logoLight: branding.logoLight,
+            logoDark: branding.logoDark,
+          },
         });
-
-        if (!response.ok) {
-          throw new Error(`HTTP_${response.status}`);
-        }
-
-        const payload: unknown = await response.json().catch(() => null);
-        const normalized = normalizeSiteSettings(payload);
-
-        setSiteSettings(normalized);
       } catch (error) {
         console.error("[HomePage] Error loading site settings:", error);
         setSiteSettings(EMPTY_SITE_SETTINGS);
@@ -515,6 +503,31 @@ export default function HomePage() {
 
     void loadHomeContent();
     void loadSiteSettings();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = listenBrandingUpdates(() => {
+      async function reloadBranding() {
+        try {
+          const branding = await getPublicBranding();
+
+          setSiteSettings({
+            identity: {
+              siteName: branding.siteName,
+              siteNameShort: branding.siteNameShort,
+              logoLight: branding.logoLight,
+              logoDark: branding.logoDark,
+            },
+          });
+        } catch (error) {
+          console.error("[HomePage] Branding sync error:", error);
+        }
+      }
+
+      void reloadBranding();
+    });
+
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -763,6 +776,7 @@ export default function HomePage() {
                         width={360}
                         height={360}
                         priority
+                        unoptimized
                         className="h-[340px] w-full object-contain"
                       />
                     ) : (

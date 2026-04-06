@@ -35,7 +35,7 @@
  * =============================================================================
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -238,65 +238,65 @@ export default function UsersDataGrid() {
    * Initial load
    * ============================================================================= */
 
-  const loadInitial = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const [usersRes, rolesRes, settingsRes] = await Promise.all([
-        fetch("/api/admin/users", { cache: "no-store" }),
-        fetch("/api/admin/roles", { cache: "no-store" }),
-        fetch("/api/admin/settings", { cache: "no-store" }),
-      ]);
-
-      if (!usersRes.ok || !rolesRes.ok || !settingsRes.ok) {
-        throw new Error("API error");
-      }
-
-      const [usersRaw, rolesRaw, settingsRaw] = await Promise.all([
-        safeJson(usersRes),
-        safeJson(rolesRes),
-        safeJson(settingsRes),
-      ]);
-
-      const usersList = normalizeArray<UserDTO>(usersRaw, ["users", "data"]);
-      const rolesList = normalizeArray<RoleDTO>(rolesRaw, ["roles", "data"]);
-
-      setUsers(usersList);
-      setRoles(rolesList);
-
-      const settingsData = normalizeArray<SystemSettingDTO>(settingsRaw, [
-        "settings",
-        "data",
-      ]);
-      const perPageCfg = settingsData.find(
-        (s) => s.key === "recordsPerPageUsers"
-      );
-
-      if (perPageCfg) {
-        const parsed = Number(perPageCfg.value);
-        if (!Number.isNaN(parsed) && parsed > 0) {
-          setRecordsPerPage(parsed);
-        }
-      }
-
-      setPage(1);
-      setSelectedIds([]);
-    } catch {
-      toast.error(t.loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [t.loadError, toast]);
-
   useEffect(() => {
-    void loadInitial();
-  }, [loadInitial]);
+    async function runInitialLoad() {
+      try {
+        setLoading(true);
+
+        const [usersRes, rolesRes, settingsRes] = await Promise.all([
+          fetch("/api/admin/users", { cache: "no-store" }),
+          fetch("/api/admin/roles", { cache: "no-store" }),
+          fetch("/api/admin/settings", { cache: "no-store" }),
+        ]);
+
+        if (!usersRes.ok || !rolesRes.ok || !settingsRes.ok) {
+          throw new Error("API error");
+        }
+
+        const [usersRaw, rolesRaw, settingsRaw] = await Promise.all([
+          safeJson(usersRes),
+          safeJson(rolesRes),
+          safeJson(settingsRes),
+        ]);
+
+        const usersList = normalizeArray<UserDTO>(usersRaw, ["users", "data"]);
+        const rolesList = normalizeArray<RoleDTO>(rolesRaw, ["roles", "data"]);
+
+        setUsers(usersList);
+        setRoles(rolesList);
+
+        const settingsData = normalizeArray<SystemSettingDTO>(settingsRaw, [
+          "settings",
+          "data",
+        ]);
+        const perPageCfg = settingsData.find(
+          (s) => s.key === "recordsPerPageUsers"
+        );
+
+        if (perPageCfg) {
+          const parsed = Number(perPageCfg.value);
+          if (!Number.isNaN(parsed) && parsed > 0) {
+            setRecordsPerPage(parsed);
+          }
+        }
+
+        setPage(1);
+        setSelectedIds([]);
+      } catch {
+        toast.error(t.loadError);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void runInitialLoad();
+  }, [toast, t.loadError]);
 
   /* =============================================================================
    * Soft refresh
    * ============================================================================= */
 
-  const refreshUsers = useCallback(async () => {
+  async function refreshUsers() {
     try {
       setRefreshing(true);
 
@@ -320,7 +320,7 @@ export default function UsersDataGrid() {
     } finally {
       setRefreshing(false);
     }
-  }, [roles.length, t.loadError, toast]);
+  }
 
   /* =============================================================================
    * Filters + pagination

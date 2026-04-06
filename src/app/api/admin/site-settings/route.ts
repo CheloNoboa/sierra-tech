@@ -67,14 +67,6 @@ interface SiteSettingsPayload {
     country: string;
   };
 
-  coverage: {
-    label: LocalizedText;
-    googleMapsUrl: string;
-    googleMapsEmbedUrl: string;
-    lat: number | null;
-    lng: number | null;
-  };
-
   socialLinks: {
     facebook: string;
     instagram: string;
@@ -141,14 +133,6 @@ const SITE_SETTINGS_DEFAULTS: SiteSettingsPayload = {
     country: "",
   },
 
-  coverage: {
-    label: { es: "", en: "" },
-    googleMapsUrl: "",
-    googleMapsEmbedUrl: "",
-    lat: null,
-    lng: null,
-  },
-
   socialLinks: {
     facebook: "",
     instagram: "",
@@ -201,15 +185,6 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-function normalizeNumber(
-  value: unknown,
-  fallback: number | null
-): number | null {
-  if (value === null) return null;
-  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-  return value;
-}
-
 function normalizeLocale(value: unknown, fallback: Locale): Locale {
   return value === "es" || value === "en" ? value : fallback;
 }
@@ -246,7 +221,6 @@ function normalizeSiteSettingsPayload(value: unknown): SiteSettingsPayload {
   const record = value as Record<string, unknown>;
   const identity = (record.identity ?? {}) as Record<string, unknown>;
   const contact = (record.contact ?? {}) as Record<string, unknown>;
-  const coverage = (record.coverage ?? {}) as Record<string, unknown>;
   const socialLinks = (record.socialLinks ?? {}) as Record<string, unknown>;
   const globalPrimaryCta =
     (record.globalPrimaryCta ?? {}) as Record<string, unknown>;
@@ -280,17 +254,6 @@ function normalizeSiteSettingsPayload(value: unknown): SiteSettingsPayload {
       addressLine2: normalizeString(contact.addressLine2),
       city: normalizeString(contact.city),
       country: normalizeString(contact.country),
-    },
-
-    coverage: {
-      label: normalizeLocalizedText(
-        coverage.label,
-        SITE_SETTINGS_DEFAULTS.coverage.label
-      ),
-      googleMapsUrl: normalizeString(coverage.googleMapsUrl),
-      googleMapsEmbedUrl: normalizeString(coverage.googleMapsEmbedUrl),
-      lat: normalizeNumber(coverage.lat, null),
-      lng: normalizeNumber(coverage.lng, null),
     },
 
     socialLinks: {
@@ -347,7 +310,6 @@ function normalizeSiteSettingsPayload(value: unknown): SiteSettingsPayload {
 function toResponsePayload(doc: {
   identity?: unknown;
   contact?: unknown;
-  coverage?: unknown;
   socialLinks?: unknown;
   globalPrimaryCta?: unknown;
   footer?: unknown;
@@ -362,7 +324,6 @@ function toResponsePayload(doc: {
   return normalizeSiteSettingsPayload({
     identity: doc.identity,
     contact: doc.contact,
-    coverage: doc.coverage,
     socialLinks: doc.socialLinks,
     globalPrimaryCta: doc.globalPrimaryCta,
     footer: doc.footer,
@@ -430,7 +391,6 @@ export async function GET() {
       doc = await SiteSettings.create({
         identity: SITE_SETTINGS_DEFAULTS.identity,
         contact: SITE_SETTINGS_DEFAULTS.contact,
-        coverage: SITE_SETTINGS_DEFAULTS.coverage,
         socialLinks: SITE_SETTINGS_DEFAULTS.socialLinks,
         globalPrimaryCta: SITE_SETTINGS_DEFAULTS.globalPrimaryCta,
         footer: SITE_SETTINGS_DEFAULTS.footer,
@@ -474,7 +434,6 @@ export async function PUT(request: Request) {
     const update = {
       identity: normalized.identity,
       contact: normalized.contact,
-      coverage: normalized.coverage,
       socialLinks: normalized.socialLinks,
       globalPrimaryCta: normalized.globalPrimaryCta,
       footer: normalized.footer,

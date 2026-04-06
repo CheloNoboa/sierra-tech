@@ -33,24 +33,33 @@
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
 import { Home as HomeIcon, Settings as SettingsIcon } from "lucide-react";
 
 import { useTranslation } from "@/hooks/useTranslation";
 import { AdminPageHeader } from "@/components/ui/AdminPageHeader";
 import { useToast } from "@/components/ui/GlobalToastProvider";
+import Image from "next/image";
 
 import type {
   Locale,
   SiteSettingsPayload,
 } from "@/lib/site-settings.contract";
+
 import { SITE_SETTINGS_DEFAULTS } from "@/lib/site-settings.contract";
 import {
   isAllowedRole,
   normalizeSiteSettingsPayload,
   safeNumberFromInput,
 } from "@/lib/site-settings.normalize";
+
+import {
+  uploadAdminFile,
+  type UploadedAdminFile,
+} from "@/lib/adminUploadsClient";
+
+import { notifyBrandingUpdated } from "@/lib/publicBranding";
 
 /* -------------------------------------------------------------------------- */
 /* Home contract                                                              */
@@ -578,6 +587,13 @@ export default function SiteSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [uploadingOgImage, setUploadingOgImage] = useState(false);
+  const [uploadingLeadershipImage, setUploadingLeadershipImage] = useState(false);
+
+  const hasLoadedInitialDataRef = useRef(false);
+
+  const [uploadingLogoLight, setUploadingLogoLight] = useState(false);
+
   const role = session?.user?.role;
   const hasAccess = isAllowedRole(role);
 
@@ -621,6 +637,8 @@ export default function SiteSettingsPage() {
 
         setHomeForm(normalizedHome);
         setHomeInitialData(normalizedHome);
+
+        hasLoadedInitialDataRef.current = true;
       } catch (error) {
         console.error("[SiteSettingsPage] Error loading configuration:", error);
         toast.error(
@@ -638,8 +656,12 @@ export default function SiteSettingsPage() {
       return;
     }
 
+    if (hasLoadedInitialDataRef.current) {
+      return;
+    }
+
     void loadAll();
-  }, [status, hasAccess, toast, lang]);
+  }, [status, hasAccess, lang, toast]);
 
   async function handleSave(): Promise<void> {
     try {
@@ -677,6 +699,8 @@ export default function SiteSettingsPage() {
 
       setHomeForm(normalizedHome);
       setHomeInitialData(normalizedHome);
+
+      notifyBrandingUpdated();
 
       toast.success(
         lang === "es"
@@ -730,6 +754,55 @@ export default function SiteSettingsPage() {
     }));
   }
 
+  async function handleLogoLightUpload(
+    event: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> {
+    const selectedFile = event.target.files?.[0] ?? null;
+
+    if (!selectedFile) {
+      return;
+    }
+
+    try {
+      setUploadingLogoLight(true);
+
+      const result = await uploadAdminFile(
+        selectedFile,
+        "site-settings/logos"
+      );
+
+      if (!result.ok || !result.file) {
+        toast.error(
+          lang === "es"
+            ? result.message || "No se pudo subir el logo."
+            : result.message || "Could not upload the logo."
+        );
+        return;
+      }
+
+      const uploadedFile: UploadedAdminFile = result.file;
+
+      updateIdentityField("logoLight", uploadedFile.fileKey);
+
+      toast.success(
+        lang === "es"
+          ? "Logo Light subido correctamente."
+          : "Logo Light uploaded successfully."
+      );
+    } catch (error) {
+      console.error("[SiteSettingsPage] Logo Light upload error:", error);
+
+      toast.error(
+        lang === "es"
+          ? "Ocurrió un error al subir el logo."
+          : "An error occurred while uploading the logo."
+      );
+    } finally {
+      setUploadingLogoLight(false);
+      event.target.value = "";
+    }
+  }
+
   function updateContactField(
     field:
       | "primaryEmail"
@@ -747,45 +820,6 @@ export default function SiteSettingsPage() {
       ...prev,
       contact: {
         ...prev.contact,
-        [field]: value,
-      },
-    }));
-  }
-
-  function updateCoverageLabel(localeKey: Locale, value: string): void {
-    setSiteForm((prev) => ({
-      ...prev,
-      coverage: {
-        ...prev.coverage,
-        label: {
-          ...prev.coverage.label,
-          [localeKey]: value,
-        },
-      },
-    }));
-  }
-
-  function updateCoverageField(
-    field: "googleMapsUrl" | "googleMapsEmbedUrl",
-    value: string
-  ): void {
-    setSiteForm((prev) => ({
-      ...prev,
-      coverage: {
-        ...prev.coverage,
-        [field]: value,
-      },
-    }));
-  }
-
-  function updateCoverageCoordinate(
-    field: "lat" | "lng",
-    value: number | null
-  ): void {
-    setSiteForm((prev) => ({
-      ...prev,
-      coverage: {
-        ...prev.coverage,
         [field]: value,
       },
     }));
@@ -1153,16 +1187,6 @@ export default function SiteSettingsPage() {
     }));
   }
 
-  function updateLeadershipImageUrl(value: string): void {
-    setHomeForm((prev) => ({
-      ...prev,
-      leadershipSection: {
-        ...prev.leadershipSection,
-        imageUrl: value,
-      },
-    }));
-  }
-
   function updateLeadershipEnabled(value: boolean): void {
     setHomeForm((prev) => ({
       ...prev,
@@ -1498,26 +1522,232 @@ export default function SiteSettingsPage() {
         <div className="grid gap-5 md:grid-cols-3">
           <div>
             <FieldLabel>Logo Light</FieldLabel>
-            <TextInput
-              value={siteForm.identity.logoLight}
-              onChange={(e) => updateIdentityField("logoLight", e.target.value)}
-            />
+
+            <div className="space-y-3">
+              <TextInput
+                value={siteForm.identity.logoLight}
+                onChange={(e) => updateIdentityField("logoLight", e.target.value)}
+                placeholder="admin/site-settings/logos/..."
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,.svg"
+                    className="hidden"
+                    onChange={handleLogoLightUpload}
+                    disabled={uploadingLogoLight || saving}
+                  />
+                  {uploadingLogoLight
+                    ? lang === "es"
+                      ? "Subiendo..."
+                      : "Uploading..."
+                    : lang === "es"
+                      ? "Subir Logo Light"
+                      : "Upload Logo Light"}
+                </label>
+
+                {siteForm.identity.logoLight ? (
+                  <span className="text-xs text-text-secondary">
+                    {siteForm.identity.logoLight}
+                  </span>
+                ) : null}
+              </div>
+
+              {siteForm.identity.logoLight ? (
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                    {lang === "es" ? "Vista previa" : "Preview"}
+                  </div>
+
+                  <Image
+                    src={`/api/admin/uploads/view?key=${encodeURIComponent(
+                      siteForm.identity.logoLight
+                    )}`}
+                    alt="Logo Light Preview"
+                    width={240}
+                    height={96}
+                    unoptimized
+                    className="max-h-24 w-auto object-contain"
+                  />
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div>
             <FieldLabel>Logo Dark</FieldLabel>
-            <TextInput
-              value={siteForm.identity.logoDark}
-              onChange={(e) => updateIdentityField("logoDark", e.target.value)}
-            />
+
+            <div className="space-y-3">
+              <TextInput
+                value={siteForm.identity.logoDark}
+                onChange={(e) => updateIdentityField("logoDark", e.target.value)}
+                placeholder="admin/site-settings/logos/..."
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,.svg"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (!file) return;
+
+                      try {
+                        const result = await uploadAdminFile(
+                          file,
+                          "site-settings/logos"
+                        );
+
+                        if (!result.ok || !result.file) {
+                          toast.error(
+                            lang === "es"
+                              ? result.message || "No se pudo subir el logo."
+                              : result.message || "Could not upload the logo."
+                          );
+                          return;
+                        }
+
+                        updateIdentityField("logoDark", result.file.fileKey);
+
+                        toast.success(
+                          lang === "es"
+                            ? "Logo Dark subido correctamente."
+                            : "Logo Dark uploaded successfully."
+                        );
+                      } catch (error) {
+                        console.error("Logo Dark upload error:", error);
+
+                        toast.error(
+                          lang === "es"
+                            ? "Error al subir el logo."
+                            : "Upload error."
+                        );
+                      } finally {
+                        e.target.value = "";
+                      }
+                    }}
+                    disabled={saving}
+                  />
+                  {lang === "es" ? "Subir Logo Dark" : "Upload Logo Dark"}
+                </label>
+
+                {siteForm.identity.logoDark ? (
+                  <span className="text-xs text-text-secondary">
+                    {siteForm.identity.logoDark}
+                  </span>
+                ) : null}
+              </div>
+
+              {siteForm.identity.logoDark ? (
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                    {lang === "es" ? "Vista previa" : "Preview"}
+                  </div>
+
+                  <Image
+                    src={`/api/admin/uploads/view?key=${encodeURIComponent(
+                      siteForm.identity.logoDark
+                    )}`}
+                    alt="Logo Dark Preview"
+                    width={240}
+                    height={96}
+                    unoptimized
+                    className="max-h-24 w-auto object-contain"
+                  />
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div>
             <FieldLabel>Favicon</FieldLabel>
-            <TextInput
-              value={siteForm.identity.favicon}
-              onChange={(e) => updateIdentityField("favicon", e.target.value)}
-            />
+
+            <div className="space-y-3">
+              <TextInput
+                value={siteForm.identity.favicon}
+                onChange={(e) => updateIdentityField("favicon", e.target.value)}
+                placeholder="admin/site-settings/favicons/..."
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                  <input
+                    type="file"
+                    accept=".png,.ico,.svg"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (!file) return;
+
+                      try {
+                        const result = await uploadAdminFile(
+                          file,
+                          "site-settings/favicons"
+                        );
+
+                        if (!result.ok || !result.file) {
+                          toast.error(
+                            lang === "es"
+                              ? result.message || "No se pudo subir el favicon."
+                              : result.message || "Could not upload the favicon."
+                          );
+                          return;
+                        }
+
+                        updateIdentityField("favicon", result.file.fileKey);
+
+                        toast.success(
+                          lang === "es"
+                            ? "Favicon subido correctamente."
+                            : "Favicon uploaded successfully."
+                        );
+                      } catch (error) {
+                        console.error("Favicon upload error:", error);
+
+                        toast.error(
+                          lang === "es"
+                            ? "Error al subir el favicon."
+                            : "Upload error."
+                        );
+                      } finally {
+                        e.target.value = "";
+                      }
+                    }}
+                    disabled={saving}
+                  />
+                  {lang === "es" ? "Subir Favicon" : "Upload Favicon"}
+                </label>
+
+                {siteForm.identity.favicon ? (
+                  <span className="text-xs text-text-secondary">
+                    {siteForm.identity.favicon}
+                  </span>
+                ) : null}
+              </div>
+
+              {siteForm.identity.favicon ? (
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                    {lang === "es" ? "Vista previa" : "Preview"}
+                  </div>
+
+                  <Image
+                    src={`/api/admin/uploads/view?key=${encodeURIComponent(
+                      siteForm.identity.favicon
+                    )}`}
+                    alt="Favicon Preview"
+                    width={40}
+                    height={40}
+                    unoptimized
+                    className="h-10 w-10 object-contain"
+                  />
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </SectionCard>
@@ -1632,87 +1862,6 @@ export default function SiteSettingsPage() {
             <TextInput
               value={siteForm.contact.country}
               onChange={(e) => updateContactField("country", e.target.value)}
-            />
-          </div>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title={lang === "es" ? "Cobertura / ubicación" : "Coverage / location"}
-        subtitle={
-          lang === "es"
-            ? "Configura textos y referencias geográficas globales."
-            : "Configure global text and geographic reference data."
-        }
-      >
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <FieldLabel>Label ES</FieldLabel>
-            <TextInput
-              value={siteForm.coverage.label.es}
-              onChange={(e) => updateCoverageLabel("es", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <FieldLabel>Label EN</FieldLabel>
-            <TextInput
-              value={siteForm.coverage.label.en}
-              onChange={(e) => updateCoverageLabel("en", e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <FieldLabel>Google Maps URL</FieldLabel>
-            <TextInput
-              value={siteForm.coverage.googleMapsUrl}
-              onChange={(e) =>
-                updateCoverageField("googleMapsUrl", e.target.value)
-              }
-            />
-          </div>
-
-          <div>
-            <FieldLabel>Google Maps Embed URL</FieldLabel>
-            <TextInput
-              value={siteForm.coverage.googleMapsEmbedUrl}
-              onChange={(e) =>
-                updateCoverageField("googleMapsEmbedUrl", e.target.value)
-              }
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <FieldLabel>Latitude</FieldLabel>
-            <TextInput
-              type="number"
-              step="any"
-              value={siteForm.coverage.lat ?? ""}
-              onChange={(e) =>
-                updateCoverageCoordinate(
-                  "lat",
-                  safeNumberFromInput(e.target.value)
-                )
-              }
-            />
-          </div>
-
-          <div>
-            <FieldLabel>Longitude</FieldLabel>
-            <TextInput
-              type="number"
-              step="any"
-              value={siteForm.coverage.lng ?? ""}
-              onChange={(e) =>
-                updateCoverageCoordinate(
-                  "lng",
-                  safeNumberFromInput(e.target.value)
-                )
-              }
             />
           </div>
         </div>
@@ -1923,10 +2072,89 @@ export default function SiteSettingsPage() {
 
         <div>
           <FieldLabel>OG Image</FieldLabel>
-          <TextInput
-            value={siteForm.seo.defaultOgImage}
-            onChange={(e) => updateSeoField("defaultOgImage", e.target.value)}
-          />
+
+          <div className="space-y-3">
+            <TextInput
+              value={siteForm.seo.defaultOgImage}
+              onChange={(e) => updateSeoField("defaultOgImage", e.target.value)}
+              placeholder="admin/home/sections/... o /assets/..."
+            />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,.svg"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (!file) return;
+
+                    try {
+                      setUploadingOgImage(true);
+
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      formData.append("scope", "home/sections");
+
+                      const res = await fetch("/api/admin/uploads", {
+                        method: "POST",
+                        body: formData,
+                      });
+
+                      const data = await res.json().catch(() => null);
+
+                      if (!res.ok || !data?.ok || !data?.file?.fileKey) {
+                        throw new Error("Upload failed");
+                      }
+
+                      updateSeoField("defaultOgImage", data.file.fileKey);
+                    } catch (error) {
+                      console.error("Error uploading OG image:", error);
+                    } finally {
+                      setUploadingOgImage(false);
+                      e.target.value = "";
+                    }
+                  }}
+                  disabled={uploadingOgImage || saving}
+                />
+                {uploadingOgImage
+                  ? lang === "es"
+                    ? "Subiendo..."
+                    : "Uploading..."
+                  : "Subir OG Image"}
+              </label>
+
+              {siteForm.seo.defaultOgImage ? (
+                <span className="text-xs text-text-secondary">
+                  {siteForm.seo.defaultOgImage}
+                </span>
+              ) : null}
+            </div>
+
+            {siteForm.seo.defaultOgImage ? (
+              <div className="rounded-xl border border-border bg-background p-4">
+                <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                  {lang === "es" ? "Vista previa" : "Preview"}
+                </div>
+
+                <Image
+                  src={
+                    siteForm.seo.defaultOgImage.startsWith("admin/")
+                      ? `/api/admin/uploads/view?key=${encodeURIComponent(
+                          siteForm.seo.defaultOgImage
+                        )}`
+                      : siteForm.seo.defaultOgImage
+                  }
+                  alt="OG Image Preview"
+                  width={320}
+                  height={180}
+                  unoptimized
+                  className="max-h-40 w-auto object-contain"
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       </SectionCard>
 
@@ -2712,12 +2940,108 @@ export default function SiteSettingsPage() {
 
         <div>
           <FieldLabel>
-            {lang === "es" ? "URL de imagen" : "Image URL"}
+            {lang === "es" ? "Imagen liderazgo" : "Leadership image"}
           </FieldLabel>
-          <TextInput
-            value={homeForm.leadershipSection.imageUrl}
-            onChange={(e) => updateLeadershipImageUrl(e.target.value)}
-          />
+
+          <div className="space-y-3">
+            <TextInput
+              value={homeForm.leadershipSection.imageUrl}
+              onChange={(e) =>
+                setHomeForm((prev) => ({
+                  ...prev,
+                  leadershipSection: {
+                    ...prev.leadershipSection,
+                    imageUrl: e.target.value,
+                  },
+                }))
+              }
+              placeholder="admin/home/leadership/... o URL pública"
+            />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (!file) return;
+
+                    try {
+                      setUploadingLeadershipImage(true);
+
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      formData.append("scope", "home/leadership");
+
+                      const res = await fetch("/api/admin/uploads", {
+                        method: "POST",
+                        body: formData,
+                      });
+
+                      const data = await res.json().catch(() => null);
+
+                      if (!res.ok || !data?.ok || !data?.file?.fileKey) {
+                        throw new Error("Upload failed");
+                      }
+
+                      setHomeForm((prev) => ({
+                        ...prev,
+                        leadershipSection: {
+                          ...prev.leadershipSection,
+                          imageUrl: data.file.fileKey,
+                        },
+                      }));
+                    } catch (error) {
+                      console.error("Error uploading leadership image:", error);
+                    } finally {
+                      setUploadingLeadershipImage(false);
+                      e.target.value = "";
+                    }
+                  }}
+                  disabled={uploadingLeadershipImage || saving}
+                />
+
+                {uploadingLeadershipImage
+                  ? lang === "es"
+                    ? "Subiendo..."
+                    : "Uploading..."
+                  : lang === "es"
+                    ? "Subir imagen"
+                    : "Upload image"}
+              </label>
+
+              {homeForm.leadershipSection.imageUrl ? (
+                <span className="text-xs text-text-secondary">
+                  {homeForm.leadershipSection.imageUrl}
+                </span>
+              ) : null}
+            </div>
+
+            {homeForm.leadershipSection.imageUrl ? (
+              <div className="rounded-xl border border-border bg-background p-4">
+                <div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+                  {lang === "es" ? "Vista previa" : "Preview"}
+                </div>
+
+                <Image
+                  src={
+                    homeForm.leadershipSection.imageUrl.startsWith("admin/")
+                      ? `/api/admin/uploads/view?key=${encodeURIComponent(
+                          homeForm.leadershipSection.imageUrl
+                        )}`
+                      : homeForm.leadershipSection.imageUrl
+                  }
+                  alt="Leadership preview"
+                  width={320}
+                  height={400}
+                  unoptimized
+                  className="max-h-80 w-auto object-cover rounded-lg"
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       </SectionCard>
 
