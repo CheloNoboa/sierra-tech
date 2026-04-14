@@ -5,21 +5,27 @@
  * =============================================================================
  *
  * ES:
- *   Endpoint unificado para subida de archivos administrativos.
+ * Endpoint unificado para subida de archivos administrativos.
  *
- *   Responsabilidades:
- *   - Recibir archivo vía multipart/form-data
- *   - Validar tipo, tamaño y scope permitido
- *   - Generar nombre seguro
- *   - Subir archivo a Cloudflare R2
- *   - Retornar metadata estable para guardar en DB
+ * Responsabilidades:
+ * - Recibir archivo vía multipart/form-data
+ * - Validar tipo, tamaño y scope permitido
+ * - Generar nombre seguro
+ * - Subir archivo a Cloudflare R2
+ * - Retornar metadata estable para guardar en DB
  *
- *   Seguridad:
- *   - No expone URLs públicas
- *   - No permite rutas arbitrarias (scope controlado)
+ * Seguridad:
+ * - No expone URLs públicas
+ * - No permite rutas arbitrarias
+ * - Solo acepta scopes administrativos aprobados
+ *
+ * Contrato:
+ * - Los archivos administrativos se guardan bajo prefijo `admin/`
+ * - El frontend persiste `fileKey`
+ * - La vista previa se resuelve por `/api/admin/uploads/view?key=<fileKey>`
  *
  * EN:
- *   Unified admin upload endpoint with validation and secure storage in R2.
+ * Unified admin upload endpoint with validation and secure storage in R2.
  * =============================================================================
  */
 
@@ -32,6 +38,7 @@ import { NextResponse } from "next/server";
 const ALLOWED_SCOPES = [
   "site-settings/logos",
   "site-settings/favicons",
+  "site-settings/seo",
   "home/hero",
   "home/sections",
   "home/leadership",
@@ -41,6 +48,9 @@ const ALLOWED_SCOPES = [
   "services/attachments",
   "documents/files",
   "documents/thumbnails",
+  "projects/covers",
+  "projects/gallery",
+  "projects/maintenance",
 ] as const;
 
 const IMAGE_MIME_TYPES = [
@@ -84,7 +94,23 @@ function generateSafeFileName(originalName: string): string {
     .replace(/-|:|\.|T|Z/g, "")
     .slice(0, 14);
 
-  return `${timestamp}-${base}.${ext}`;
+  return ext ? `${timestamp}-${base}.${ext}` : `${timestamp}-${base}`;
+}
+
+function getR2Credentials() {
+  const endpoint = process.env.R2_ENDPOINT;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+
+  if (!endpoint || !accessKeyId || !secretAccessKey) {
+    throw new Error("Missing R2 environment variables.");
+  }
+
+  return {
+    endpoint,
+    accessKeyId,
+    secretAccessKey,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -95,8 +121,11 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
 
-    const file = formData.get("file") as File | null;
-    const scope = String(formData.get("scope") || "");
+    const rawFile = formData.get("file");
+    const rawScope = formData.get("scope");
+
+    const file = rawFile instanceof File ? rawFile : null;
+    const scope = typeof rawScope === "string" ? rawScope.trim() : "";
 
     /* ---------------------------------------------------------------------- */
     /* Basic validation                                                       */
@@ -109,7 +138,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!isValidScope(scope)) {
+    if (!scope || !isValidScope(scope)) {
       return NextResponse.json(
         { ok: false, message: "Invalid upload scope." },
         { status: 400 }
@@ -150,20 +179,16 @@ export async function POST(req: Request) {
     const originalName = file.name;
     const extension = getExtension(originalName);
     const safeName = generateSafeFileName(originalName);
-
     const fileKey = `admin/${scope}/${safeName}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     /* ---------------------------------------------------------------------- */
-    /* Upload to R2 (S3-compatible)                                           */
+    /* Upload to R2                                                           */
     /* ---------------------------------------------------------------------- */
 
-    const endpoint = process.env.R2_ENDPOINT!;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID!;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY!;
-
+    const { endpoint, accessKeyId, secretAccessKey } = getR2Credentials();
     const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
 
     const client = new S3Client({
@@ -180,7 +205,7 @@ export async function POST(req: Request) {
         Bucket: BUCKET_NAME,
         Key: fileKey,
         Body: buffer,
-        ContentType: mimeType,
+        ContentType: mimeType || "application/octet-stream",
       })
     );
 
@@ -211,7 +236,8 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         ok: false,
-        message: "Internal server error.",
+        message:
+          error instanceof Error ? error.message : "Internal server error.",
       },
       { status: 500 }
     );

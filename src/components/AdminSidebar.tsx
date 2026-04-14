@@ -38,6 +38,7 @@ import {
   Cookie,
   DatabaseBackup,
   FileText,
+  FolderKanban,
   Globe2,
   LayoutDashboard,
   ListOrdered,
@@ -107,8 +108,11 @@ export default function AdminSidebar() {
     title: locale === "es" ? "Panel Admin" : "Admin Panel",
 
     cms: locale === "es" ? "Sitio Web" : "Website",
-    publicSite: locale === "es" ? "Sitio Público" : "Public Website",
+    siteSettings:
+      locale === "es" ? "Configuración del sitio" : "Site settings",
+    home: locale === "es" ? "Página de inicio" : "Home",
     services: locale === "es" ? "Servicios" : "Services",
+    projects: locale === "es" ? "Proyectos" : "Projects",
     serviceClasses:
       locale === "es" ? "Clases de servicio" : "Service classes",
     contactRequests:
@@ -143,11 +147,12 @@ export default function AdminSidebar() {
     brand: "Sierra Tech",
   };
 
-  const isPublicSiteActive =
-    pathname.startsWith("/admin/dashboard/site-settings") ||
-    pathname.startsWith("/admin/dashboard/home");
-
+  const isSiteSettingsActive = pathname.startsWith(
+    "/admin/dashboard/site-settings"
+  );
+  const isHomeActive = pathname.startsWith("/admin/dashboard/home");
   const isServicesActive = pathname.startsWith("/admin/dashboard/services");
+  const isProjectsActive = pathname.startsWith("/admin/dashboard/projects");
   const isServiceClassesActive = pathname.startsWith(
     "/admin/dashboard/service-classes"
   );
@@ -181,6 +186,7 @@ export default function AdminSidebar() {
     canAccessModule(permissions, "home") ||
     canAccessModule(permissions, "site-settings") ||
     canAccessModule(permissions, "services") ||
+    canAccessModule(permissions, "projects") ||
     canAccessModule(permissions, "service-classes") ||
     canAccessModule(permissions, "contact-requests") ||
     canAccessModule(permissions, "cms");
@@ -240,18 +246,26 @@ export default function AdminSidebar() {
               </p>
 
               {(isSuperAdmin ||
-                canAccessModule(permissions, "home") ||
                 canAccessModule(permissions, "site-settings") ||
                 canAccessModule(permissions, "cms")) && (
                 <Link
                   href="/admin/dashboard/site-settings"
-                  className={linkClass(isPublicSiteActive)}
+                  className={linkClass(isSiteSettingsActive)}
                 >
-                  <MonitorSmartphone
-                    size={18}
-                    className={iconClass(isPublicSiteActive)}
-                  />
-                  <span className={textVisibility}>{t.publicSite}</span>
+                  <Settings size={18} className={iconClass(isSiteSettingsActive)} />
+                  <span className={textVisibility}>{t.siteSettings}</span>
+                </Link>
+              )}
+
+              {(isSuperAdmin ||
+                canAccessModule(permissions, "home") ||
+                canAccessModule(permissions, "cms")) && (
+                <Link
+                  href="/admin/dashboard/home"
+                  className={linkClass(isHomeActive)}
+                >
+                  <MonitorSmartphone size={18} className={iconClass(isHomeActive)} />
+                  <span className={textVisibility}>{t.home}</span>
                 </Link>
               )}
 
@@ -264,6 +278,21 @@ export default function AdminSidebar() {
                 >
                   <Wrench size={18} className={iconClass(isServicesActive)} />
                   <span className={textVisibility}>{t.services}</span>
+                </Link>
+              )}
+
+              {(isSuperAdmin ||
+                canAccessModule(permissions, "projects") ||
+                canAccessModule(permissions, "cms")) && (
+                <Link
+                  href="/admin/dashboard/projects"
+                  className={linkClass(isProjectsActive)}
+                >
+                  <FolderKanban
+                    size={18}
+                    className={iconClass(isProjectsActive)}
+                  />
+                  <span className={textVisibility}>{t.projects}</span>
                 </Link>
               )}
 

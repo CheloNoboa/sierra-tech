@@ -24,6 +24,7 @@
  *     bandera explícita independiente del mapa embebido.
  *   - Los bloques institucionales adicionales del Home también se administran
  *     desde esta misma entidad global.
+ *   - Partner Section soporta múltiples partners.
  *
  * EN:
  *   Administrative endpoint for reading and updating the structured public
@@ -36,181 +37,21 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDB } from "@/lib/connectToDB";
+import { HOME_DEFAULTS } from "@/lib/home/home.defaults";
+import {
+  normalizeHomePayload,
+  normalizeString,
+} from "@/lib/home/home.normalize";
 import HomeSettings from "@/models/HomeSettings";
+import type { AllowedRole, HomePayload } from "@/types/home";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
 
-type AllowedRole = "admin" | "superadmin";
-
-interface LocalizedText {
-  es: string;
-  en: string;
-}
-
-interface HomeCta {
-  label: LocalizedText;
-  href: string;
-  enabled: boolean;
-}
-
-interface HomeFeaturedCard {
-  id: string;
-  title: LocalizedText;
-  description: LocalizedText;
-  order: number;
-  enabled: boolean;
-}
-
-interface WhyChooseUsItem {
-  title: LocalizedText;
-  description: LocalizedText;
-}
-
-interface HomePayload {
-  hero: {
-    badge: {
-      text: LocalizedText;
-      enabled: boolean;
-    };
-    title: LocalizedText;
-    subtitle: LocalizedText;
-    primaryCta: HomeCta;
-    secondaryCta: HomeCta;
-  };
-
-  highlightPanel: {
-    coverageLabel: LocalizedText;
-    enabled: boolean;
-  };
-
-  featuredCards: HomeFeaturedCard[];
-
-  coverageSection: {
-    eyebrow: LocalizedText;
-    title: LocalizedText;
-    description: LocalizedText;
-    note: LocalizedText;
-    openMapsLabel: LocalizedText;
-    showOpenMapsLink: boolean;
-    enabled: boolean;
-  };
-
-  aboutSection: {
-    eyebrow: LocalizedText;
-    title: LocalizedText;
-    description: LocalizedText;
-    highlights: LocalizedText[];
-    enabled: boolean;
-  };
-
-  leadershipSection: {
-    name: string;
-    role: LocalizedText;
-    message: LocalizedText;
-    imageUrl: string;
-    enabled: boolean;
-  };
-
-  whyChooseUs: {
-    title: LocalizedText;
-    items: WhyChooseUsItem[];
-    enabled: boolean;
-  };
-
-  mapSection: {
-    enabled: boolean;
-    useBrowserGeolocation: boolean;
-    fallbackLat: number | null;
-    fallbackLng: number | null;
-    zoom: number;
-  };
-
-  updatedAt?: string;
-  updatedBy?: string;
-  updatedByEmail?: string;
-}
-
 type AdminGuardResult =
-  | { ok: true; role: AllowedRole; userName: string; userEmail: string }
+  | { ok: true; userName: string; userEmail: string }
   | { ok: false; response: NextResponse };
-
-/* -------------------------------------------------------------------------- */
-/* Defaults                                                                   */
-/* -------------------------------------------------------------------------- */
-
-const HOME_DEFAULTS: HomePayload = {
-  hero: {
-    badge: {
-      text: { es: "", en: "" },
-      enabled: true,
-    },
-    title: { es: "", en: "" },
-    subtitle: { es: "", en: "" },
-    primaryCta: {
-      label: { es: "", en: "" },
-      href: "",
-      enabled: true,
-    },
-    secondaryCta: {
-      label: { es: "", en: "" },
-      href: "",
-      enabled: true,
-    },
-  },
-
-  highlightPanel: {
-    coverageLabel: { es: "", en: "" },
-    enabled: true,
-  },
-
-  featuredCards: [],
-
-  coverageSection: {
-    eyebrow: { es: "", en: "" },
-    title: { es: "", en: "" },
-    description: { es: "", en: "" },
-    note: { es: "", en: "" },
-    openMapsLabel: { es: "", en: "" },
-    showOpenMapsLink: false,
-    enabled: true,
-  },
-
-  aboutSection: {
-    eyebrow: { es: "", en: "" },
-    title: { es: "", en: "" },
-    description: { es: "", en: "" },
-    highlights: [],
-    enabled: true,
-  },
-
-  leadershipSection: {
-    name: "",
-    role: { es: "", en: "" },
-    message: { es: "", en: "" },
-    imageUrl: "",
-    enabled: true,
-  },
-
-  whyChooseUs: {
-    title: { es: "", en: "" },
-    items: [],
-    enabled: true,
-  },
-
-  mapSection: {
-    enabled: true,
-    useBrowserGeolocation: true,
-    fallbackLat: -0.1807,
-    fallbackLng: -78.4678,
-    zoom: 7,
-  },
-
-  updatedAt: "",
-  updatedBy: "",
-  updatedByEmail: "",
-};
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -220,242 +61,6 @@ function isAllowedRole(role: unknown): role is AllowedRole {
   return role === "admin" || role === "superadmin";
 }
 
-function normalizeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function normalizeBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function normalizeNumber(
-  value: unknown,
-  fallback: number | null
-): number | null {
-  if (value === null) return null;
-  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-  return value;
-}
-
-function normalizeLocalizedText(value: unknown): LocalizedText {
-  if (!value || typeof value !== "object") {
-    return { es: "", en: "" };
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return {
-    es: normalizeString(record.es),
-    en: normalizeString(record.en),
-  };
-}
-
-function normalizeLocalizedTextArray(value: unknown): LocalizedText[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item): LocalizedText | null => {
-      if (!item || typeof item !== "object") return null;
-      return normalizeLocalizedText(item);
-    })
-    .filter((item): item is LocalizedText => item !== null);
-}
-
-function normalizeCta(value: unknown, fallbackEnabled = true): HomeCta {
-  if (!value || typeof value !== "object") {
-    return {
-      label: { es: "", en: "" },
-      href: "",
-      enabled: fallbackEnabled,
-    };
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return {
-    label: normalizeLocalizedText(record.label),
-    href: normalizeString(record.href),
-    enabled: normalizeBoolean(record.enabled, fallbackEnabled),
-  };
-}
-
-function normalizeFeaturedCards(value: unknown): HomeFeaturedCard[] {
-  if (!Array.isArray(value)) return [];
-
-  const normalized = value
-    .map((item, index): HomeFeaturedCard | null => {
-      if (!item || typeof item !== "object") return null;
-
-      const record = item as Record<string, unknown>;
-
-      const id =
-        typeof record.id === "string" && record.id.trim().length > 0
-          ? record.id.trim()
-          : `card-${index + 1}`;
-
-      return {
-        id,
-        title: normalizeLocalizedText(record.title),
-        description: normalizeLocalizedText(record.description),
-        order:
-          typeof record.order === "number" && Number.isFinite(record.order)
-            ? record.order
-            : index + 1,
-        enabled: normalizeBoolean(record.enabled, true),
-      };
-    })
-    .filter((item): item is HomeFeaturedCard => item !== null)
-    .sort((a, b) => a.order - b.order)
-    .map((item, index) => ({
-      ...item,
-      order: index + 1,
-    }));
-
-  return normalized;
-}
-
-function normalizeWhyChooseUsItems(value: unknown): WhyChooseUsItem[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item): WhyChooseUsItem | null => {
-      if (!item || typeof item !== "object") return null;
-
-      const record = item as Record<string, unknown>;
-
-      return {
-        title: normalizeLocalizedText(record.title),
-        description: normalizeLocalizedText(record.description),
-      };
-    })
-    .filter((item): item is WhyChooseUsItem => item !== null);
-}
-
-function normalizeHomePayload(value: unknown): HomePayload {
-  if (!value || typeof value !== "object") {
-    return structuredClone(HOME_DEFAULTS);
-  }
-
-  const record = value as Record<string, unknown>;
-  const hero = (record.hero ?? {}) as Record<string, unknown>;
-  const badge = (hero.badge ?? {}) as Record<string, unknown>;
-  const highlightPanel = (record.highlightPanel ?? {}) as Record<string, unknown>;
-  const coverageSection = (record.coverageSection ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const aboutSection = (record.aboutSection ?? {}) as Record<string, unknown>;
-  const leadershipSection = (record.leadershipSection ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const whyChooseUs = (record.whyChooseUs ?? {}) as Record<string, unknown>;
-  const mapSection = (record.mapSection ?? {}) as Record<string, unknown>;
-
-  return {
-    hero: {
-      badge: {
-        text: normalizeLocalizedText(badge.text),
-        enabled: normalizeBoolean(
-          badge.enabled,
-          HOME_DEFAULTS.hero.badge.enabled
-        ),
-      },
-      title: normalizeLocalizedText(hero.title),
-      subtitle: normalizeLocalizedText(hero.subtitle),
-      primaryCta: normalizeCta(hero.primaryCta, true),
-      secondaryCta: normalizeCta(hero.secondaryCta, true),
-    },
-
-    highlightPanel: {
-      coverageLabel: normalizeLocalizedText(highlightPanel.coverageLabel),
-      enabled: normalizeBoolean(
-        highlightPanel.enabled,
-        HOME_DEFAULTS.highlightPanel.enabled
-      ),
-    },
-
-    featuredCards: normalizeFeaturedCards(record.featuredCards),
-
-    coverageSection: {
-      eyebrow: normalizeLocalizedText(coverageSection.eyebrow),
-      title: normalizeLocalizedText(coverageSection.title),
-      description: normalizeLocalizedText(coverageSection.description),
-      note: normalizeLocalizedText(coverageSection.note),
-      openMapsLabel: normalizeLocalizedText(coverageSection.openMapsLabel),
-      showOpenMapsLink: normalizeBoolean(
-        coverageSection.showOpenMapsLink,
-        HOME_DEFAULTS.coverageSection.showOpenMapsLink
-      ),
-      enabled: normalizeBoolean(
-        coverageSection.enabled,
-        HOME_DEFAULTS.coverageSection.enabled
-      ),
-    },
-
-    aboutSection: {
-      eyebrow: normalizeLocalizedText(aboutSection.eyebrow),
-      title: normalizeLocalizedText(aboutSection.title),
-      description: normalizeLocalizedText(aboutSection.description),
-      highlights: normalizeLocalizedTextArray(aboutSection.highlights),
-      enabled: normalizeBoolean(
-        aboutSection.enabled,
-        HOME_DEFAULTS.aboutSection.enabled
-      ),
-    },
-
-    leadershipSection: {
-      name: normalizeString(leadershipSection.name),
-      role: normalizeLocalizedText(leadershipSection.role),
-      message: normalizeLocalizedText(leadershipSection.message),
-      imageUrl: normalizeString(leadershipSection.imageUrl),
-      enabled: normalizeBoolean(
-        leadershipSection.enabled,
-        HOME_DEFAULTS.leadershipSection.enabled
-      ),
-    },
-
-    whyChooseUs: {
-      title: normalizeLocalizedText(whyChooseUs.title),
-      items: normalizeWhyChooseUsItems(whyChooseUs.items),
-      enabled: normalizeBoolean(
-        whyChooseUs.enabled,
-        HOME_DEFAULTS.whyChooseUs.enabled
-      ),
-    },
-
-    mapSection: {
-      enabled: normalizeBoolean(
-        mapSection.enabled,
-        HOME_DEFAULTS.mapSection.enabled
-      ),
-      useBrowserGeolocation: normalizeBoolean(
-        mapSection.useBrowserGeolocation,
-        HOME_DEFAULTS.mapSection.useBrowserGeolocation
-      ),
-      fallbackLat: normalizeNumber(
-        mapSection.fallbackLat,
-        HOME_DEFAULTS.mapSection.fallbackLat
-      ),
-      fallbackLng: normalizeNumber(
-        mapSection.fallbackLng,
-        HOME_DEFAULTS.mapSection.fallbackLng
-      ),
-      zoom:
-        typeof mapSection.zoom === "number" &&
-        Number.isFinite(mapSection.zoom) &&
-        mapSection.zoom >= 1 &&
-        mapSection.zoom <= 20
-          ? mapSection.zoom
-          : HOME_DEFAULTS.mapSection.zoom,
-    },
-
-    updatedAt: normalizeString(record.updatedAt),
-    updatedBy: normalizeString(record.updatedBy),
-    updatedByEmail: normalizeString(record.updatedByEmail),
-  };
-}
-
 function toResponsePayload(
   doc: {
     hero?: unknown;
@@ -463,6 +68,7 @@ function toResponsePayload(
     featuredCards?: unknown;
     coverageSection?: unknown;
     aboutSection?: unknown;
+    partnerSection?: unknown;
     leadershipSection?: unknown;
     whyChooseUs?: unknown;
     mapSection?: unknown;
@@ -471,7 +77,9 @@ function toResponsePayload(
     updatedByEmail?: string;
   } | null
 ): HomePayload {
-  if (!doc) return structuredClone(HOME_DEFAULTS);
+  if (!doc) {
+    return normalizeHomePayload(HOME_DEFAULTS);
+  }
 
   return normalizeHomePayload({
     hero: doc.hero,
@@ -479,6 +87,7 @@ function toResponsePayload(
     featuredCards: doc.featuredCards,
     coverageSection: doc.coverageSection,
     aboutSection: doc.aboutSection,
+    partnerSection: doc.partnerSection,
     leadershipSection: doc.leadershipSection,
     whyChooseUs: doc.whyChooseUs,
     mapSection: doc.mapSection,
@@ -521,7 +130,6 @@ async function requireAdmin(): Promise<AdminGuardResult> {
 
   return {
     ok: true,
-    role,
     userName: normalizeString(session.user.name),
     userEmail: normalizeString(session.user.email),
   };
@@ -547,6 +155,7 @@ export async function GET() {
         featuredCards: HOME_DEFAULTS.featuredCards,
         coverageSection: HOME_DEFAULTS.coverageSection,
         aboutSection: HOME_DEFAULTS.aboutSection,
+        partnerSection: HOME_DEFAULTS.partnerSection,
         leadershipSection: HOME_DEFAULTS.leadershipSection,
         whyChooseUs: HOME_DEFAULTS.whyChooseUs,
         mapSection: HOME_DEFAULTS.mapSection,
@@ -583,6 +192,17 @@ export async function PUT(request: Request) {
     await connectToDB();
 
     const body: unknown = await request.json().catch(() => null);
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          error_es: "Payload inválido.",
+          error_en: "Invalid payload.",
+        },
+        { status: 400 }
+      );
+    }
+
     const normalized = normalizeHomePayload(body);
 
     const update = {
@@ -591,6 +211,7 @@ export async function PUT(request: Request) {
       featuredCards: normalized.featuredCards,
       coverageSection: normalized.coverageSection,
       aboutSection: normalized.aboutSection,
+      partnerSection: normalized.partnerSection,
       leadershipSection: normalized.leadershipSection,
       whyChooseUs: normalized.whyChooseUs,
       mapSection: normalized.mapSection,

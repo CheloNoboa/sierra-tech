@@ -51,89 +51,8 @@ import {
   getPublicBranding,
   listenBrandingUpdates,
 } from "@/lib/publicBranding";
-
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
-
-type Locale = "es" | "en";
-
-interface LocalizedText {
-  es: string;
-  en: string;
-}
-
-interface HomeCta {
-  label: LocalizedText;
-  href: string;
-  enabled: boolean;
-}
-
-interface HomeFeaturedCard {
-  id: string;
-  title: LocalizedText;
-  description: LocalizedText;
-  order: number;
-  enabled: boolean;
-}
-
-interface WhyChooseUsItem {
-  title: LocalizedText;
-  description: LocalizedText;
-}
-
-interface HomePayload {
-  hero: {
-    badge: {
-      text: LocalizedText;
-      enabled: boolean;
-    };
-    title: LocalizedText;
-    subtitle: LocalizedText;
-    primaryCta: HomeCta;
-    secondaryCta: HomeCta;
-  };
-  highlightPanel: {
-    coverageLabel: LocalizedText;
-    enabled: boolean;
-  };
-  featuredCards: HomeFeaturedCard[];
-  coverageSection: {
-    eyebrow: LocalizedText;
-    title: LocalizedText;
-    description: LocalizedText;
-    note: LocalizedText;
-    openMapsLabel: LocalizedText;
-    showOpenMapsLink: boolean;
-    enabled: boolean;
-  };
-  aboutSection: {
-    eyebrow: LocalizedText;
-    title: LocalizedText;
-    description: LocalizedText;
-    highlights: LocalizedText[];
-    enabled: boolean;
-  };
-  leadershipSection: {
-    name: string;
-    role: LocalizedText;
-    message: LocalizedText;
-    imageUrl: string;
-    enabled: boolean;
-  };
-  whyChooseUs: {
-    title: LocalizedText;
-    items: WhyChooseUsItem[];
-    enabled: boolean;
-  };
-  mapSection: {
-    enabled: boolean;
-    useBrowserGeolocation: boolean;
-    fallbackLat: number | null;
-    fallbackLng: number | null;
-    zoom: number;
-  };
-}
+import type { HomePayload, Locale, LocalizedText } from "@/types/home";
+import { HOME_DEFAULTS } from "@/lib/home/home.defaults";
 
 interface SiteSettingsPublic {
   identity: {
@@ -153,69 +72,6 @@ interface Coordinates {
 /* Empty payloads                                                             */
 /* -------------------------------------------------------------------------- */
 
-const EMPTY_LOCALIZED: LocalizedText = { es: "", en: "" };
-
-const EMPTY_HOME: HomePayload = {
-  hero: {
-    badge: {
-      text: { es: "", en: "" },
-      enabled: false,
-    },
-    title: { es: "", en: "" },
-    subtitle: { es: "", en: "" },
-    primaryCta: {
-      label: { es: "", en: "" },
-      href: "",
-      enabled: false,
-    },
-    secondaryCta: {
-      label: { es: "", en: "" },
-      href: "",
-      enabled: false,
-    },
-  },
-  highlightPanel: {
-    coverageLabel: { es: "", en: "" },
-    enabled: false,
-  },
-  featuredCards: [],
-  coverageSection: {
-    eyebrow: { es: "", en: "" },
-    title: { es: "", en: "" },
-    description: { es: "", en: "" },
-    note: { es: "", en: "" },
-    openMapsLabel: { es: "", en: "" },
-    showOpenMapsLink: false,
-    enabled: false,
-  },
-  aboutSection: {
-    eyebrow: { es: "", en: "" },
-    title: { es: "", en: "" },
-    description: { es: "", en: "" },
-    highlights: [],
-    enabled: false,
-  },
-  leadershipSection: {
-    name: "",
-    role: { es: "", en: "" },
-    message: { es: "", en: "" },
-    imageUrl: "",
-    enabled: false,
-  },
-  whyChooseUs: {
-    title: { es: "", en: "" },
-    items: [],
-    enabled: false,
-  },
-  mapSection: {
-    enabled: false,
-    useBrowserGeolocation: true,
-    fallbackLat: null,
-    fallbackLng: null,
-    zoom: 7,
-  },
-};
-
 const EMPTY_SITE_SETTINGS: SiteSettingsPublic = {
   identity: {
     siteName: "",
@@ -228,186 +84,6 @@ const EMPTY_SITE_SETTINGS: SiteSettingsPublic = {
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
-
-function normalizeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function normalizeBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function normalizeNumber(
-  value: unknown,
-  fallback: number | null
-): number | null {
-  if (value === null) return null;
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function normalizeLocalizedText(
-  value: unknown,
-  fallback: LocalizedText = EMPTY_LOCALIZED
-): LocalizedText {
-  if (!value || typeof value !== "object") return fallback;
-
-  const record = value as Record<string, unknown>;
-
-  return {
-    es: normalizeString(record.es, fallback.es),
-    en: normalizeString(record.en, fallback.en),
-  };
-}
-
-function normalizeLocalizedTextArray(value: unknown): LocalizedText[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item): LocalizedText | null => {
-      if (!item || typeof item !== "object") return null;
-      return normalizeLocalizedText(item);
-    })
-    .filter((item): item is LocalizedText => item !== null);
-}
-
-function normalizeCta(value: unknown, fallback: HomeCta): HomeCta {
-  if (!value || typeof value !== "object") return fallback;
-
-  const record = value as Record<string, unknown>;
-
-  return {
-    label: normalizeLocalizedText(record.label, fallback.label),
-    href: normalizeString(record.href, fallback.href),
-    enabled: normalizeBoolean(record.enabled, fallback.enabled),
-  };
-}
-
-function normalizeFeaturedCards(value: unknown): HomeFeaturedCard[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item, index): HomeFeaturedCard | null => {
-      if (!item || typeof item !== "object") return null;
-
-      const record = item as Record<string, unknown>;
-      const fallbackOrder = index + 1;
-
-      return {
-        id: normalizeString(record.id, `card-${fallbackOrder}`),
-        title: normalizeLocalizedText(record.title),
-        description: normalizeLocalizedText(record.description),
-        order:
-          typeof record.order === "number" && Number.isFinite(record.order)
-            ? record.order
-            : fallbackOrder,
-        enabled: normalizeBoolean(record.enabled, true),
-      };
-    })
-    .filter((item): item is HomeFeaturedCard => item !== null)
-    .sort((a, b) => a.order - b.order);
-}
-
-function normalizeWhyChooseUsItems(value: unknown): WhyChooseUsItem[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item): WhyChooseUsItem | null => {
-      if (!item || typeof item !== "object") return null;
-
-      const record = item as Record<string, unknown>;
-
-      return {
-        title: normalizeLocalizedText(record.title),
-        description: normalizeLocalizedText(record.description),
-      };
-    })
-    .filter((item): item is WhyChooseUsItem => item !== null);
-}
-
-function normalizeHomePayload(payload: unknown): HomePayload {
-  if (!payload || typeof payload !== "object") return EMPTY_HOME;
-
-  const record = payload as Record<string, unknown>;
-  const hero = (record.hero ?? {}) as Record<string, unknown>;
-  const heroBadge = (hero.badge ?? {}) as Record<string, unknown>;
-  const highlightPanel = (record.highlightPanel ?? {}) as Record<string, unknown>;
-  const coverageSection = (record.coverageSection ?? {}) as Record<string, unknown>;
-  const aboutSection = (record.aboutSection ?? {}) as Record<string, unknown>;
-  const leadershipSection = (record.leadershipSection ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const whyChooseUs = (record.whyChooseUs ?? {}) as Record<string, unknown>;
-  const mapSection = (record.mapSection ?? {}) as Record<string, unknown>;
-
-  return {
-    hero: {
-      badge: {
-        text: normalizeLocalizedText(heroBadge.text),
-        enabled: normalizeBoolean(heroBadge.enabled, false),
-      },
-      title: normalizeLocalizedText(hero.title),
-      subtitle: normalizeLocalizedText(hero.subtitle),
-      primaryCta: normalizeCta(hero.primaryCta, EMPTY_HOME.hero.primaryCta),
-      secondaryCta: normalizeCta(
-        hero.secondaryCta,
-        EMPTY_HOME.hero.secondaryCta
-      ),
-    },
-    highlightPanel: {
-      coverageLabel: normalizeLocalizedText(highlightPanel.coverageLabel),
-      enabled: normalizeBoolean(highlightPanel.enabled, false),
-    },
-    featuredCards: normalizeFeaturedCards(record.featuredCards),
-    coverageSection: {
-      eyebrow: normalizeLocalizedText(coverageSection.eyebrow),
-      title: normalizeLocalizedText(coverageSection.title),
-      description: normalizeLocalizedText(coverageSection.description),
-      note: normalizeLocalizedText(coverageSection.note),
-      openMapsLabel: normalizeLocalizedText(coverageSection.openMapsLabel),
-      showOpenMapsLink: normalizeBoolean(
-        coverageSection.showOpenMapsLink,
-        false
-      ),
-      enabled: normalizeBoolean(coverageSection.enabled, false),
-    },
-    aboutSection: {
-      eyebrow: normalizeLocalizedText(aboutSection.eyebrow),
-      title: normalizeLocalizedText(aboutSection.title),
-      description: normalizeLocalizedText(aboutSection.description),
-      highlights: normalizeLocalizedTextArray(aboutSection.highlights),
-      enabled: normalizeBoolean(aboutSection.enabled, false),
-    },
-    leadershipSection: {
-      name: normalizeString(leadershipSection.name),
-      role: normalizeLocalizedText(leadershipSection.role),
-      message: normalizeLocalizedText(leadershipSection.message),
-      imageUrl: normalizeString(leadershipSection.imageUrl),
-      enabled: normalizeBoolean(leadershipSection.enabled, false),
-    },
-    whyChooseUs: {
-      title: normalizeLocalizedText(whyChooseUs.title),
-      items: normalizeWhyChooseUsItems(whyChooseUs.items),
-      enabled: normalizeBoolean(whyChooseUs.enabled, false),
-    },
-    mapSection: {
-      enabled: normalizeBoolean(mapSection.enabled, false),
-      useBrowserGeolocation: normalizeBoolean(
-        mapSection.useBrowserGeolocation,
-        true
-      ),
-      fallbackLat: normalizeNumber(mapSection.fallbackLat, null),
-      fallbackLng: normalizeNumber(mapSection.fallbackLng, null),
-      zoom:
-        typeof mapSection.zoom === "number" &&
-        Number.isFinite(mapSection.zoom) &&
-        mapSection.zoom >= 1 &&
-        mapSection.zoom <= 20
-          ? mapSection.zoom
-          : 7,
-    },
-  };
-}
 
 function normalizeImageSrc(value: string | null | undefined): string {
   const trimmed = value?.trim() ?? "";
@@ -448,7 +124,7 @@ export default function HomePage() {
   const { locale } = useTranslation();
   const lang: Locale = locale === "es" ? "es" : "en";
 
-  const [homeContent, setHomeContent] = useState<HomePayload>(EMPTY_HOME);
+  const [homeContent, setHomeContent] = useState<HomePayload>(HOME_DEFAULTS);
   const [siteSettings, setSiteSettings] =
     useState<SiteSettingsPublic>(EMPTY_SITE_SETTINGS);
 
@@ -469,17 +145,18 @@ export default function HomePage() {
           throw new Error(`HTTP_${response.status}`);
         }
 
-        const payload: unknown = await response.json().catch(() => null);
-        const normalized = normalizeHomePayload(payload);
+        const payload = (await response.json().catch(() => null)) as HomePayload | null;
 
-        setHomeContent(normalized);
+        const nextHomeContent = payload ?? HOME_DEFAULTS;
+
+        setHomeContent(nextHomeContent);
         setCoords((prev) => ({
-          lat: normalized.mapSection.fallbackLat ?? prev.lat,
-          lng: normalized.mapSection.fallbackLng ?? prev.lng,
+          lat: nextHomeContent.mapSection.fallbackLat ?? prev.lat,
+          lng: nextHomeContent.mapSection.fallbackLng ?? prev.lng,
         }));
       } catch (error) {
         console.error("[HomePage] Error loading home content:", error);
-        setHomeContent(EMPTY_HOME);
+        setHomeContent(HOME_DEFAULTS);
       }
     }
 
@@ -607,17 +284,23 @@ export default function HomePage() {
   }, [homeContent.featuredCards]);
 
   const aboutHighlights = useMemo(() => {
-    return homeContent.aboutSection.highlights.filter((item) =>
-      hasLocalizedText(item)
-    );
-  }, [homeContent.aboutSection.highlights]);
+    const highlights = Array.isArray(homeContent.aboutSection?.highlights)
+      ? homeContent.aboutSection.highlights
+      : [];
+
+    return highlights.filter((item) => hasLocalizedText(item));
+  }, [homeContent.aboutSection]);
 
   const whyChooseUsItems = useMemo(() => {
-    return homeContent.whyChooseUs.items.filter(
+    const items = Array.isArray(homeContent.whyChooseUs?.items)
+      ? homeContent.whyChooseUs.items
+      : [];
+
+    return items.filter(
       (item) =>
         hasLocalizedText(item.title) || hasLocalizedText(item.description)
     );
-  }, [homeContent.whyChooseUs.items]);
+  }, [homeContent.whyChooseUs]);
 
   const leadershipImageSrc = normalizeImageSrc(
     homeContent.leadershipSection.imageUrl
@@ -668,6 +351,67 @@ export default function HomePage() {
   const showAboutDescription = hasLocalizedText(
     homeContent.aboutSection.description
   );
+
+  const partnerItems = useMemo(() => {
+    const items = Array.isArray(homeContent.partnerSection?.items)
+      ? homeContent.partnerSection.items
+      : [];
+
+    return items
+      .filter((item) => item.enabled)
+      .filter((item) => {
+        const coverageItems = Array.isArray(item.coverageItems)
+          ? item.coverageItems.filter((entry) => hasLocalizedText(entry))
+          : [];
+
+        const tags = Array.isArray(item.tags)
+          ? item.tags.filter((entry) => hasLocalizedText(entry))
+          : [];
+
+        const documents = Array.isArray(item.documents)
+          ? item.documents.filter(
+              (document) =>
+                document.enabled &&
+                (hasLocalizedText(document.label) ||
+                  hasLocalizedText(document.title) ||
+                  document.file.url.trim().length > 0)
+            )
+          : [];
+
+        return (
+          item.name.trim().length > 0 ||
+          item.shortName.trim().length > 0 ||
+          hasLocalizedText(item.badgeLabel) ||
+          hasLocalizedText(item.summary) ||
+          hasLocalizedText(item.description) ||
+          item.logo.url.trim().length > 0 ||
+          coverageItems.length > 0 ||
+          tags.length > 0 ||
+          (hasLocalizedText(item.ctaLabel) && item.ctaHref.trim().length > 0) ||
+          documents.length > 0
+        );
+      })
+      .sort((a, b) => a.order - b.order);
+  }, [homeContent.partnerSection]);
+
+  const showPartnerSection =
+    homeContent.partnerSection.enabled &&
+    (hasLocalizedText(homeContent.partnerSection.eyebrow) ||
+      hasLocalizedText(homeContent.partnerSection.title) ||
+      hasLocalizedText(homeContent.partnerSection.description) ||
+      hasLocalizedText(homeContent.partnerSection.badgeLabel) ||
+      (hasLocalizedText(homeContent.partnerSection.ctaLabel) &&
+        homeContent.partnerSection.ctaHref.trim().length > 0) ||
+      partnerItems.length > 0);
+
+  const showPartnerEyebrow = hasLocalizedText(homeContent.partnerSection.eyebrow);
+  const showPartnerTitle = hasLocalizedText(homeContent.partnerSection.title);
+  const showPartnerDescription = hasLocalizedText(homeContent.partnerSection.description);
+  const showPartnerBadge = hasLocalizedText(homeContent.partnerSection.badgeLabel);
+
+  const showPartnerSectionCta =
+    hasLocalizedText(homeContent.partnerSection.ctaLabel) &&
+    homeContent.partnerSection.ctaHref.trim().length > 0;
 
   const showLeadershipSection =
     homeContent.leadershipSection.enabled &&
@@ -920,6 +664,202 @@ export default function HomePage() {
           </div>
         ) : null}
       </section>
+
+      {showPartnerSection ? (
+        <section className="mx-auto max-w-7xl px-6 py-10 md:px-10 md:py-12">
+          <div className="rounded-[30px] border border-slate-200 bg-white p-7 shadow-sm md:p-9">
+            <div className="max-w-3xl">
+              {showPartnerEyebrow ? (
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-700">
+                  {getLocalizedText(homeContent.partnerSection.eyebrow, lang)}
+                </p>
+              ) : null}
+
+              {showPartnerTitle ? (
+                <h2 className="mt-4 text-3xl font-semibold leading-tight text-slate-950 md:text-[2.6rem]">
+                  {getLocalizedText(homeContent.partnerSection.title, lang)}
+                </h2>
+              ) : null}
+
+              {showPartnerDescription ? (
+                <p className="mt-6 text-base leading-8 text-slate-600 md:text-lg md:leading-9">
+                  {getLocalizedText(homeContent.partnerSection.description, lang)}
+                </p>
+              ) : null}
+
+              {showPartnerBadge ? (
+                <div className="mt-6">
+                  <span className="inline-flex rounded-full border border-lime-200 bg-lime-50 px-4 py-2 text-sm font-medium text-lime-700">
+                    {getLocalizedText(homeContent.partnerSection.badgeLabel, lang)}
+                  </span>
+                </div>
+              ) : null}
+
+              {showPartnerSectionCta ? (
+                <div className="mt-6">
+                  <Link
+                    href={homeContent.partnerSection.ctaHref}
+                    className="inline-flex items-center rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+                  >
+                    {getLocalizedText(homeContent.partnerSection.ctaLabel, lang)}
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+
+            {partnerItems.length > 0 ? (
+              <div className="mt-10 grid gap-6 lg:grid-cols-2">
+                {partnerItems.map((partner) => {
+                  const partnerLogoSrc = normalizeImageSrc(partner.logo.url);
+                  const partnerCoverageItems = partner.coverageItems.filter((item) =>
+                    hasLocalizedText(item)
+                  );
+                  const partnerTags = partner.tags.filter((item) => hasLocalizedText(item));
+                  const partnerDocuments = partner.documents
+                    .filter(
+                      (document) =>
+                        document.enabled &&
+                        document.file.url.trim().length > 0 &&
+                        (hasLocalizedText(document.label) || hasLocalizedText(document.title))
+                    )
+                    .sort((a, b) => a.order - b.order);
+
+                  const showPartnerName =
+                    partner.name.trim().length > 0 || partner.shortName.trim().length > 0;
+                  const partnerDisplayName =
+                    partner.name.trim() || partner.shortName.trim();
+
+                  const showPartnerItemBadge = hasLocalizedText(partner.badgeLabel);
+                  const showPartnerSummary = hasLocalizedText(partner.summary);
+                  const showPartnerItemDescription = hasLocalizedText(partner.description);
+                  const showPartnerItemCta =
+                    hasLocalizedText(partner.ctaLabel) && partner.ctaHref.trim().length > 0;
+
+                  return (
+                    <article
+                      key={partner.id}
+                      className="rounded-[28px] border border-slate-200 bg-slate-50 p-6 shadow-sm"
+                    >
+                      {showPartnerItemBadge ? (
+                        <span className="inline-flex rounded-full border border-lime-200 bg-lime-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-lime-700">
+                          {getLocalizedText(partner.badgeLabel, lang)}
+                        </span>
+                      ) : null}
+
+                      <div className="mt-5 flex items-center gap-4">
+                        {partnerLogoSrc ? (
+                          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                            <Image
+                              src={partnerLogoSrc}
+                              alt={partnerDisplayName || "Partner logo"}
+                              width={80}
+                              height={80}
+                              className="h-full w-full object-contain"
+                              unoptimized
+                            />
+                          </div>
+                        ) : null}
+
+                        <div className="min-w-0">
+                          {showPartnerName ? (
+                            <h3 className="text-xl font-semibold text-slate-950">
+                              {partnerDisplayName}
+                            </h3>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {showPartnerSummary ? (
+                        <p className="mt-5 text-sm leading-7 text-slate-600 md:text-[0.96rem]">
+                          {getLocalizedText(partner.summary, lang)}
+                        </p>
+                      ) : null}
+
+                      {showPartnerItemDescription ? (
+                        <p className="mt-4 text-sm leading-7 text-slate-600 md:text-[0.96rem]">
+                          {getLocalizedText(partner.description, lang)}
+                        </p>
+                      ) : null}
+
+                      {partnerTags.length > 0 ? (
+                        <div className="mt-5 flex flex-wrap gap-2">
+                          {partnerTags.map((item, index) => (
+                            <span
+                              key={`${partner.id}-tag-${index}`}
+                              className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+                            >
+                              {getLocalizedText(item, lang)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {partnerCoverageItems.length > 0 ? (
+                        <div className="mt-6">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {lang === "es" ? "Cobertura autorizada" : "Authorized coverage"}
+                          </p>
+
+                          <ul className="mt-3 space-y-2">
+                            {partnerCoverageItems.map((item, index) => (
+                              <li
+                                key={`${partner.id}-coverage-${index}`}
+                                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+                              >
+                                {getLocalizedText(item, lang)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {partnerDocuments.length > 0 ? (
+                        <div className="mt-6">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {lang === "es" ? "Documentos" : "Documents"}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            {partnerDocuments.map((document) => {
+                              const label =
+                                getLocalizedText(document.label, lang).trim() ||
+                                getLocalizedText(document.title, lang).trim() ||
+                                (lang === "es" ? "Abrir documento" : "Open document");
+
+                              return (
+                                <Link
+                                  key={document.id}
+                                  href={document.file.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+                                >
+                                  {label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {showPartnerItemCta ? (
+                        <div className="mt-6">
+                          <Link
+                            href={partner.ctaHref}
+                            className="inline-flex items-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-lime-600"
+                          >
+                            {getLocalizedText(partner.ctaLabel, lang)}
+                          </Link>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {showLeadershipSection ? (
         <section className="mx-auto max-w-7xl px-6 py-10 md:px-10 md:py-12">
