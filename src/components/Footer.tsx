@@ -332,6 +332,8 @@ export default function Footer() {
     return normalizeImageSrc(siteSettings.identity.logoLight);
   }, [siteSettings.identity.logoLight]);
 
+  const futuraTechLogo = "/images/LogoCortoFuturaTech.png";
+
   const aboutText = useMemo(() => {
     const fromDb =
       lang === "es"
@@ -606,71 +608,102 @@ export default function Footer() {
         </div>
 
         {/* BOTTOM */}
-        <div className="flex flex-col items-center justify-between gap-5 border-t border-border pt-6 md:flex-row">
-          <div className="text-center text-xs text-text-muted md:text-left">
-            {copyrightText}
-          </div>
+        <div className="border-t border-border pt-6">
+          <div className="flex flex-col gap-4">
+            {/* ROW 1 */}
+            <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+              <div className="text-center text-xs text-text-muted md:text-left">
+                {copyrightText}
+              </div>
 
-          <div className="flex items-center justify-center gap-4">
-            {socialLinks.facebook ? (
-              <a
-                href={socialLinks.facebook}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-brand-primaryStrong"
-                aria-label="Facebook"
-              >
-                <Facebook size={20} />
-              </a>
-            ) : null}
+              <div className="flex items-center gap-4">
+                {socialLinks.facebook && (
+                  <a
+                    href={socialLinks.facebook}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted transition hover:text-brand-primaryStrong"
+                  >
+                    <Facebook size={18} />
+                  </a>
+                )}
 
-            {socialLinks.instagram ? (
-              <a
-                href={socialLinks.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-brand-primaryStrong"
-                aria-label="Instagram"
-              >
-                <Instagram size={20} />
-              </a>
-            ) : null}
+                {socialLinks.instagram && (
+                  <a
+                    href={socialLinks.instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted transition hover:text-brand-primaryStrong"
+                  >
+                    <Instagram size={18} />
+                  </a>
+                )}
 
-            {socialLinks.x ? (
-              <a
-                href={socialLinks.x}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-brand-primaryStrong"
-                aria-label="X"
-              >
-                <Twitter size={20} />
-              </a>
-            ) : null}
+                {socialLinks.x && (
+                  <a
+                    href={socialLinks.x}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted transition hover:text-brand-primaryStrong"
+                  >
+                    <Twitter size={18} />
+                  </a>
+                )}
 
-            {socialLinks.youtube ? (
-              <a
-                href={socialLinks.youtube}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-brand-primaryStrong"
-                aria-label="YouTube"
-              >
-                <Youtube size={20} />
-              </a>
-            ) : null}
+                {socialLinks.youtube && (
+                  <a
+                    href={socialLinks.youtube}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted transition hover:text-brand-primaryStrong"
+                  >
+                    <Youtube size={18} />
+                  </a>
+                )}
 
-            {socialLinks.linkedin ? (
-              <a
-                href={socialLinks.linkedin}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-brand-primaryStrong"
-                aria-label="LinkedIn"
-              >
-                <Linkedin size={20} />
-              </a>
-            ) : null}
+                {socialLinks.linkedin && (
+                  <a
+                    href={socialLinks.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-muted transition hover:text-brand-primaryStrong"
+                  >
+                    <Linkedin size={18} />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* SIGNATURE STRIP */}
+            <div className="flex items-center justify-center">
+              <div className="flex items-center gap-3 text-xs text-text-muted">
+                <span className="hidden sm:inline">
+                  {lang === "es" ? "Desarrollado por" : "Developed by"}
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <Image
+                    src="/images/LogoCortoFuturaTech.png"
+                    alt="FuturaTech"
+                    width={20}
+                    height={20}
+                    className="h-5 w-auto object-contain opacity-90"
+                  />
+
+                  <span className="font-medium tracking-wide text-text-primary">
+                    FuturaTech
+                  </span>
+                </div>
+
+                <span className="hidden sm:inline text-border">—</span>
+
+                <span className="hidden sm:inline">
+                  {lang === "es"
+                    ? "Desarrollo de software y soluciones cloud"
+                    : "Software & cloud solutions"}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
