@@ -60,7 +60,7 @@ export type ProjectVisibility = "private" | "public";
  */
 export type ProjectImage = {
   url: string;
-  alt: string;
+  alt: LocalizedText;
   storageKey: string;
 };
 
@@ -368,9 +368,12 @@ export type ProjectPayload = {
 
   technicalOverview: LocalizedText;
 
-  systemType: string;
-  treatedMedium: string;
-  technologyUsed: string[];
+  systemType: LocalizedText;
+  treatedMedium: LocalizedText;
+  technologyUsed: {
+    es: string[];
+    en: string[];
+  };
 
   operationalNotes: string;
   internalNotes: string;

@@ -57,7 +57,13 @@ import {
 /* Layout constants                                                           */
 /* -------------------------------------------------------------------------- */
 
-const GLOBAL_HEADER_HEIGHT_PX = 80;
+/**
+ * Altura visual real del header administrativo.
+ *
+ * Se aumenta para que el sidebar comience claramente debajo del header
+ * y no quede “metido” detrás del branding superior.
+ */
+const GLOBAL_HEADER_HEIGHT_PX = 112;
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -212,9 +218,7 @@ export default function AdminSidebar() {
         height: `calc(100vh - ${GLOBAL_HEADER_HEIGHT_PX}px)`,
       }}
       className={`
-        fixed left-0
-        z-40 w-64
-        overflow-y-auto
+        fixed left-0 z-40 w-64 overflow-y-auto
         border-r border-border bg-surface
         transition-[width,transform] duration-200 ease-in-out
         ${mobileTransform}

@@ -332,8 +332,6 @@ export default function Footer() {
     return normalizeImageSrc(siteSettings.identity.logoLight);
   }, [siteSettings.identity.logoLight]);
 
-  const futuraTechLogo = "/images/LogoCortoFuturaTech.png";
-
   const aboutText = useMemo(() => {
     const fromDb =
       lang === "es"

@@ -26,7 +26,10 @@ import type { ProjectImage } from "@/types/project";
 
 type UploadResult = {
   url: string;
-  alt?: string;
+  alt?: {
+    es: string;
+    en: string;
+  };
   storageKey?: string;
 };
 
@@ -144,7 +147,10 @@ export default function ProjectImageUploader({
 
       onChange({
         url: normalizedUrl || storageKey,
-        alt: normalizeString(uploaded.alt),
+        alt: {
+          es: normalizeString(uploaded.alt?.es),
+          en: normalizeString(uploaded.alt?.en),
+        },
         storageKey,
       });
     } finally {
@@ -155,12 +161,15 @@ export default function ProjectImageUploader({
     }
   }
 
-  function updateAlt(nextAlt: string) {
+  function updateAlt(localeKey: "es" | "en", nextAlt: string) {
     if (!value) return;
 
     onChange({
       ...value,
-      alt: nextAlt,
+      alt: {
+        es: localeKey === "es" ? nextAlt : value.alt?.es || "",
+        en: localeKey === "en" ? nextAlt : value.alt?.en || "",
+      },
     });
   }
 
@@ -227,7 +236,7 @@ export default function ProjectImageUploader({
 
               <Image
                 src={previewSrc}
-                alt={value.alt || "Project cover preview"}
+                alt={value.alt?.[safeLocale] || value.alt?.es || value.alt?.en || "Project cover preview"}
                 width={640}
                 height={360}
                 unoptimized
@@ -236,16 +245,30 @@ export default function ProjectImageUploader({
             </div>
           ) : null}
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-text-primary">
-              {t.altLabel}
-            </label>
-            <input
-              value={value.alt}
-              onChange={(e) => updateAlt(e.currentTarget.value)}
-              disabled={disabled || uploading}
-              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
-            />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                {safeLocale === "es" ? "Texto alternativo (ES)" : "Alt text (ES)"}
+              </label>
+              <input
+                value={value.alt?.es || ""}
+                onChange={(e) => updateAlt("es", e.currentTarget.value)}
+                disabled={disabled || uploading}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                {safeLocale === "es" ? "Texto alternativo (EN)" : "Alt text (EN)"}
+              </label>
+              <input
+                value={value.alt?.en || ""}
+                onChange={(e) => updateAlt("en", e.currentTarget.value)}
+                disabled={disabled || uploading}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end">

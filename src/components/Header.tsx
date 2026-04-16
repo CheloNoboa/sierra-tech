@@ -461,8 +461,8 @@ export default function Header() {
   return (
     <>
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-border bg-surface/95 shadow-sm backdrop-blur-md">
-        <div className="grid h-16 w-full grid-cols-[auto_1fr_auto] items-center px-4 md:h-20 md:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-16 w-full grid-cols-[minmax(0,auto)_1fr_auto] items-center px-4 md:h-20 md:px-6">
+          <div className="flex min-w-0 items-center gap-4 md:gap-5">
             <button
               type="button"
               onClick={() => setIsMenuOpen((prev) => !prev)}
@@ -479,23 +479,23 @@ export default function Header() {
             <Link
               href="/"
               onClick={closeMobileMenu}
-              className="flex min-w-0 items-center gap-3"
+              className="flex min-w-0 items-center gap-3.5 md:gap-4"
             >
               {businessLogotipo ? (
                 <Image
                   src={businessLogotipo}
                   alt={businessName}
-                  width={54}
-                  height={54}
-                  className="h-[42px] w-auto object-contain md:h-[54px]"
+                  width={60}
+                  height={60}
+                  className="h-[46px] w-auto object-contain md:h-[58px]"
                   priority
                   unoptimized
                 />
               ) : (
-                <div className="h-[42px] w-[42px] rounded-md border border-border bg-surface-soft md:h-[54px] md:w-[54px]" />
+                <div className="h-[46px] w-[46px] rounded-md border border-border bg-surface-soft md:h-[58px] md:w-[58px]" />
               )}
 
-              <span className="truncate text-base font-semibold tracking-tight text-text-primary md:text-[1.35rem]">
+              <span className="truncate leading-none text-base font-semibold tracking-tight text-text-primary md:text-[1.35rem]">
                 {businessName}
               </span>
             </Link>
@@ -528,20 +528,20 @@ export default function Header() {
             })}
           </nav>
 
-          <div className="flex items-center justify-end gap-2 md:gap-3">
+          <div className="flex h-full items-center justify-end gap-2 self-stretch md:gap-3">
             {showGlobalCta ? (
               globalCtaIsSectionLink ? (
                 <button
                   type="button"
                   onClick={handleGlobalCtaNavigation}
-                  className="hidden rounded-full bg-brand-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white md:inline-flex"
+                  className="hidden h-10 rounded-full bg-brand-primary px-4 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white md:inline-flex md:items-center"
                 >
                   {authText.quote}
                 </button>
               ) : (
                 <Link
                   href={globalCtaHref}
-                  className="hidden rounded-full bg-brand-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white md:inline-flex"
+                  className="hidden h-10 rounded-full bg-brand-primary px-4 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white md:inline-flex md:items-center"
                 >
                   {authText.quote}
                 </Link>
@@ -550,8 +550,8 @@ export default function Header() {
 
             {isAuthenticated ? (
               <>
-                <div className="hidden items-center justify-end gap-3 md:flex">
-                  <div className="flex items-center gap-2 rounded-full border border-border bg-surface-soft px-4 py-2 text-sm text-text-secondary">
+                <div className="hidden h-full items-center justify-end gap-3 md:flex">
+                  <div className="flex h-10 items-center gap-2 rounded-full border border-border bg-surface-soft px-4 text-sm text-text-secondary">
                     <HiOutlineUserCircle size={18} className="shrink-0" />
                     <span className="max-w-[140px] truncate">
                       {authText.hello}, {firstName}
@@ -561,7 +561,7 @@ export default function Header() {
                   <button
                     type="button"
                     onClick={() => void handleLogout()}
-                    className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-text-secondary transition hover:border-status-error hover:bg-status-error hover:text-white"
+                    className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm font-medium text-text-secondary transition hover:border-status-error hover:bg-status-error hover:text-white"
                   >
                     <HiOutlineUserCircle size={18} className="shrink-0" />
                     <span>{authText.signOut}</span>
@@ -579,11 +579,11 @@ export default function Header() {
               </>
             ) : (
               <>
-                <div className="hidden items-center justify-end gap-3 md:flex">
+                <div className="hidden h-full items-center justify-end gap-3 md:flex">
                   <button
                     type="button"
                     onClick={() => setShowLogin(true)}
-                    className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-text-secondary transition hover:border-brand-primary hover:bg-surface-soft hover:text-brand-primaryStrong"
+                    className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm font-medium text-text-secondary transition hover:border-brand-primary hover:bg-surface-soft hover:text-brand-primaryStrong"
                   >
                     <HiOutlineUserCircle size={18} className="shrink-0" />
                     <span>{authText.signIn}</span>
@@ -592,7 +592,7 @@ export default function Header() {
                   <button
                     type="button"
                     onClick={() => setShowSignUp(true)}
-                    className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-soft px-4 py-2 text-sm font-medium text-text-primary transition hover:border-brand-primary hover:bg-brand-secondary"
+                    className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface-soft px-4 text-sm font-medium text-text-primary transition hover:border-brand-primary hover:bg-brand-secondary"
                   >
                     <HiOutlineIdentification size={18} className="shrink-0" />
                     <span>{authText.signUp}</span>
@@ -619,7 +619,7 @@ export default function Header() {
               </>
             )}
 
-            <div className="hidden items-center gap-2 rounded-full border border-border bg-surface-soft px-4 py-2 md:flex">
+            <div className="hidden h-10 items-center gap-2 rounded-full border border-border bg-surface-soft px-4 md:flex">
               <HiOutlineGlobeAlt
                 size={18}
                 className="shrink-0 text-text-secondary"
@@ -639,7 +639,7 @@ export default function Header() {
               </select>
             </div>
 
-            <div className="flex items-center md:hidden">
+            <div className="flex h-full items-center md:hidden">
               <label htmlFor="mobile-header-locale" className="sr-only">
                 {authText.language}
               </label>

@@ -17,6 +17,8 @@
  *   - password almacenado como hash
  *   - fullName persistido para optimizar UI y búsquedas
  *   - no eliminación física → uso de status
+ *   - colección fijada explícitamente como "OrganizationUsers"
+ *     para mantener consistencia con la convención del proyecto
  *
  *   Responsabilidad:
  *   - Persistencia de identidad de usuario
@@ -124,6 +126,7 @@ const OrganizationUserSchema = new Schema<OrganizationUserDocument>(
   {
     timestamps: true,
     versionKey: false,
+    collection: "OrganizationUsers",
   }
 );
 
@@ -135,7 +138,8 @@ const OrganizationUserModel: Model<OrganizationUserDocument> =
   models.OrganizationUser ||
   mongoose.model<OrganizationUserDocument>(
     "OrganizationUser",
-    OrganizationUserSchema
+    OrganizationUserSchema,
+    "OrganizationUsers"
   );
 
 export default OrganizationUserModel;

@@ -1,108 +1,112 @@
 /**
- * ============================================================================
+ * =============================================================================
  * 📌 GLOBAL MIDDLEWARE — src/middleware.ts
- * ============================================================================
- * ES — PROPÓSITO
- *   Middleware unificado de seguridad y ruteo para la plataforma FastFood.
- *   Aplica control de acceso basado en JWT (NextAuth) y estandariza la
- *   inyección de identidad mínima hacia endpoints internos (/api).
+ * =============================================================================
  *
- * ES — ALCANCE
- *   1) Protección de rutas de plataforma:
- *      - /admin/** requiere permiso "system.dashboard.view" (o "*" / superadmin).
- *      - /user/** requiere autenticación (token presente).
+ * ES:
+ * Middleware oficial de seguridad y ruteo para Sierra Tech.
  *
- *   2) Separación de audiencias (cliente vs plataforma):
- *      - /menu/** es una experiencia de cliente (pública).
- *      - Si el usuario autenticado corresponde a “plataforma”, NO debe
- *        permanecer en /menu/** → se redirige a /admin/dashboard.
+ * Propósito:
+ * - proteger rutas administrativas
+ * - proteger portal cliente
+ * - separar audiencias internas vs clientes
+ * - inyectar identidad mínima hacia endpoints internos /api/**
  *
- *   3) API identity headers:
- *      - Para /api/** (excepto /api/auth/** por matcher), inyecta headers mínimos:
- *          x-user-id (CRÍTICO), x-user-role, x-user-branch-id, x-user-permissions (opcional).
+ * Alcance:
+ * 1) Protección de rutas:
+ *    - /admin/**  → solo usuarios internos activos
+ *    - /portal/** → solo usuarios cliente activos con organización válida
  *
- * ES — CONTRATOS (INVARIANTES)
- *   - La autoridad de identidad proviene del JWT (NextAuth).
- *   - userId efectivo se resuelve priorizando: token._id -> token.sub -> token.userId -> token.id.
- *   - "plataforma" se determina por:
- *       (a) rol ∈ {admin, superadmin, staff}
- *       (b) permisos incluyen "system.dashboard.view" o "*"
- *     (Cualquiera de los anteriores es suficiente.)
+ * 2) Redirecciones de audiencia:
+ *    - usuario autenticado que entra a /login se redirige según su tipo
+ *    - usuario interno en rutas de portal cliente se saca hacia admin
+ *    - usuario cliente en rutas administrativas se saca hacia portal
  *
- * ES — NO OBJETIVOS
- *   - No implementa lógica de negocio (promos, pedidos, catálogos).
- *   - No reemplaza validación de permisos dentro de cada endpoint; solo provee
- *     identidad y control de acceso a nivel de rutas.
+ * 3) Propagación de identidad hacia APIs internas:
+ *    - para /api/** (excepto /api/auth/** por matcher), inyecta:
+ *      - x-user-id
+ *      - x-user-role
+ *      - x-user-permissions
+ *      - x-user-type
+ *      - x-user-status
+ *      - x-organization-id
+ *      - x-organization-name
+ *      - x-organization-user-role
  *
- * EN — SUMMARY
- *   Unified middleware for route-level security and identity propagation.
- *   Protects /admin and /user routes, enforces audience separation for /menu,
- *   and injects identity headers for /api requests.
+ * Contratos:
+ * - la autoridad de identidad proviene del JWT de NextAuth
+ * - el tipo de usuario NO se deduce por role; se lee desde userType
+ * - el portal cliente exige organizationId válido
+ * - el middleware controla acceso por audiencia, no lógica de negocio
  *
- * ----------------------------------------------------------------------------
- * AUTORES:
- *   Diseño: Marcelo Noboa
- *   Mantención técnica: IA Asistida (ChatGPT)
- *   Última actualización: 2026-02-01
- * ============================================================================
+ * No objetivos:
+ * - no implementa permisos finos por pantalla o módulo
+ * - no reemplaza validaciones internas dentro de cada API/route handler
+ *
+ * EN:
+ * Official security and routing middleware for Sierra Tech.
+ * =============================================================================
  */
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-/* ============================================================================
- * CONFIG — Rutas bajo protección del middleware
- * ----------------------------------------------------------------------------
- * Excluye:
- *   - _next (archivos internos)
- *   - api/auth (rutas internas de NextAuth)
- *   - assets comunes (favicon, imágenes, íconos)
- * ============================================================================
+/* -------------------------------------------------------------------------- */
+/* ⚙️ Config                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Protege todo excepto:
+ * - internals de Next.js
+ * - endpoints auth de NextAuth
+ * - assets comunes
+ *
+ * Nota:
+ * Si más adelante agregas otras carpetas públicas de assets, se incorporan aquí.
  */
 export const config = {
   matcher: ["/((?!_next|api/auth|favicon.ico|images|icons).*)"],
 };
 
-/* ============================================================================
- * 🔐 Token shape (JWT NextAuth extendido en app)
- * ----------------------------------------------------------------------------
- * NOTA:
- * - NextAuth usa `sub` como id estándar.
- * - La app setea también `token._id` (ObjectId string).
- * ============================================================================
- */
+/* -------------------------------------------------------------------------- */
+/* 🧱 Token shape                                                             */
+/* -------------------------------------------------------------------------- */
+
 interface TokenPayload {
   sub?: string;
   _id?: string;
   id?: string;
   userId?: string;
 
-  role?: string; // staff role o "customer"
-  branchId?: string | null;
+  role?: string;
   permissions?: string[];
+
+  userType?: "internal" | "client";
+  status?: "active" | "inactive";
+
+  organizationId?: string | null;
+  organizationName?: string | null;
+  organizationUserRole?: string | null;
 }
 
-/* ============================================================================
- * Utils (sin any)
- * ============================================================================
- */
-function asNonEmptyString(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const s = v.trim();
-  return s.length ? s : null;
+/* -------------------------------------------------------------------------- */
+/* 🧰 Helpers                                                                 */
+/* -------------------------------------------------------------------------- */
+
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
 }
 
-function normalizeHeaderValue(v: string): string {
-  // headers deben ser strings simples sin saltos de línea
-  return v.replace(/\r?\n/g, " ").trim();
+function normalizeHeaderValue(value: string): string {
+  return value.replace(/\r?\n/g, " ").trim();
 }
 
 /**
- * ✅ Resuelve userId de forma robusta:
- * - Preferimos `_id` (ObjectId real del sistema)
- * - Luego `sub` (estándar NextAuth)
- * - Fallbacks históricos: userId / id
+ * Resuelve el user id efectivo del token con prioridad estable.
+ * Preferimos _id y luego los fallbacks históricos.
  */
 function resolveUserIdFromToken(token: TokenPayload | null): string {
   return (
@@ -114,27 +118,50 @@ function resolveUserIdFromToken(token: TokenPayload | null): string {
   );
 }
 
-/**
- * ✅ Permisos de dashboard (plataforma)
- */
-function canViewAdminDashboard(role: string, permissions: string[]): boolean {
-  if (role === "superadmin") return true;
-  if (permissions.includes("*")) return true;
-  return permissions.includes("system.dashboard.view");
+function getUserType(token: TokenPayload | null): "internal" | "client" | "" {
+  return token?.userType === "internal" || token?.userType === "client"
+    ? token.userType
+    : "";
+}
+
+function getUserStatus(token: TokenPayload | null): "active" | "inactive" | "" {
+  return token?.status === "active" || token?.status === "inactive"
+    ? token.status
+    : "";
 }
 
 /**
- * ✅ Determina si un usuario autenticado debe salir de /menu/** hacia /admin.
- * Regla: SOLO si realmente puede ver dashboard (misma regla de /admin).
+ * Usuario interno válido para plataforma administrativa.
  */
-function isPlatformAudience(role: string, permissions: string[]): boolean {
-  return canViewAdminDashboard(role, permissions);
+function isInternalUser(token: TokenPayload | null): boolean {
+  return getUserType(token) === "internal" && getUserStatus(token) === "active";
 }
 
-/* ============================================================================
- * 🧩 MIDDLEWARE PRINCIPAL
- * ============================================================================
+/**
+ * Usuario cliente válido para portal.
+ * Requiere userType client + status active + organizationId presente.
  */
+function isClientUser(token: TokenPayload | null): boolean {
+  return (
+    getUserType(token) === "client" &&
+    getUserStatus(token) === "active" &&
+    !!asNonEmptyString(token?.organizationId)
+  );
+}
+
+/**
+ * Redirección segura por audiencia autenticada.
+ */
+function resolveAuthenticatedHome(token: TokenPayload | null): string {
+  if (isInternalUser(token)) return "/admin/dashboard";
+  if (isClientUser(token)) return "/portal";
+  return "/login";
+}
+
+/* -------------------------------------------------------------------------- */
+/* 🧩 Middleware principal                                                    */
+/* -------------------------------------------------------------------------- */
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -143,43 +170,80 @@ export async function middleware(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   })) as TokenPayload | null;
 
-  const role = typeof token?.role === "string" && token.role ? token.role : "user";
-  const permissions = Array.isArray(token?.permissions) ? token.permissions.filter((p) => typeof p === "string") : [];
-  const branchId =
-    typeof token?.branchId === "string"
-      ? token.branchId
-      : token?.branchId
-        ? String(token.branchId)
-        : "";
-
   const userId = resolveUserIdFromToken(token);
+  const role = asNonEmptyString(token?.role) ?? "";
+  const permissions = Array.isArray(token?.permissions)
+    ? token.permissions.filter(
+        (value): value is string => typeof value === "string"
+      )
+    : [];
+  const userType = getUserType(token);
+  const status = getUserStatus(token);
+  const organizationId = asNonEmptyString(token?.organizationId) ?? "";
+  const organizationName = asNonEmptyString(token?.organizationName) ?? "";
+  const organizationUserRole =
+    asNonEmptyString(token?.organizationUserRole) ?? "";
 
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isUserRoute = pathname.startsWith("/user");
   const isApiRoute = pathname.startsWith("/api/");
-  const isMenuRoute = pathname === "/menu" || pathname.startsWith("/menu/");
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isPortalRoute =
+    pathname === "/portal" || pathname.startsWith("/portal/");
+  const isLoginRoute = pathname === "/login";
 
-  /* ============================================================================
-   * 1) API — Inyectar headers mínimos (IDENTIDAD)
-   * ----------------------------------------------------------------------------
-   * IMPORTANT:
-   * - Aplica para /api/** excepto /api/auth/** por matcher.
-   * - Solo inyecta si hay token (autenticado).
-   * ============================================================================
+  /* ------------------------------------------------------------------------ */
+  /* 1) API identity headers                                                  */
+  /* ------------------------------------------------------------------------ */
+  /**
+   * Para route handlers internos propagamos identidad mínima desde el JWT.
+   * Esto permite que los endpoints lean contexto autenticado sin reimplementar
+   * parsing manual del token en cada handler.
    */
   if (isApiRoute) {
-    // ✅ IMPORTANTE: para pasar identidad a Route Handlers hay que mutar
-    // los headers del REQUEST (no del response).
     const requestHeaders = new Headers(req.headers);
 
     if (token) {
-      requestHeaders.set("x-user-role", normalizeHeaderValue(role));
-      requestHeaders.set("x-user-branch-id", normalizeHeaderValue(branchId || ""));
+      if (userId) {
+        requestHeaders.set("x-user-id", normalizeHeaderValue(userId));
+      }
 
-      if (userId) requestHeaders.set("x-user-id", normalizeHeaderValue(userId));
+      if (role) {
+        requestHeaders.set("x-user-role", normalizeHeaderValue(role));
+      }
 
-      if (permissions.length) {
-        requestHeaders.set("x-user-permissions", normalizeHeaderValue(permissions.join(",")));
+      if (permissions.length > 0) {
+        requestHeaders.set(
+          "x-user-permissions",
+          normalizeHeaderValue(permissions.join(","))
+        );
+      }
+
+      if (userType) {
+        requestHeaders.set("x-user-type", normalizeHeaderValue(userType));
+      }
+
+      if (status) {
+        requestHeaders.set("x-user-status", normalizeHeaderValue(status));
+      }
+
+      if (organizationId) {
+        requestHeaders.set(
+          "x-organization-id",
+          normalizeHeaderValue(organizationId)
+        );
+      }
+
+      if (organizationName) {
+        requestHeaders.set(
+          "x-organization-name",
+          normalizeHeaderValue(organizationName)
+        );
+      }
+
+      if (organizationUserRole) {
+        requestHeaders.set(
+          "x-organization-user-role",
+          normalizeHeaderValue(organizationUserRole)
+        );
       }
     }
 
@@ -188,47 +252,91 @@ export async function middleware(req: NextRequest) {
     });
   }
 
-  /* ============================================================================
-   * 2) Separación de audiencias — /menu/** (cliente) vs plataforma
-   * ----------------------------------------------------------------------------
-   * Regla:
-   * - Usuario autenticado “plataforma” NO permanece en /menu/**.
-   * - Redirige server-side a /admin/dashboard (sin flash de UI cliente).
-   * ============================================================================
+  /* ------------------------------------------------------------------------ */
+  /* 2) Login route                                                           */
+  /* ------------------------------------------------------------------------ */
+  /**
+   * Si el usuario ya tiene sesión válida, no debe permanecer en /login.
+   * Se redirige al hogar correspondiente según su audiencia.
    */
-  if (isMenuRoute && token) {
-    if (isPlatformAudience(role, permissions)) {
-      return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+  if (isLoginRoute && token) {
+    const destination = resolveAuthenticatedHome(token);
+    if (destination !== "/login") {
+      return NextResponse.redirect(new URL(destination, req.url));
     }
   }
 
-  /* ============================================================================
-   * 3) Rutas protegidas (/admin, /user)
-   * ============================================================================
+  /* ------------------------------------------------------------------------ */
+  /* 3) Home pública                                                          */
+  /* ------------------------------------------------------------------------ */
+  /**
+   * Si la raíz pública recibe a un usuario autenticado, lo enviamos a su zona.
+   * Esto evita mezclar home comercial con home privada.
    */
-
-  // No autenticado → home (para rutas protegidas)
-  if ((isAdminRoute || isUserRoute) && !token) {
-    return NextResponse.redirect(new URL("/", req.url));
-  }
-
-  // Auto-redirect desde "/" → /admin/dashboard si tiene acceso
   if (pathname === "/" && token) {
-    if (canViewAdminDashboard(role, permissions)) {
+    const destination = resolveAuthenticatedHome(token);
+    if (destination !== "/login") {
+      return NextResponse.redirect(new URL(destination, req.url));
+    }
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* 4) Protección de /admin/**                                               */
+  /* ------------------------------------------------------------------------ */
+  if (isAdminRoute) {
+    /**
+     * Sin sesión → login.
+     */
+    if (!token) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
+
+    /**
+     * Usuario cliente autenticado intentando entrar a admin.
+     * Se redirige al portal cliente.
+     */
+    if (isClientUser(token)) {
+      return NextResponse.redirect(new URL("/portal", req.url));
+    }
+
+    /**
+     * Cualquier identidad no válida para admin sale a login.
+     */
+    if (!isInternalUser(token)) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* 5) Protección de /portal/**                                              */
+  /* ------------------------------------------------------------------------ */
+  if (isPortalRoute) {
+    /**
+     * Sin sesión → login.
+     */
+    if (!token) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
+
+    /**
+     * Usuario interno autenticado intentando entrar al portal cliente.
+     * Se redirige al dashboard administrativo.
+     */
+    if (isInternalUser(token)) {
       return NextResponse.redirect(new URL("/admin/dashboard", req.url));
     }
-  }
 
-  // Validación /admin (requiere permiso dashboard)
-  if (isAdminRoute) {
-    if (!canViewAdminDashboard(role, permissions)) {
-      return NextResponse.redirect(new URL("/", req.url));
+    /**
+     * Cualquier identidad no válida para portal sale a login.
+     */
+    if (!isClientUser(token)) {
+      return NextResponse.redirect(new URL("/login", req.url));
     }
   }
 
-  /* ============================================================================
-   * 4) Resto — Continuar normal
-   * ============================================================================
-   */
+  /* ------------------------------------------------------------------------ */
+  /* 6) Resto                                                                 */
+  /* ------------------------------------------------------------------------ */
+
   return NextResponse.next();
 }

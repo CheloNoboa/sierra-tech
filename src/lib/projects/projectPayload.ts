@@ -12,12 +12,16 @@
  *   - proteger UI / API / DB contra datos incompletos o inconsistentes
  *   - alinear el payload con el contrato nuevo de mantenimientos basado en
  *     `schedule` como única fuente estructurada de programación
+ *   - soportar compatibilidad entre datos viejos monolingües y el nuevo
+ *     contrato bilingüe para clasificación visible del portal
  *
  * Reglas:
  * - este archivo es la fuente de verdad para normalización defensiva
  * - no debe inventar shapes distintos a los definidos en src/types/project.ts
  * - todo campo de fecha debe salir como ISO string o null
  * - todo array debe salir estable, aunque el input venga corrupto
+ * - systemType, treatedMedium y technologyUsed deben salir siempre en formato
+ *   bilingüe estable
  * =============================================================================
  */
 
@@ -233,6 +237,62 @@ function normalizeLocalizedText(value: unknown): LocalizedText {
   };
 }
 
+/**
+ * ---------------------------------------------------------------------------
+ * Normaliza clasificación bilingüe con compatibilidad hacia atrás.
+ *
+ * Casos soportados:
+ * - dato nuevo: { es: "...", en: "..." }
+ * - dato viejo: "texto único"
+ * - dato faltante: fallback vacío
+ * ---------------------------------------------------------------------------
+ */
+function normalizeLocalizedTextWithLegacyString(value: unknown): LocalizedText {
+  if (typeof value === "string") {
+    const text = normalizeString(value);
+
+    return {
+      es: text,
+      en: text,
+    };
+  }
+
+  return normalizeLocalizedText(value);
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * Normaliza lista bilingüe con compatibilidad hacia atrás.
+ *
+ * Casos soportados:
+ * - dato nuevo:
+ *   { es: ["a", "b"], en: ["a", "b"] }
+ * - dato viejo:
+ *   ["a", "b"]
+ * - dato faltante:
+ *   { es: [], en: [] }
+ * ---------------------------------------------------------------------------
+ */
+function normalizeLocalizedStringArray(
+  value: unknown
+): { es: string[]; en: string[] } {
+  if (Array.isArray(value)) {
+    const normalized = value.map(normalizeString).filter(Boolean);
+
+    return {
+      es: normalized,
+      en: normalized,
+    };
+  }
+
+  const source = isRecord(value) ? value : {};
+
+  return {
+    es: safeArray(source.es).map(normalizeString).filter(Boolean),
+    en: safeArray(source.en).map(normalizeString).filter(Boolean),
+  };
+}
+
 function normalizeProjectImage(value: unknown): ProjectImage | null {
   const source = isRecord(value) ? value : null;
   if (!source) return null;
@@ -242,7 +302,7 @@ function normalizeProjectImage(value: unknown): ProjectImage | null {
 
   return {
     url,
-    alt: normalizeString(source.alt),
+    alt: normalizeLocalizedTextWithLegacyString(source.alt),
     storageKey: normalizeString(source.storageKey),
   };
 }
@@ -419,9 +479,9 @@ export function createEmptyProjectPayload(): ProjectPayload {
     contractEndDate: null,
 
     technicalOverview: { es: "", en: "" },
-    systemType: "",
-    treatedMedium: "",
-    technologyUsed: [],
+    systemType: { es: "", en: "" },
+    treatedMedium: { es: "", en: "" },
+    technologyUsed: { es: [], en: [] },
     operationalNotes: "",
     internalNotes: "",
     locationLabel: "",
@@ -481,11 +541,9 @@ export function normalizeProjectWritePayload(value: unknown): ProjectPayload {
       calculateContractEndDate(contractStartDate, contractDurationMonths),
 
     technicalOverview: normalizeLocalizedText(source.technicalOverview),
-    systemType: normalizeString(source.systemType),
-    treatedMedium: normalizeString(source.treatedMedium),
-    technologyUsed: safeArray(source.technologyUsed)
-      .map(normalizeString)
-      .filter(Boolean),
+    systemType: normalizeLocalizedTextWithLegacyString(source.systemType),
+    treatedMedium: normalizeLocalizedTextWithLegacyString(source.treatedMedium),
+    technologyUsed: normalizeLocalizedStringArray(source.technologyUsed),
     operationalNotes: normalizeString(source.operationalNotes),
     internalNotes: normalizeString(source.internalNotes),
     locationLabel: normalizeString(source.locationLabel),

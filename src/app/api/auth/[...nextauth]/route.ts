@@ -1,25 +1,46 @@
 /**
  * =============================================================================
- * 📌 NextAuth Route — Platform Auth Gateway
+ * 📌 NextAuth Route — Sierra Tech Auth Gateway
  * Path: src/app/api/auth/[...nextauth]/route.ts
  * =============================================================================
  *
  * ES:
- * Gateway central de autenticación para la plataforma base.
+ * Gateway central de autenticación para Sierra Tech.
  *
- * Objetivo:
- * - Centralizar autenticación de usuarios del sistema
- * - Exponer una sesión consistente para frontend, middleware y seguridad
- * - Mantener login con credentials y Google OAuth
+ * Propósito:
+ * - centralizar autenticación de usuarios internos y usuarios cliente
+ * - exponer una sesión consistente para frontend, middleware y seguridad
+ * - mantener login por credentials
+ * - mantener Google OAuth solo para usuarios internos
+ *
+ * Alcance:
+ * - valida credentials contra la colección Users
+ * - si no hay coincidencia en Users, valida contra OrganizationUsers
+ * - construye un JWT/session con identidad suficiente para:
+ *   - separar admin vs portal cliente
+ *   - proteger rutas por middleware
+ *   - propagar headers mínimos hacia APIs internas
+ *
+ * Decisiones:
+ * - userType distingue audiencias:
+ *   - "internal" → usuario interno del sistema
+ *   - "client"   → usuario del portal cliente
+ * - Google OAuth permanece limitado a Users en esta fase
+ * - OrganizationUsers no usan Google OAuth en esta versión
+ * - el middleware será el responsable final de redirección según userType
  *
  * Contratos:
- * - Solo existe identidad de usuario del sistema (`User`)
- * - Los roles provienen dinámicamente de la colección `Roles`
- * - Los permisos se resuelven según el rol actual
- * - No existe lógica de customer, sucursal, pricing ni menú
+ * - Users:
+ *   - colección: Users
+ *   - rol dinámico desde Roles
+ *   - permisos resueltos desde la colección Roles
+ * - OrganizationUsers:
+ *   - colección: OrganizationUsers
+ *   - acceso ligado a una organización activa
+ *   - no cargan permisos internos de plataforma
  *
  * EN:
- * Central authentication gateway for the reusable platform base.
+ * Central authentication gateway for Sierra Tech.
  * =============================================================================
  */
 
@@ -36,62 +57,120 @@ import { connectToDB } from "@/lib/connectToDB";
 import UserModel from "@/models/User";
 import RoleModel from "@/models/Role";
 import SystemSettings from "@/models/SystemSettings";
+import OrganizationModel from "@/models/Organization";
+import OrganizationUserModel from "@/models/OrganizationUser";
 
-/* =============================================================================
- * Extended JWT
- * ============================================================================= */
+/* -------------------------------------------------------------------------- */
+/* 🧱 JWT extendido                                                           */
+/* -------------------------------------------------------------------------- */
+
 type AppJWT = JWT & {
   _id?: string;
   role?: string;
   permissions?: string[];
+
+  userType?: "internal" | "client";
+  status?: "active" | "inactive";
+
   name?: string | null;
   email?: string | null;
+
+  organizationId?: string | null;
+  organizationName?: string | null;
+  organizationUserRole?: string | null;
+
   isRegistered?: boolean;
   phone?: string | null;
   exp?: number;
 };
 
-/* =============================================================================
- * Helpers
- * ============================================================================= */
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
+/* -------------------------------------------------------------------------- */
+/* 🧰 Helpers generales                                                       */
+/* -------------------------------------------------------------------------- */
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
-function pickString(v: unknown): string | null {
-  return typeof v === "string" && v.trim() ? v.trim() : null;
+function pickString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function pickDocString(doc: unknown, key: string): string | null {
   if (!isRecord(doc)) return null;
-  const value = doc[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return pickString(doc[key]);
 }
 
-function pickPhoneOrNull(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const trimmed = v.trim();
-  return trimmed ? trimmed : null;
+function pickPhoneOrNull(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
 }
+
+function normalizeStatus(value: unknown): "active" | "inactive" {
+  return value === "inactive" ? "inactive" : "active";
+}
+
+function normalizeUserType(value: unknown): "internal" | "client" | null {
+  if (value === "internal" || value === "client") return value;
+  return null;
+}
+
+/**
+ * Extrae string seguro desde ObjectId/string/unknown.
+ */
+function toIdString(value: unknown): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toString" in value &&
+    typeof value.toString === "function"
+  ) {
+    const parsed = value.toString().trim();
+    return parsed;
+  }
+
+  return "";
+}
+
+/* -------------------------------------------------------------------------- */
+/* 🧾 Tipado interno para hydration de user en callback jwt                   */
+/* -------------------------------------------------------------------------- */
 
 type UserLike = {
   id?: unknown;
   _id?: unknown;
   role?: unknown;
   permissions?: unknown;
+
+  userType?: unknown;
+  status?: unknown;
+
   name?: unknown;
   email?: unknown;
+
+  organizationId?: unknown;
+  organizationName?: unknown;
+  organizationUserRole?: unknown;
+
   isRegistered?: unknown;
   phone?: unknown;
 };
 
-function getUserLike(u: User | AdapterUser): UserLike {
-  return isRecord(u) ? (u as UserLike) : {};
+function getUserLike(user: User | AdapterUser): UserLike {
+  return isRecord(user) ? (user as UserLike) : {};
 }
 
-/* =============================================================================
- * Session timeout from DB
- * ============================================================================= */
+/* -------------------------------------------------------------------------- */
+/* ⏱️ Timeout de sesión desde DB                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Obtiene timeout de sesión configurable desde SystemSettings.
+ * Fallback seguro: 60 minutos.
+ */
 async function loadTimeout(): Promise<number> {
   await connectToDB();
 
@@ -114,12 +193,24 @@ async function loadTimeout(): Promise<number> {
   return parsed && parsed > 0 ? parsed : 60;
 }
 
-/* =============================================================================
- * NextAuth options
- * ============================================================================= */
+/* -------------------------------------------------------------------------- */
+/* 🔐 NextAuth options                                                        */
+/* -------------------------------------------------------------------------- */
+
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
-  pages: { signIn: "/" },
+  session: {
+    strategy: "jwt",
+  },
+
+  /**
+   * Ruta oficial de login.
+   * Separar landing pública del formulario de autenticación evita
+   * mezclar flujo comercial con flujo de acceso.
+   */
+  pages: {
+    signIn: "/login",
+  },
+
   secret: process.env.NEXTAUTH_SECRET,
 
   providers: [
@@ -138,58 +229,158 @@ export const authOptions: NextAuthOptions = {
         email: string | null;
         role: string;
         permissions: string[];
-        isRegistered: boolean;
-        phone: string | null;
+        userType: "internal" | "client";
+        status: "active" | "inactive";
+        organizationId?: string | null;
+        organizationName?: string | null;
+        organizationUserRole?: string | null;
+        isRegistered?: boolean;
+        phone?: string | null;
       } | null> {
         if (!credentials?.email || !credentials.password) return null;
 
         await connectToDB();
 
         const email = credentials.email.trim().toLowerCase();
-        const plain = credentials.password;
+        const plainPassword = credentials.password;
 
-        const user = await UserModel.findOne({ email })
-          .select("+password +passwordHash +provider +role +isRegistered +name +email +phone")
+        /* ------------------------------------------------------------------ */
+        /* 1) USERS — autenticación interna                                   */
+        /* ------------------------------------------------------------------ */
+
+        const internalUser = await UserModel.findOne({ email })
+          .select(
+            "+password +passwordHash +provider +role +status +isRegistered +name +email +phone"
+          )
           .exec();
 
-        if (!user) return null;
+        if (internalUser) {
+          const provider = pickDocString(internalUser, "provider");
+          if (provider && provider !== "credentials") {
+            return null;
+          }
 
-        const provider = pickDocString(user, "provider");
-        if (provider && provider !== "credentials") return null;
+          const hash =
+            pickDocString(internalUser, "password") ??
+            pickDocString(internalUser, "passwordHash");
 
-        const hash =
-          pickDocString(user, "password") ??
-          pickDocString(user, "passwordHash");
+          if (!hash) return null;
 
-        if (!hash) return null;
+          const validPassword = await bcrypt.compare(plainPassword, hash);
+          if (!validPassword) return null;
 
-        const valid = await bcrypt.compare(plain, hash);
-        if (!valid) return null;
+          const internalStatus = normalizeStatus(
+            (internalUser as unknown as { status?: unknown }).status
+          );
 
-        const roleCode =
-          typeof user.role === "string" && user.role ? user.role : "user";
+          if (internalStatus !== "active") return null;
 
-        const roleDoc = await RoleModel.findOne({ code: roleCode }).lean().exec();
+          const roleCode =
+            typeof internalUser.role === "string" && internalUser.role.trim()
+              ? internalUser.role.trim()
+              : "user";
 
-        const permissions = Array.isArray(roleDoc?.permissions)
-          ? roleDoc.permissions.filter((x): x is string => typeof x === "string")
-          : [];
+          const roleDoc = await RoleModel.findOne({ code: roleCode })
+            .lean()
+            .exec();
 
-        const id = user._id.toString();
+          const permissions = Array.isArray(roleDoc?.permissions)
+            ? roleDoc.permissions.filter(
+                (value): value is string => typeof value === "string"
+              )
+            : [];
+
+          const id = internalUser._id.toString();
+
+          return {
+            id,
+            _id: id,
+            name: internalUser.name ?? null,
+            email: internalUser.email ?? null,
+            role: roleCode,
+            permissions,
+            userType: "internal",
+            status: internalStatus,
+            organizationId: null,
+            organizationName: null,
+            organizationUserRole: null,
+            isRegistered: internalUser.isRegistered ?? false,
+            phone: pickPhoneOrNull(
+              (internalUser as unknown as { phone?: unknown }).phone
+            ),
+          };
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* 2) ORGANIZATION USERS — portal cliente                             */
+        /* ------------------------------------------------------------------ */
+
+        const organizationUser = await OrganizationUserModel.findOne({ email })
+          .select(
+            "+passwordHash +firstName +lastName +fullName +email +role +status +organizationId"
+          )
+          .lean()
+          .exec();
+
+        if (!organizationUser) return null;
+
+        const passwordHash =
+          typeof organizationUser.passwordHash === "string"
+            ? organizationUser.passwordHash
+            : "";
+
+        if (!passwordHash) return null;
+
+        const validPassword = await bcrypt.compare(plainPassword, passwordHash);
+        if (!validPassword) return null;
+
+        const organizationUserStatus = normalizeStatus(organizationUser.status);
+        if (organizationUserStatus !== "active") return null;
+
+        const organizationId = toIdString(organizationUser.organizationId);
+        if (!organizationId) return null;
+
+        const organization = await OrganizationModel.findById(organizationId)
+          .select("legalName commercialName status")
+          .lean()
+          .exec();
+
+        if (!organization) return null;
+
+        const organizationStatus = normalizeStatus(organization.status);
+        if (organizationStatus !== "active") return null;
+
+        const organizationName =
+          pickString(organization.commercialName) ??
+          pickString(organization.legalName) ??
+          null;
+
+        const organizationUserId = toIdString(organizationUser._id);
+        if (!organizationUserId) return null;
 
         return {
-          id,
-          _id: id,
-          name: user.name ?? null,
-          email: user.email ?? null,
-          role: roleCode,
-          permissions,
-          isRegistered: user.isRegistered ?? false,
-          phone: pickPhoneOrNull((user as unknown as { phone?: unknown }).phone),
+          id: organizationUserId,
+          _id: organizationUserId,
+          name: pickString(organizationUser.fullName),
+          email: pickString(organizationUser.email),
+          role: "organization_user",
+          permissions: [],
+          userType: "client",
+          status: organizationUserStatus,
+          organizationId,
+          organizationName,
+          organizationUserRole: pickString(organizationUser.role),
+          isRegistered: true,
+          phone: null,
         };
       },
     }),
 
+    /**
+     * Google OAuth se mantiene solo para usuarios internos.
+     * No se extiende a portal cliente en esta fase para evitar
+     * mezclar onboarding de organizaciones con OAuth externo.
+     */
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
@@ -242,6 +433,15 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
+    /**
+     * ------------------------------------------------------------------------
+     * JWT callback
+     * ------------------------------------------------------------------------
+     * Responsabilidad:
+     * - normalizar identidad autenticada
+     * - enriquecer token para middleware y session callback
+     * - mantener expiración dinámica desde DB
+     */
     async jwt(params: {
       token: JWT;
       user?: User | AdapterUser;
@@ -254,9 +454,9 @@ export const authOptions: NextAuthOptions = {
       const { token, user, account } = params;
       const t = token as AppJWT;
 
-      /* -----------------------------------------------------------------------
-       * Google user
-       * -------------------------------------------------------------------- */
+      /* -------------------------------------------------------------------- */
+      /* Google OAuth → solo Users                                            */
+      /* -------------------------------------------------------------------- */
       if (account?.provider === "google" && user) {
         await connectToDB();
 
@@ -269,15 +469,24 @@ export const authOptions: NextAuthOptions = {
             email,
             provider: "google",
             role: "user",
+            status: "active",
             isRegistered: true,
             phone: null,
           });
         }
 
-        const roleDoc = await RoleModel.findOne({ code: existing.role }).lean().exec();
+        const internalStatus = normalizeStatus(
+          (existing as unknown as { status?: unknown }).status
+        );
+
+        const roleDoc = await RoleModel.findOne({ code: existing.role })
+          .lean()
+          .exec();
 
         const permissions = Array.isArray(roleDoc?.permissions)
-          ? roleDoc.permissions.filter((x): x is string => typeof x === "string")
+          ? roleDoc.permissions.filter(
+              (value): value is string => typeof value === "string"
+            )
           : [];
 
         const id = existing._id.toString();
@@ -286,42 +495,76 @@ export const authOptions: NextAuthOptions = {
         t._id = id;
         t.role = existing.role;
         t.permissions = permissions;
+
+        t.userType = "internal";
+        t.status = internalStatus;
+
         t.name = existing.name ?? null;
         t.email = existing.email ?? null;
+
+        t.organizationId = null;
+        t.organizationName = null;
+        t.organizationUserRole = null;
+
         t.isRegistered = existing.isRegistered ?? false;
-        t.phone = pickPhoneOrNull((existing as unknown as { phone?: unknown }).phone);
+        t.phone = pickPhoneOrNull(
+          (existing as unknown as { phone?: unknown }).phone
+        );
       }
 
-      /* -----------------------------------------------------------------------
-       * Credentials user
-       * -------------------------------------------------------------------- */
+      /* -------------------------------------------------------------------- */
+      /* Credentials → Users / OrganizationUsers                              */
+      /* -------------------------------------------------------------------- */
       if (user && account?.provider !== "google") {
-        const u = getUserLike(user);
+        const normalizedUser = getUserLike(user);
 
-        const id = pickString(u._id) || pickString(u.id) || "";
+        const id =
+          pickString(normalizedUser._id) ??
+          pickString(normalizedUser.id) ??
+          "";
+
         if (id) t.sub = id;
+        t._id = pickString(normalizedUser._id) ?? id;
 
-        t._id = pickString(u._id) ?? id;
+        if (typeof normalizedUser.role === "string") {
+          t.role = normalizedUser.role;
+        }
 
-        if (typeof u.role === "string") t.role = u.role;
-
-        t.permissions = Array.isArray(u.permissions)
-          ? u.permissions.filter((x): x is string => typeof x === "string")
+        t.permissions = Array.isArray(normalizedUser.permissions)
+          ? normalizedUser.permissions.filter(
+              (value): value is string => typeof value === "string"
+            )
           : (t.permissions ?? []);
 
-        if (typeof u.name === "string") t.name = u.name;
-        else if (u.name === null) t.name = null;
+        const userType = normalizeUserType(normalizedUser.userType);
+        if (userType) t.userType = userType;
 
-        if (typeof u.email === "string") t.email = u.email;
-        else if (u.email === null) t.email = null;
+        t.status = normalizeStatus(normalizedUser.status);
 
-        if (typeof u.isRegistered === "boolean") {
-          t.isRegistered = u.isRegistered;
+        if (typeof normalizedUser.name === "string") {
+          t.name = normalizedUser.name;
+        } else if (normalizedUser.name === null) {
+          t.name = null;
+        }
+
+        if (typeof normalizedUser.email === "string") {
+          t.email = normalizedUser.email;
+        } else if (normalizedUser.email === null) {
+          t.email = null;
+        }
+
+        t.organizationId = pickString(normalizedUser.organizationId) ?? null;
+        t.organizationName = pickString(normalizedUser.organizationName) ?? null;
+        t.organizationUserRole =
+          pickString(normalizedUser.organizationUserRole) ?? null;
+
+        if (typeof normalizedUser.isRegistered === "boolean") {
+          t.isRegistered = normalizedUser.isRegistered;
         } else {
           t.isRegistered = t.isRegistered ?? false;
         }
 
-        t.phone = pickPhoneOrNull(u.phone) ?? (t.phone ?? null);
+        t.phone = pickPhoneOrNull(normalizedUser.phone) ?? (t.phone ?? null);
       }
 
       if (!t.sub && typeof t._id === "string" && t._id) {
@@ -334,17 +577,35 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
+    /**
+     * ------------------------------------------------------------------------
+     * Session callback
+     * ------------------------------------------------------------------------
+     * Responsabilidad:
+     * - exponer al frontend un shape estable y suficiente
+     * - evitar que UI y middleware tengan que adivinar el tipo de usuario
+     */
     async session({ session, token }) {
       const t = token as AppJWT;
 
       session.user = {
         ...(session.user ?? {}),
-        _id: (t._id as string) ?? (t.sub ?? ""),
-        role: (t.role as string) ?? "",
-        permissions: (t.permissions as string[]) ?? [],
-        name: (t.name as string | null) ?? null,
-        email: (t.email as string | null) ?? null,
-        isRegistered: t.isRegistered ?? false,
+        _id: typeof t._id === "string" && t._id ? t._id : (t.sub ?? ""),
+        role: typeof t.role === "string" ? t.role : "",
+        permissions: Array.isArray(t.permissions) ? t.permissions : [],
+        userType: t.userType === "client" ? "client" : "internal",
+        status: t.status === "inactive" ? "inactive" : "active",
+        name: typeof t.name === "string" ? t.name : null,
+        email: typeof t.email === "string" ? t.email : null,
+        organizationId:
+          typeof t.organizationId === "string" ? t.organizationId : null,
+        organizationName:
+          typeof t.organizationName === "string" ? t.organizationName : null,
+        organizationUserRole:
+          typeof t.organizationUserRole === "string"
+            ? t.organizationUserRole
+            : null,
+        isRegistered: typeof t.isRegistered === "boolean" ? t.isRegistered : false,
         phone: typeof t.phone === "string" ? t.phone : null,
       };
 
@@ -354,8 +615,25 @@ export const authOptions: NextAuthOptions = {
 
       return session;
     },
+
+    /**
+     * ------------------------------------------------------------------------
+     * Redirect callback
+     * ------------------------------------------------------------------------
+     * Mantiene política segura por defecto.
+     * La separación final de audiencias vive en middleware.
+     */
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (url.startsWith(baseUrl)) return url;
+      return baseUrl;
+    },
   },
 };
+
+/* -------------------------------------------------------------------------- */
+/* 🚪 Export handler                                                          */
+/* -------------------------------------------------------------------------- */
 
 const handler = NextAuth(authOptions);
 

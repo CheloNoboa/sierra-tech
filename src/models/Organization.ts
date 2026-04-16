@@ -19,6 +19,8 @@
  *   - taxId se maneja como string (no number)
  *   - timestamps habilitados para trazabilidad
  *   - índices en campos de búsqueda frecuente
+ *   - colección fijada explícitamente como "Organizations"
+ *     para mantener consistencia con la convención del proyecto
  *
  *   Responsabilidad:
  *   - Persistencia de datos corporativos
@@ -138,6 +140,7 @@ const OrganizationSchema = new Schema<OrganizationDocument>(
   {
     timestamps: true,
     versionKey: false,
+    collection: "Organizations",
   }
 );
 
@@ -145,24 +148,9 @@ const OrganizationSchema = new Schema<OrganizationDocument>(
 /* 🔎 Índices                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Búsqueda por razón social
- */
 OrganizationSchema.index({ legalName: 1 });
-
-/**
- * Búsqueda por nombre comercial
- */
 OrganizationSchema.index({ commercialName: 1 });
-
-/**
- * Búsqueda por identificación fiscal
- */
 OrganizationSchema.index({ taxId: 1 });
-
-/**
- * Búsqueda por email principal
- */
 OrganizationSchema.index({ primaryEmail: 1 });
 
 /* -------------------------------------------------------------------------- */
@@ -171,6 +159,10 @@ OrganizationSchema.index({ primaryEmail: 1 });
 
 const OrganizationModel: Model<OrganizationDocument> =
   models.Organization ||
-  mongoose.model<OrganizationDocument>("Organization", OrganizationSchema);
+  mongoose.model<OrganizationDocument>(
+    "Organization",
+    OrganizationSchema,
+    "Organizations"
+  );
 
 export default OrganizationModel;

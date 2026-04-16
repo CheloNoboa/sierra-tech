@@ -8,27 +8,26 @@
  * =============================================================================
  *
  * ES:
- * - Modal público de autenticación para Sierra Tech.
- * - Incluye:
- *   - login con credenciales
- *   - login con Google
- *   - recuperación de contraseña
- *   - sincronización cross-tab de sesión
+ * Modal público oficial de autenticación para Sierra Tech.
+ *
+ * Objetivo:
+ * - permitir login con credentials
+ * - permitir login con Google para usuarios internos
+ * - permitir recuperación de contraseña
+ * - resolver redirección post-login según la sesión real
+ *
+ * Contrato de redirección:
+ * - userType = "internal" -> /admin/dashboard
+ * - userType = "client"   -> /portal
  *
  * Decisiones:
  * - NO usa getSession()
- * - NO depende del dominio anterior
- * - Resuelve redirección post-login consultando la sesión actual
- * - Conserva acceso al panel administrativo cuando el rol corresponde
- *
- * Nota importante:
- * - La mayor parte del look visual del modal se controla desde:
- *   "@/components/auth/authModalStyles"
- * - Este archivo solo corrige los elementos visuales hardcodeados locales
- *   para alinearlos con Sierra Tech.
+ * - resuelve la sesión consultando /api/auth/session después del signIn
+ * - NO depende de rutas heredadas como /user/home
+ * - la separación final de audiencias sigue viviendo en middleware
  *
  * EN:
- * - Public authentication modal for Sierra Tech.
+ * Official public authentication modal for Sierra Tech.
  * =============================================================================
  */
 
@@ -42,6 +41,10 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { useToast } from "@/hooks/useToast";
 import { AUTH_MODAL_STYLES } from "@/components/auth/authModalStyles";
 
+/* -------------------------------------------------------------------------- */
+/* 🧱 Tipos                                                                   */
+/* -------------------------------------------------------------------------- */
+
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,19 +53,54 @@ interface LoginModalProps {
 
 interface SessionResponseUser {
   role?: string | null;
+  userType?: "internal" | "client" | null;
+  status?: "active" | "inactive" | null;
+  organizationId?: string | null;
 }
 
 interface SessionResponse {
   user?: SessionResponseUser | null;
 }
 
-function mapRoleToPostLoginPath(role: string | null | undefined): string {
-  if (role === "superadmin" || role === "admin" || role === "user") {
+/* -------------------------------------------------------------------------- */
+/* 🧰 Helpers                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Resuelve ruta post-login desde la sesión real.
+ *
+ * Reglas:
+ * - internal activo -> admin dashboard
+ * - client activo con organizationId -> portal
+ * - fallback seguro -> /login
+ */
+function mapSessionToPostLoginPath(
+  user: SessionResponseUser | null | undefined
+): string {
+  if (!user) return "/login";
+
+  const userType = user.userType ?? null;
+  const status = user.status ?? null;
+  const organizationId = user.organizationId ?? null;
+
+  if (status !== "active") {
+    return "/login";
+  }
+
+  if (userType === "internal") {
     return "/admin/dashboard";
   }
 
-  return "/user/home";
+  if (userType === "client" && organizationId) {
+    return "/portal";
+  }
+
+  return "/login";
 }
+
+/* -------------------------------------------------------------------------- */
+/* 🧩 Component                                                               */
+/* -------------------------------------------------------------------------- */
 
 export default function LoginModal({
   isOpen,
@@ -85,9 +123,9 @@ export default function LoginModal({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const saved = localStorage.getItem("lastEmail");
-    if (saved) {
-      setEmail(saved);
+    const savedEmail = localStorage.getItem("lastEmail");
+    if (savedEmail) {
+      setEmail(savedEmail);
     }
   }, []);
 
@@ -99,19 +137,22 @@ export default function LoginModal({
     onClose();
   };
 
+  /**
+   * Consulta la sesión actual después de autenticar.
+   * Esto permite decidir la ruta correcta sin depender de shape viejo.
+   */
   async function resolvePostLoginPathFromSession(): Promise<string> {
     try {
-      const res = await fetch("/api/auth/session", {
+      const response = await fetch("/api/auth/session", {
         method: "GET",
         cache: "no-store",
       });
 
-      const data = (await res.json().catch(() => null)) as SessionResponse | null;
-      const role = data?.user?.role ?? null;
+      const data = (await response.json().catch(() => null)) as SessionResponse | null;
 
-      return mapRoleToPostLoginPath(role);
+      return mapSessionToPostLoginPath(data?.user ?? null);
     } catch {
-      return "/user/home";
+      return "/login";
     }
   }
 
@@ -131,11 +172,14 @@ export default function LoginModal({
       password,
     });
 
-    if (result?.error) {
+    if (!result || result.error) {
       setError(t.login.error);
       return;
     }
 
+    /**
+     * Notifica a otras pestañas que la sesión cambió.
+     */
     try {
       if (typeof window !== "undefined" && "BroadcastChannel" in window) {
         const channel = new BroadcastChannel("session-updates");
@@ -146,22 +190,39 @@ export default function LoginModal({
       /* noop */
     }
 
+    const nextPath = await resolvePostLoginPathFromSession();
+
+    /**
+     * Si por alguna razón no pudimos resolver una ruta válida,
+     * mostramos error en lugar de empujar a una ruta incorrecta.
+     */
+    if (nextPath === "/login") {
+      setError(
+        locale === "es"
+          ? "No se pudo resolver el destino de acceso."
+          : "Could not resolve the access destination."
+      );
+      return;
+    }
+
     handleClose();
     router.refresh();
-
-    const nextPath = await resolvePostLoginPathFromSession();
     router.push(nextPath);
   };
 
   const handleGoogleLogin = async (): Promise<void> => {
     setError("");
 
+    /**
+     * En esta fase Google permanece orientado a usuarios internos.
+     * El middleware terminará de corregir la audiencia si aplica.
+     */
     if (staffGoogle) {
       await signIn("google", { callbackUrl: "/admin/dashboard" });
       return;
     }
 
-    await signIn("google", { callbackUrl: "/google-complete" });
+    await signIn("google", { callbackUrl: "/admin/dashboard" });
   };
 
   const handlePasswordReset = async (): Promise<void> => {
@@ -171,13 +232,13 @@ export default function LoginModal({
     }
 
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      const response = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: recoveryEmail }),
       });
 
-      if (!res.ok) {
+      if (!response.ok) {
         toast.error(
           locale === "es"
             ? "No se pudo enviar el correo."
@@ -243,6 +304,7 @@ export default function LoginModal({
           <label htmlFor="login-email" className="sr-only">
             Email
           </label>
+
           <input
             id="login-email"
             name="login-email"

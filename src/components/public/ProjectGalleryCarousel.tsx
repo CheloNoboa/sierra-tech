@@ -21,9 +21,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type LocalizedText = {
+  es: string;
+  en: string;
+};
+
 type ProjectImage = {
   url: string;
-  alt: string;
+  alt: LocalizedText;
   storageKey: string;
 };
 
@@ -31,10 +36,22 @@ type Props = {
   items: ProjectImage[];
   projectTitle: string;
   baseUrl: string;
+  locale: "es" | "en";
 };
 
 function normalizeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function resolveLocalizedText(
+  value: LocalizedText | null | undefined,
+  locale: "es" | "en"
+): string {
+  if (!value) return "";
+
+  return locale === "en"
+    ? normalizeString(value.en) || normalizeString(value.es)
+    : normalizeString(value.es) || normalizeString(value.en);
 }
 
 function resolveImageUrl(image: ProjectImage | null, baseUrl: string): string {
@@ -86,10 +103,42 @@ export default function ProjectGalleryCarousel({
   items,
   projectTitle,
   baseUrl,
+  locale,
 }: Props) {
   const validItems = useMemo(() => items.filter(Boolean), [items]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  const ui = {
+    gallery: locale === "en" ? "Gallery" : "Galería",
+    galleryDescription:
+      locale === "en"
+        ? "Visual view of the project authorized for publication."
+        : "Vista visual del proyecto autorizado para publicación.",
+    previousImage: locale === "en" ? "Previous image" : "Imagen anterior",
+    nextImage: locale === "en" ? "Next image" : "Imagen siguiente",
+    noImage: locale === "en" ? "No image" : "Sin imagen",
+    imageCounter:
+      locale === "en"
+        ? `Image ${currentIndex + 1} of ${validItems.length}`
+        : `Imagen ${currentIndex + 1} de ${validItems.length}`,
+    goToImage: (index: number) =>
+      locale === "en"
+        ? `Go to image ${index + 1}`
+        : `Ir a imagen ${index + 1}`,
+    viewImage: (index: number) =>
+      locale === "en"
+        ? `View image ${index + 1}`
+        : `Ver imagen ${index + 1}`,
+    imageAltFallback: (index: number) =>
+      locale === "en"
+        ? `${projectTitle} - image ${index + 1}`
+        : `${projectTitle} - imagen ${index + 1}`,
+    thumbnailAltFallback: (index: number) =>
+      locale === "en"
+        ? `${projectTitle} - thumbnail ${index + 1}`
+        : `${projectTitle} - miniatura ${index + 1}`,
+  };
 
   useEffect(() => {
     if (validItems.length <= 1) return;
@@ -118,8 +167,8 @@ export default function ProjectGalleryCarousel({
   const currentImageUrl = resolveImageUrl(currentItem, baseUrl);
 
   const currentAlt =
-    normalizeString(currentItem.alt) ||
-    `${projectTitle} - imagen ${currentIndex + 1}`;
+    resolveLocalizedText(currentItem.alt, locale) ||
+    ui.imageAltFallback(currentIndex);
 
   function goPrev() {
     setCurrentIndex((prev) =>
@@ -141,9 +190,9 @@ export default function ProjectGalleryCarousel({
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Galería</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{ui.gallery}</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Vista visual del proyecto autorizado para publicación.
+            {ui.galleryDescription}
           </p>
         </div>
 
@@ -152,7 +201,7 @@ export default function ProjectGalleryCarousel({
             <button
               type="button"
               onClick={goPrev}
-              aria-label="Imagen anterior"
+              aria-label={ui.previousImage}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition-colors duration-200 hover:border-lime-400 hover:bg-lime-50 hover:text-lime-700"
             >
               <ArrowIcon direction="left" />
@@ -161,7 +210,7 @@ export default function ProjectGalleryCarousel({
             <button
               type="button"
               onClick={goNext}
-              aria-label="Imagen siguiente"
+              aria-label={ui.nextImage}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition-colors duration-200 hover:border-lime-400 hover:bg-lime-50 hover:text-lime-700"
             >
               <ArrowIcon direction="right" />
@@ -181,7 +230,7 @@ export default function ProjectGalleryCarousel({
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
-              Sin imagen
+              {ui.noImage}
             </div>
           )}
 
@@ -190,7 +239,7 @@ export default function ProjectGalleryCarousel({
               <button
                 type="button"
                 onClick={goPrev}
-                aria-label="Imagen anterior"
+                aria-label={ui.previousImage}
                 className="absolute left-4 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-slate-900/45 text-white shadow-lg backdrop-blur-md transition-colors duration-200 hover:bg-lime-500 hover:text-white"
                 style={{ transform: "translateY(-50%)" }}
               >
@@ -200,7 +249,7 @@ export default function ProjectGalleryCarousel({
               <button
                 type="button"
                 onClick={goNext}
-                aria-label="Imagen siguiente"
+                aria-label={ui.nextImage}
                 className="absolute right-4 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-slate-900/45 text-white shadow-lg backdrop-blur-md transition-colors duration-200 hover:bg-lime-500 hover:text-white"
                 style={{ transform: "translateY(-50%)" }}
               >
@@ -214,10 +263,10 @@ export default function ProjectGalleryCarousel({
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Imagen {currentIndex + 1} de {validItems.length}
+                {ui.imageCounter}
               </p>
               <p className="mt-1 text-sm leading-6 text-slate-700">
-                {normalizeString(currentItem.alt) || currentAlt}
+                {resolveLocalizedText(currentItem.alt, locale) || currentAlt}
               </p>
             </div>
 
@@ -230,7 +279,7 @@ export default function ProjectGalleryCarousel({
                     <button
                       key={`dot-${index}`}
                       type="button"
-                      aria-label={`Ir a imagen ${index + 1}`}
+                      aria-label={ui.goToImage(index)}
                       onClick={() => setCurrentIndex(index)}
                       className={[
                         "h-2.5 rounded-full transition-all duration-200",
@@ -252,8 +301,8 @@ export default function ProjectGalleryCarousel({
           {validItems.map((item, index) => {
             const thumbUrl = resolveImageUrl(item, baseUrl);
             const thumbAlt =
-              normalizeString(item.alt) ||
-              `${projectTitle} - miniatura ${index + 1}`;
+              resolveLocalizedText(item.alt, locale) ||
+              ui.thumbnailAltFallback(index);
 
             const isActive = index === currentIndex;
 
@@ -262,7 +311,7 @@ export default function ProjectGalleryCarousel({
                 key={`${item.storageKey || item.url || "gallery"}-${index}`}
                 type="button"
                 onClick={() => setCurrentIndex(index)}
-                aria-label={`Ver imagen ${index + 1}`}
+                aria-label={ui.viewImage(index)}
                 className={[
                   "overflow-hidden rounded-2xl border bg-white shadow-sm transition duration-200",
                   isActive
@@ -280,7 +329,7 @@ export default function ProjectGalleryCarousel({
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
-                      Sin imagen
+                      {ui.noImage}
                     </div>
                   )}
                 </div>

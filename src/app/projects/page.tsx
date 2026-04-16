@@ -30,7 +30,7 @@
  */
 
 import Link from "next/link";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 type LocalizedText = {
   es: string;
@@ -39,7 +39,7 @@ type LocalizedText = {
 
 type ProjectImage = {
   url: string;
-  alt: string;
+  alt: LocalizedText;
   storageKey: string;
 };
 
@@ -173,6 +173,18 @@ function ProjectCard({
   const summary = resolveText(project.summary, locale);
   const imageUrl = resolveImageUrl(project.coverImage, baseUrl);
 
+  const ui = {
+    noImage: locale === "en" ? "No image" : "Sin imagen",
+    featured: locale === "en" ? "Featured" : "Destacado",
+    noTitle: locale === "en" ? "Untitled project" : "Proyecto sin título",
+    noSummary:
+      locale === "en"
+        ? "This project does not have a public summary."
+        : "Este proyecto no tiene resumen público.",
+    viewProject: locale === "en" ? "View project" : "Ver proyecto",
+    projectAlt: locale === "en" ? "Project" : "Proyecto",
+  };
+
   return (
     <article
       className={[
@@ -185,18 +197,22 @@ function ProjectCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imageUrl}
-            alt={project.coverImage?.alt || title || "Proyecto"}
+            alt={
+              resolveText(project.coverImage?.alt ?? { es: "", en: "" }, locale) ||
+              title ||
+              ui.projectAlt
+            }
             className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-slate-100 text-sm text-slate-400">
-            Sin imagen
+            {ui.noImage}
           </div>
         )}
 
         {project.featured ? (
           <span className="absolute left-4 top-4 inline-flex rounded-full border border-lime-200 bg-lime-50 px-3 py-1 text-xs font-semibold text-lime-700 shadow-sm">
-            Destacado
+            {ui.featured}
           </span>
         ) : null}
       </div>
@@ -208,11 +224,11 @@ function ProjectCard({
             compact ? "text-2xl" : "text-[1.75rem]",
           ].join(" ")}
         >
-          {title || "Proyecto sin título"}
+          {title || ui.noTitle}
         </h2>
 
         <p className="mt-4 line-clamp-4 text-sm leading-7 text-slate-600">
-          {summary || "Este proyecto no tiene resumen público."}
+          {summary || ui.noSummary}
         </p>
 
         <div className="mt-6 pt-2">
@@ -220,7 +236,7 @@ function ProjectCard({
             href={`/projects/${project.slug}`}
             className="inline-flex items-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-lime-600"
           >
-            Ver proyecto
+            {ui.viewProject}
           </Link>
         </div>
       </div>
@@ -236,7 +252,48 @@ export default async function PublicProjectsPage() {
   const baseUrl = resolveBaseUrl(host, forwardedProto);
 
   const projects = await getProjects(baseUrl);
-  const locale: "es" | "en" = "es";
+  const cookieStore = await cookies();
+  const localeCookie = cookieStore.get("locale")?.value;
+  const locale: "es" | "en" = localeCookie === "en" ? "en" : "es";
+
+  const ui = {
+    badge: locale === "en" ? "Projects" : "Proyectos",
+    heroTitle:
+      locale === "en"
+        ? "Projects executed by Sierra Tech"
+        : "Proyectos ejecutados por Sierra Tech",
+    heroDescription:
+      locale === "en"
+        ? "We present projects authorized by our clients, with a public view focused on results, technical scope, and the visual identity of the executed work."
+        : "Presentamos proyectos autorizados por nuestros clientes, con una vista pública enfocada en resultados, alcance técnico e identidad visual del trabajo ejecutado.",
+
+    noProjectsTitle:
+      locale === "en"
+        ? "No public projects available"
+        : "No hay proyectos públicos disponibles",
+    noProjectsDescription:
+      locale === "en"
+        ? "When published and authorized projects exist, they will appear in this section."
+        : "Cuando existan proyectos publicados y autorizados, aparecerán en esta sección.",
+
+    featuredBadge:
+      locale === "en" ? "Featured selection" : "Selección destacada",
+    featuredTitle:
+      locale === "en" ? "Featured projects" : "Proyectos destacados",
+    featuredDescription:
+      locale === "en"
+        ? "A selection of relevant projects authorized for public publication."
+        : "Una selección de proyectos relevantes autorizados para publicación pública.",
+
+    catalogBadge:
+      locale === "en" ? "Public catalog" : "Catálogo público",
+    catalogTitle:
+      locale === "en" ? "All projects" : "Todos los proyectos",
+    catalogDescription:
+      locale === "en"
+        ? "Explore the projects currently published and authorized on the site."
+        : "Explora los proyectos publicados y autorizados actualmente en el sitio.",
+  };
 
   const featuredProjects = projects.filter((project) => project.featured);
   const regularProjects = projects.filter((project) => !project.featured);
@@ -247,17 +304,15 @@ export default async function PublicProjectsPage() {
         <div className="mx-auto max-w-7xl px-4 pb-16 pt-24 sm:px-6 sm:pb-16 sm:pt-28 lg:px-8 lg:pb-16 lg:pt-32">
           <div className="max-w-4xl">
             <span className="inline-flex rounded-full border border-lime-200 bg-lime-50 px-4 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-lime-700">
-              Proyectos
+              {ui.badge}
             </span>
 
             <h1 className="mt-5 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Proyectos ejecutados por Sierra Tech
+              {ui.heroTitle}
             </h1>
 
             <p className="mt-6 max-w-3xl text-base leading-8 text-slate-600 sm:text-lg">
-              Presentamos proyectos autorizados por nuestros clientes, con una
-              vista pública enfocada en resultados, alcance técnico e identidad
-              visual del trabajo ejecutado.
+              {ui.heroDescription}
             </p>
           </div>
         </div>
@@ -267,11 +322,10 @@ export default async function PublicProjectsPage() {
         {projects.length === 0 ? (
           <div className="rounded-[30px] border border-slate-200 bg-slate-50 px-6 py-14 text-center shadow-sm">
             <h2 className="text-xl font-semibold text-slate-900">
-              No hay proyectos públicos disponibles
+              {ui.noProjectsTitle}
             </h2>
             <p className="mt-3 text-sm text-slate-600">
-              Cuando existan proyectos publicados y autorizados, aparecerán en
-              esta sección.
+              {ui.noProjectsDescription}
             </p>
           </div>
         ) : (
@@ -280,16 +334,15 @@ export default async function PublicProjectsPage() {
               <section className="space-y-6">
                 <div className="max-w-3xl">
                   <span className="inline-flex rounded-full border border-lime-200 bg-lime-50 px-4 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-lime-700">
-                    Selección destacada
+                    {ui.featuredBadge}
                   </span>
 
                   <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                    Proyectos destacados
+                    {ui.featuredTitle}
                   </h2>
 
                   <p className="mt-3 text-base leading-7 text-slate-600">
-                    Una selección de proyectos relevantes autorizados para
-                    publicación pública.
+                    {ui.featuredDescription}
                   </p>
                 </div>
 
@@ -310,16 +363,15 @@ export default async function PublicProjectsPage() {
               <section className="space-y-6">
                 <div className="max-w-3xl">
                   <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-4 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                    Catálogo público
+                    {ui.catalogBadge}
                   </span>
 
                   <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                    Todos los proyectos
+                    {ui.catalogTitle}
                   </h2>
 
                   <p className="mt-3 text-base leading-7 text-slate-600">
-                    Explora los proyectos publicados y autorizados actualmente
-                    en el sitio.
+                    {ui.catalogDescription}
                   </p>
                 </div>
 

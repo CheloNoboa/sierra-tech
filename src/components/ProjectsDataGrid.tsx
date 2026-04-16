@@ -91,9 +91,23 @@ function isProjectEntity(value: unknown): value is ProjectEntity {
     typeof value.featured === "boolean" &&
     typeof value.sortOrder === "number" &&
     typeof value.status === "string" &&
-    typeof value.systemType === "string" &&
-    typeof value.treatedMedium === "string" &&
-    Array.isArray(value.technologyUsed) &&
+    (
+      typeof value.systemType === "string" ||
+      isLocalizedText(value.systemType)
+    ) &&
+    (
+      typeof value.treatedMedium === "string" ||
+      isLocalizedText(value.treatedMedium)
+    ) &&
+    (
+      Array.isArray(value.technologyUsed) ||
+      isLocalizedText(value.technologyUsed) ||
+      (
+        isObj(value.technologyUsed) &&
+        Array.isArray(value.technologyUsed.es) &&
+        Array.isArray(value.technologyUsed.en)
+      )
+    ) &&
     Array.isArray(value.documents) &&
     Array.isArray(value.maintenanceItems) &&
     typeof value.operationalNotes === "string" &&
@@ -122,6 +136,51 @@ function getLocalizedText(value: LocalizedText, locale: "es" | "en"): string {
   const fallback = locale === "es" ? value.en : value.es;
 
   return normalizeString(primary) || normalizeString(fallback) || "—";
+}
+
+function getMixedText(
+  value:
+    | string
+    | LocalizedText
+    | null
+    | undefined,
+  locale: "es" | "en"
+): string {
+  if (typeof value === "string") {
+    return normalizeString(value) || "—";
+  }
+
+  if (isLocalizedText(value)) {
+    return getLocalizedText(value, locale);
+  }
+
+  return "—";
+}
+
+function getTechnologySearchText(value: unknown, locale: "es" | "en"): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeString(item)).filter(Boolean).join(" ");
+  }
+
+  if (isLocalizedText(value)) {
+    return getLocalizedText(value, locale);
+  }
+
+  if (
+    isObj(value) &&
+    Array.isArray(value.es) &&
+    Array.isArray(value.en)
+  ) {
+    const source = locale === "es" ? value.es : value.en;
+    const fallback = locale === "es" ? value.en : value.es;
+
+    return [...source, ...fallback]
+      .map((item) => normalizeString(item))
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return "";
 }
 
 function formatProjectDate(
@@ -388,8 +447,12 @@ export default function ProjectsDataGrid() {
       const clientDisplayName = normalizeString(
         project.clientDisplayName
       ).toLowerCase();
-      const systemType = normalizeString(project.systemType).toLowerCase();
-      const treatedMedium = normalizeString(project.treatedMedium).toLowerCase();
+      const systemType = getMixedText(project.systemType, safeLocale).toLowerCase();
+      const treatedMedium = getMixedText(project.treatedMedium, safeLocale).toLowerCase();
+      const technologyUsed = getTechnologySearchText(
+        project.technologyUsed,
+        safeLocale
+      ).toLowerCase();
       const technicalOverviewEs = normalizeString(
         project.technicalOverview.es
       ).toLowerCase();
@@ -407,6 +470,7 @@ export default function ProjectsDataGrid() {
         clientDisplayName.includes(query) ||
         systemType.includes(query) ||
         treatedMedium.includes(query) ||
+        technologyUsed.includes(query) ||
         technicalOverviewEs.includes(query) ||
         technicalOverviewEn.includes(query);
 
@@ -417,7 +481,7 @@ export default function ProjectsDataGrid() {
 
       return matchText && matchFeatured;
     });
-  }, [projects, searchText, featuredFilter]);
+  }, [projects, searchText, featuredFilter, safeLocale]);
 
   const total = filtered.length;
   const totalPages = total > 0 ? Math.ceil(total / recordsPerPage) : 1;

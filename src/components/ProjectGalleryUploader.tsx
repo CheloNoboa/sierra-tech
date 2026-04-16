@@ -35,7 +35,10 @@ import type { ProjectImage } from "@/types/project";
 
 type UploadResult = {
   url: string;
-  alt?: string;
+  alt?: {
+    es: string;
+    en: string;
+  };
   storageKey?: string;
 };
 
@@ -151,7 +154,10 @@ export default function ProjectGalleryUploader({
 
         uploadedItems.push({
           url: normalizedUrl || storageKey,
-          alt: normalizeString(uploaded.alt),
+          alt: {
+            es: normalizeString(uploaded.alt?.es),
+            en: normalizeString(uploaded.alt?.en),
+          },
           storageKey,
         });
       }
@@ -169,10 +175,18 @@ export default function ProjectGalleryUploader({
     onChange(value.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  function updateAlt(index: number, alt: string) {
+  function updateAlt(index: number, localeKey: "es" | "en", alt: string) {
     onChange(
       value.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, alt } : item
+        itemIndex === index
+          ? {
+              ...item,
+              alt: {
+                es: localeKey === "es" ? alt : item.alt?.es || "",
+                en: localeKey === "en" ? alt : item.alt?.en || "",
+              },
+            }
+          : item
       )
     );
   }
@@ -237,7 +251,12 @@ export default function ProjectGalleryUploader({
 
                     <Image
                       src={previewSrc}
-                      alt={item.alt || `Gallery image ${index + 1}`}
+                      alt={
+                        item.alt?.[safeLocale] ||
+                        item.alt?.es ||
+                        item.alt?.en ||
+                        `Gallery image ${index + 1}`
+                      }
                       width={480}
                       height={320}
                       unoptimized
@@ -253,16 +272,30 @@ export default function ProjectGalleryUploader({
                   {currentFileLabel}
                 </p>
 
-                <div className="mt-3">
-                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
-                    {t.altLabel}
-                  </label>
-                  <input
-                    value={item.alt}
-                    onChange={(e) => updateAlt(index, e.currentTarget.value)}
-                    disabled={disabled || uploading}
-                    className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
-                  />
+                <div className="mt-3 grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                      {safeLocale === "es" ? "Texto alternativo (ES)" : "Alt text (ES)"}
+                    </label>
+                    <input
+                      value={item.alt?.es || ""}
+                      onChange={(e) => updateAlt(index, "es", e.currentTarget.value)}
+                      disabled={disabled || uploading}
+                      className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                      {safeLocale === "es" ? "Texto alternativo (EN)" : "Alt text (EN)"}
+                    </label>
+                    <input
+                      value={item.alt?.en || ""}
+                      onChange={(e) => updateAlt(index, "en", e.currentTarget.value)}
+                      disabled={disabled || uploading}
+                      className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-4 flex justify-end">

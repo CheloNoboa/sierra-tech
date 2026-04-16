@@ -19,7 +19,12 @@ import { NextResponse } from "next/server";
 import { connectToDB } from "@/lib/connectToDB";
 import Project from "@/models/Project";
 import { normalizeProjectEntity } from "@/lib/projects/projectPayload";
-import type { ProjectEntity, ProjectImage, LocalizedText } from "@/types/project";
+import type {
+  LocalizedText,
+  ProjectDocumentLink,
+  ProjectEntity,
+  ProjectImage,
+} from "@/types/project";
 
 type RouteContext = {
   params: Promise<{
@@ -34,11 +39,50 @@ type PublicProjectResponse = {
   summary: LocalizedText;
   coverImage: ProjectImage | null;
   gallery: ProjectImage[];
+  documents: PublicProjectDocument[];
   featured: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
 };
+
+type PublicProjectDocument = {
+  documentId: string;
+  title: string;
+  description: string;
+  documentType: ProjectDocumentLink["documentType"];
+  fileUrl: string;
+  fileName: string;
+  mimeType: string;
+  size: number | null;
+  language: ProjectDocumentLink["language"];
+  documentDate: string | null;
+};
+
+function serializePublicDocuments(
+  project: ProjectEntity
+): PublicProjectDocument[] {
+  return project.documents
+    .filter(
+      (document) =>
+        document.visibleInPublicSite &&
+        !document.visibleToInternalOnly &&
+        !!document.fileUrl
+    )
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((document) => ({
+      documentId: document.documentId || `${project._id}-${document.sortOrder}`,
+      title: document.title || "Documento",
+      description: document.description || "",
+      documentType: document.documentType,
+      fileUrl: document.fileUrl,
+      fileName: document.fileName || "",
+      mimeType: document.mimeType || "",
+      size: document.size ?? null,
+      language: document.language,
+      documentDate: document.documentDate,
+    }));
+}
 
 function serializePublicProject(project: ProjectEntity): PublicProjectResponse {
   return {
@@ -48,6 +92,7 @@ function serializePublicProject(project: ProjectEntity): PublicProjectResponse {
     summary: project.summary,
     coverImage: project.publicSiteSettings.showCoverImage ? project.coverImage : null,
     gallery: project.publicSiteSettings.showGallery ? project.gallery : [],
+    documents: serializePublicDocuments(project),
     featured: project.featured,
     sortOrder: project.sortOrder,
     createdAt: project.createdAt,

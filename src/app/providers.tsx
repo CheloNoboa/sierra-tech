@@ -7,7 +7,7 @@
  * =============================================================================
  *
  * ES:
- * Punto central de providers cliente de la plataforma base.
+ * Punto central de providers cliente de Sierra Tech.
  *
  * Responsabilidades:
  * - Proveer sesión global (NextAuth)
@@ -15,21 +15,28 @@
  * - Proveer sistema global de toasts
  * - Sincronizar sesión entre pestañas
  * - Aplicar guard de auto logout
- * - Montar Header y Footer públicos
+ * - Montar el chrome público solo cuando la ruta pertenece al sitio público
  *
  * Decisiones:
- * - Ya no usamos BranchProvider porque la base fue desacoplada del dominio
- *   FastFood / sucursales.
- * - Toda la mensajería global depende de GlobalToastProvider.
- * - Todo componente que use useToast() debe vivir dentro de este árbol.
+ * - Providers NO debe forzar el Header/Footer público sobre admin o portal.
+ * - /portal/** y /admin/** usan su propio layout visual.
+ * - El sitio público mantiene Header/Footer desde este mismo árbol mientras
+ *   hacemos el refactor mayor de route groups con seguridad.
+ *
+ * Regla:
+ * - showPublicChrome = true solo para rutas públicas
+ * - showPublicChrome = false para:
+ *   - /admin/**
+ *   - /portal/**
  *
  * EN:
- * Central client-side provider entry point for the reusable platform base.
+ * Central client-side provider entry point for Sierra Tech.
  * =============================================================================
  */
 
 import type { ReactNode } from "react";
 import { SessionProvider } from "next-auth/react";
+import { usePathname } from "next/navigation";
 
 import { LanguageProvider } from "@/context/LanguageContext";
 
@@ -44,6 +51,24 @@ interface ProvidersProps {
 }
 
 export default function Providers({ children }: ProvidersProps) {
+  const pathname = usePathname();
+
+  /**
+   * ---------------------------------------------------------------------------
+   * Determina si la ruta actual pertenece al sitio público.
+   *
+   * Rutas privadas:
+   * - /admin/**
+   * - /portal/**
+   *
+   * Todo lo demás se considera público dentro de la estructura actual.
+   * ---------------------------------------------------------------------------
+   */
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isPortalRoute =
+    pathname === "/portal" || pathname.startsWith("/portal/");
+  const showPublicChrome = !isAdminRoute && !isPortalRoute;
+
   return (
     <SessionProvider refetchOnWindowFocus={false} refetchInterval={0}>
       <LanguageProvider>
@@ -51,17 +76,25 @@ export default function Providers({ children }: ProvidersProps) {
           {/* Sincronización de login/logout entre pestañas */}
           <SessionSyncClient />
 
-          {/* Guard de inactividad */}
+          {/* Guard global de inactividad */}
           <AutoLogoutGuard />
 
-          {/* Header público global */}
-          <Header />
+          {/* Header público solo en rutas públicas */}
+          {showPublicChrome ? <Header /> : null}
 
           {/* Contenido dinámico */}
-          <main className="flex-1 bg-gray-900 text-gray-100">{children}</main>
+          <main
+            className={
+              showPublicChrome
+                ? "flex-1 bg-white text-text-primary"
+                : "flex-1"
+            }
+          >
+            {children}
+          </main>
 
-          {/* Footer público global */}
-          <Footer />
+          {/* Footer público solo en rutas públicas */}
+          {showPublicChrome ? <Footer /> : null}
         </GlobalToastProvider>
       </LanguageProvider>
     </SessionProvider>

@@ -31,10 +31,18 @@ const LocalizedTextSchema = new Schema(
   { _id: false }
 );
 
+const LocalizedStringArraySchema = new Schema(
+  {
+    es: { type: [String], default: [] },
+    en: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
 const ProjectImageSchema = new Schema(
   {
     url: { type: String, trim: true, default: "" },
-    alt: { type: String, trim: true, default: "" },
+    alt: { type: LocalizedTextSchema, default: () => ({ es: "", en: "" }) },
     storageKey: { type: String, trim: true, default: "" },
   },
   { _id: false }
@@ -278,8 +286,8 @@ export interface ProjectDocument {
   clientDisplayName: string;
   clientEmail: string;
 
-  coverImage: { url: string; alt: string; storageKey: string } | null;
-  gallery: { url: string; alt: string; storageKey: string }[];
+  coverImage: { url: string; alt: { es: string; en: string }; storageKey: string } | null;
+  gallery: { url: string; alt: { es: string; en: string }; storageKey: string }[];
 
   publicSiteSettings: {
     enabled: boolean;
@@ -343,9 +351,9 @@ export interface ProjectDocument {
   contractEndDate: Date | null;
 
   technicalOverview: { es: string; en: string };
-  systemType: string;
-  treatedMedium: string;
-  technologyUsed: string[];
+  systemType: { es: string; en: string };
+  treatedMedium: { es: string; en: string };
+  technologyUsed: { es: string[]; en: string[] };
   operationalNotes: string;
   internalNotes: string;
   locationLabel: string;
@@ -443,9 +451,12 @@ const ProjectSchema = new Schema<ProjectDocument>(
     contractEndDate: { type: Date, default: null },
 
     technicalOverview: { type: LocalizedTextSchema, default: () => ({}) },
-    systemType: { type: String, trim: true, default: "" },
-    treatedMedium: { type: String, trim: true, default: "" },
-    technologyUsed: { type: [String], default: [] },
+    systemType: { type: LocalizedTextSchema, default: () => ({}) },
+    treatedMedium: { type: LocalizedTextSchema, default: () => ({}) },
+    technologyUsed: {
+      type: LocalizedStringArraySchema,
+      default: () => ({ es: [], en: [] }),
+    },
     operationalNotes: { type: String, trim: true, default: "" },
     internalNotes: { type: String, trim: true, default: "" },
     locationLabel: { type: String, trim: true, default: "" },
