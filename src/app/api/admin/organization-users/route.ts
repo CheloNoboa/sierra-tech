@@ -17,13 +17,17 @@
  *     - crear un usuario de organización
  *     - validar organización existente
  *     - validar unicidad de email
+ *     - generar contraseña temporal
  *     - almacenar password como hash
+ *     - generar token de activación
+ *     - enviar correo inicial con acceso temporal y enlace de activación
  *
  *   Reglas:
  *   - acceso exclusivo para usuarios administrativos
  *   - un usuario siempre pertenece a una organización
  *   - email único global
  *   - passwordHash no se expone en respuestas
+ *   - si falla el correo, se revierte la creación para no dejar usuarios huérfanos
  *
  * EN:
  *   Administrative endpoint for listing and creating organization users.
@@ -34,11 +38,22 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { getServerSession } from "next-auth";
 import { hash } from "bcryptjs";
+import nodemailer from "nodemailer";
+
+import SystemSettings from "@/models/SystemSettings";
+import Organization from "@/models/Organization";
+import OrganizationUser from "@/models/OrganizationUser";
 
 import { connectToDB } from "@/lib/connectToDB";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import Organization from "@/models/Organization";
-import OrganizationUser from "@/models/OrganizationUser";
+import {
+  buildActivationUrl,
+  generateActivationToken,
+  generateTemporaryPassword,
+  getActivationTokenExpiresAt,
+  getTemporaryPasswordExpiresAt,
+  hashActivationToken,
+} from "@/lib/auth/organization-user-credentials";
 
 /* -------------------------------------------------------------------------- */
 /* 🧱 Tipos                                                                   */
@@ -61,7 +76,6 @@ interface NormalizedOrganizationUserInput {
   lastName: string;
   fullName: string;
   email: string;
-  password: string;
   role: OrganizationUserRole;
   status: OrganizationUserStatus;
 }
@@ -70,6 +84,23 @@ interface PopulatedOrganizationRef {
   _id: unknown;
   legalName?: string;
   commercialName?: string;
+}
+
+interface OrganizationUserRow {
+  _id: string;
+  organizationId: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  role: OrganizationUserRole;
+  status: OrganizationUserStatus;
+  isRegistered: boolean;
+  activationStatus: "completed" | "pending";
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  organizationName: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -204,7 +235,6 @@ function normalizeOrganizationUserInput(
     lastName,
     fullName: buildFullName(firstName, lastName),
     email: normalizeEmail(data.email),
-    password: normalizeString(data.password),
     role: normalizeRole(data.role),
     status: normalizeStatus(data.status),
   };
@@ -233,15 +263,162 @@ function validateOrganizationUserInput(
     return "email is required.";
   }
 
-  if (!input.password) {
-    return "password is required.";
-  }
-
-  if (input.password.length < 8) {
-    return "password must be at least 8 characters long.";
-  }
-
   return null;
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+
+  if (!value || !value.trim()) {
+    throw new Error(`Missing required env variable: ${name}`);
+  }
+
+  return value.trim();
+}
+
+function requireEnvInt(name: string): number {
+  const raw = requireEnv(name);
+  const parsed = Number(raw);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid numeric env variable: ${name}`);
+  }
+
+  return parsed;
+}
+
+async function resolveBrandName(): Promise<string> {
+  try {
+    const setting = await SystemSettings.findOne({ key: "businessName" })
+      .lean()
+      .exec();
+
+    const value =
+      setting && typeof setting === "object" && "value" in setting
+        ? (setting as { value?: unknown }).value
+        : null;
+
+    return typeof value === "string" && value.trim()
+      ? value.trim()
+      : "Sierra Tech";
+  } catch {
+    return "Sierra Tech";
+  }
+}
+
+/**
+ * ES:
+ * Mantener el envío de correo dentro del route evita introducir una capa
+ * adicional prematura. Este endpoint es hoy el único responsable de este
+ * tipo de notificación.
+ */
+async function sendOrganizationUserActivationEmail(params: {
+  email: string;
+  fullName: string;
+  activationUrl: string;
+}) {
+  const smtpHost = requireEnv("SMTP_HOST");
+  const smtpPort = requireEnvInt("SMTP_PORT");
+  const smtpUser = requireEnv("SMTP_USER");
+  const smtpPass = requireEnv("SMTP_PASS");
+  const smtpFrom = requireEnv("SMTP_FROM");
+
+  const brandName = await resolveBrandName();
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  });
+
+  await transporter.sendMail({
+    from: smtpFrom,
+    to: params.email,
+    subject: `${brandName} - Activación de acceso`,
+    html: `
+      <div style="font-family: Arial, Helvetica, sans-serif; color: #333333; line-height: 1.6;">
+        <h2 style="color:#D97706; margin-bottom:16px;">${brandName}</h2>
+
+        <p>Hola ${params.fullName || "usuario"},</p>
+
+        <p>
+          Su acceso al portal ha sido creado correctamente.
+        </p>
+
+        <p>
+          Para activar su cuenta y definir su contraseña, haga clic en el siguiente botón:
+        </p>
+
+        <p style="margin:24px 0;">
+          <a
+            href="${params.activationUrl}"
+            style="
+              display:inline-block;
+              padding:12px 24px;
+              background:#D97706;
+              color:#FFFFFF;
+              text-decoration:none;
+              border-radius:8px;
+              font-weight:bold;
+            "
+          >
+            Activar cuenta
+          </a>
+        </p>
+
+        <p style="margin-top:16px;">
+          Si el botón no funciona, copie y pegue este enlace en su navegador:
+        </p>
+
+        <p style="word-break:break-all; color:#92400E;">
+          ${params.activationUrl}
+        </p>
+
+        <p style="margin-top:15px; font-size:12px; color:#777777;">
+          Este enlace tiene vigencia limitada.
+        </p>
+      </div>
+    `,
+  });
+}
+
+function mapUserToRow(user: {
+  _id: unknown;
+  organizationId: unknown;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  role: OrganizationUserRole;
+  status: OrganizationUserStatus;
+  isRegistered?: boolean;
+  lastLoginAt?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): OrganizationUserRow {
+  const organization = extractPopulatedOrganization(user.organizationId);
+  const isRegistered = Boolean(user.isRegistered);
+
+  return {
+    _id: String(user._id),
+    organizationId: resolveOrganizationId(organization),
+    firstName: user.firstName,
+    lastName: user.lastName,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    isRegistered,
+    activationStatus: isRegistered ? "completed" : "pending",
+    lastLoginAt: user.lastLoginAt ?? null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    organizationName: resolveOrganizationName(organization),
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -315,24 +492,22 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1, fullName: 1 })
       .lean();
 
-    const rows = users.map((user) => {
-      const organization = extractPopulatedOrganization(user.organizationId);
-
-      return {
-        _id: String(user._id),
-        organizationId: resolveOrganizationId(organization),
+    const rows = users.map((user) =>
+      mapUserToRow({
+        _id: user._id,
+        organizationId: user.organizationId,
         firstName: user.firstName,
         lastName: user.lastName,
         fullName: user.fullName,
         email: user.email,
         role: user.role,
         status: user.status,
+        isRegistered: user.isRegistered,
         lastLoginAt: user.lastLoginAt ?? null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        organizationName: resolveOrganizationName(organization),
-      };
-    });
+      })
+    );
 
     return NextResponse.json({
       ok: true,
@@ -421,9 +596,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const passwordHash = await hash(input.password, 12);
+    const temporaryPassword = generateTemporaryPassword(10);
+    const passwordHash = await hash(temporaryPassword, 12);
 
-    const createdUser = await OrganizationUser.create({
+    const activationToken = generateActivationToken();
+    const activationTokenHash = hashActivationToken(activationToken);
+    const activationTokenExpiresAt = getActivationTokenExpiresAt();
+    const temporaryPasswordExpiresAt = getTemporaryPasswordExpiresAt();
+    const activationUrl = buildActivationUrl(activationToken);
+
+    const createdUser = new OrganizationUser({
       organizationId: input.organizationId,
       firstName: input.firstName,
       lastName: input.lastName,
@@ -432,7 +614,29 @@ export async function POST(req: NextRequest) {
       passwordHash,
       role: input.role,
       status: input.status,
+      isRegistered: false,
+      activationTokenHash,
+      activationTokenExpiresAt,
+      temporaryPasswordExpiresAt,
+      resetToken: null,
+      resetTokenExpiry: null,
     });
+
+    try {
+      await createdUser.save();
+
+      await sendOrganizationUserActivationEmail({
+        email: createdUser.email,
+        fullName: createdUser.fullName,
+        activationUrl,
+      });
+    } catch (emailOrCreateError) {
+      if (createdUser._id) {
+        await OrganizationUser.findByIdAndDelete(createdUser._id);
+      }
+
+      throw emailOrCreateError;
+    }
 
     const populatedUser = await OrganizationUser.findById(createdUser._id)
       .populate({
@@ -441,29 +645,42 @@ export async function POST(req: NextRequest) {
       })
       .lean();
 
-    const organization = extractPopulatedOrganization(
-      populatedUser?.organizationId
-    );
-
-    return NextResponse.json(
-      {
-        ok: true,
-        message: "Organization user created successfully.",
-        data: {
-          _id: populatedUser ? String(populatedUser._id) : String(createdUser._id),
-          organizationId:
-            resolveOrganizationId(organization) || input.organizationId,
+    const responseRow = populatedUser
+      ? mapUserToRow({
+          _id: populatedUser._id,
+          organizationId: populatedUser.organizationId,
+          firstName: populatedUser.firstName,
+          lastName: populatedUser.lastName,
+          fullName: populatedUser.fullName,
+          email: populatedUser.email,
+          role: populatedUser.role,
+          status: populatedUser.status,
+          isRegistered: populatedUser.isRegistered,
+          lastLoginAt: populatedUser.lastLoginAt ?? null,
+          createdAt: populatedUser.createdAt,
+          updatedAt: populatedUser.updatedAt,
+        })
+      : mapUserToRow({
+          _id: createdUser._id,
+          organizationId: createdUser.organizationId,
           firstName: createdUser.firstName,
           lastName: createdUser.lastName,
           fullName: createdUser.fullName,
           email: createdUser.email,
           role: createdUser.role,
           status: createdUser.status,
+          isRegistered: createdUser.isRegistered,
           lastLoginAt: createdUser.lastLoginAt ?? null,
           createdAt: createdUser.createdAt,
           updatedAt: createdUser.updatedAt,
-          organizationName: resolveOrganizationName(organization),
-        },
+        });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        message:
+          "Organization user created and activation email sent successfully.",
+        data: responseRow,
       },
       { status: 201 }
     );

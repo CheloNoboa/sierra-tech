@@ -42,6 +42,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   Trash2,
   Users as UsersIcon,
 } from "lucide-react";
@@ -60,6 +61,8 @@ import type {
   OrganizationUserRow,
   OrganizationUserStatus,
 } from "@/types/organizationUser";
+
+import { formatLastAccess } from "@/lib/format/formatLastAccess";
 
 /* =============================================================================
  * Internal helper types
@@ -138,6 +141,15 @@ function isOrganizationUserRow(value: unknown): value is OrganizationUserRow {
     return false;
   }
 
+  if (typeof value.isRegistered !== "boolean") return false;
+
+  if (
+    value.activationStatus !== "pending" &&
+    value.activationStatus !== "completed"
+  ) {
+    return false;
+  }
+
   return true;
 }
 
@@ -200,23 +212,6 @@ function applyInactiveStatus(
   );
 }
 
-function formatLastLogin(
-  value: string | null | undefined,
-  locale: "es" | "en"
-): string {
-  if (!value) {
-    return locale === "es" ? "Nunca" : "Never";
-  }
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleString(locale === "es" ? "es-EC" : "en-US");
-}
-
 /* =============================================================================
  * Main component
  * ============================================================================= */
@@ -266,6 +261,9 @@ export default function OrganizationUsersDataGrid() {
       statusLabel: locale === "es" ? "Estado" : "Status",
       lastLogin: locale === "es" ? "Último acceso" : "Last login",
       actions: locale === "es" ? "Acciones" : "Actions",
+      activation: locale === "es" ? "Activación" : "Activation",
+      activationPending: locale === "es" ? "Pendiente" : "Pending",
+      activationCompleted: locale === "es" ? "Activado" : "Activated",
 
       loading:
         locale === "es"
@@ -328,6 +326,21 @@ export default function OrganizationUsersDataGrid() {
         locale === "es"
           ? "Editar usuario de organización"
           : "Edit organization user",
+      resendActivation:
+        locale === "es" ? "Reenviar activación" : "Resend activation",
+      resendActivationSuccess:
+        locale === "es"
+          ? "Correo de activación reenviado correctamente."
+          : "Activation email resent successfully.",
+      resendActivationError:
+        locale === "es"
+          ? "No se pudo reenviar el correo de activación."
+          : "Could not resend activation email.",
+      resendActivationConflict:
+        locale === "es"
+          ? "Este usuario ya activó su cuenta."
+          : "This user has already activated the account.",
+
       statusActiveText: locale === "es" ? "Activo" : "Active",
       statusInactiveText: locale === "es" ? "Inactivo" : "Inactive",
       lastLoginNever: locale === "es" ? "Nunca" : "Never",
@@ -568,6 +581,37 @@ export default function OrganizationUsersDataGrid() {
     setOrganizationUsers((prev) => upsertOrganizationUser(prev, savedUser));
     setModalOpen(false);
     setEditing(null);
+  };
+
+  const handleResendActivation = async (user: OrganizationUserRow) => {
+    try {
+      const res = await fetch(
+        `/api/admin/organization-users/${user._id}/resend-activation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result = (await res.json().catch(() => null)) as
+        | { ok?: boolean; message?: string }
+        | null;
+
+      if (res.status === 409) {
+        toast.error(result?.message || t.resendActivationConflict);
+        return;
+      }
+
+      if (!res.ok || !result?.ok) {
+        throw new Error(result?.message || t.resendActivationError);
+      }
+
+      toast.success(result.message || t.resendActivationSuccess);
+    } catch {
+      toast.error(t.resendActivationError);
+    }
   };
 
   /* =============================================================================
@@ -874,6 +918,7 @@ export default function OrganizationUsersDataGrid() {
               <th className="px-3 py-3">{t.organization}</th>
               <th className="px-3 py-3">{t.role}</th>
               <th className="px-3 py-3">{t.statusLabel}</th>
+              <th className="px-3 py-3">{t.activation}</th>
               <th className="px-3 py-3">{t.lastLogin}</th>
               <th className="px-3 py-3 text-right">{t.actions}</th>
             </tr>
@@ -882,13 +927,13 @@ export default function OrganizationUsersDataGrid() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="py-5 text-center text-text-secondary">
+                <td colSpan={10} className="py-5 text-center text-text-secondary">
                   {t.loading}
                 </td>
               </tr>
             ) : paginated.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-5 text-center text-text-muted">
+                <td colSpan={10} className="py-5 text-center text-text-muted">
                   {t.noResults}
                 </td>
               </tr>
@@ -960,15 +1005,37 @@ export default function OrganizationUsersDataGrid() {
                       </span>
                     </td>
 
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${
+                          user.activationStatus === "pending"
+                            ? "border border-amber-200 bg-amber-50 text-amber-700"
+                            : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {user.activationStatus === "pending"
+                          ? t.activationPending
+                          : t.activationCompleted}
+                      </span>
+                    </td>
+
                     <td className="px-3 py-3 text-text-secondary">
-                      {formatLastLogin(
-                        user.lastLoginAt ?? null,
-                        locale === "es" ? "es" : "en"
-                      )}
+                      {formatLastAccess(user.lastLoginAt ?? null)}
                     </td>
 
                     <td className="px-3 py-3 text-right">
                       <div className="inline-flex gap-2">
+                        {user.activationStatus === "pending" ? (
+                          <button
+                            type="button"
+                            aria-label={`${t.resendActivation} ${user.fullName}`}
+                            className="rounded-md border border-amber-300 bg-amber-50 p-1.5 text-amber-700 transition hover:bg-amber-100"
+                            onClick={() => void handleResendActivation(user)}
+                          >
+                            <Send size={16} />
+                          </button>
+                        ) : null}
+
                         <button
                           type="button"
                           aria-label={`${t.editUser} ${user.fullName}`}

@@ -27,6 +27,7 @@ import bcrypt from "bcryptjs";
 
 import { connectToDB } from "@/lib/connectToDB";
 import User from "@/models/User";
+import OrganizationUser from "@/models/OrganizationUser";
 
 interface ResetTokenPayload extends JwtPayload {
   email: string;
@@ -97,9 +98,14 @@ export async function POST(req: Request) {
 
     await connectToDB();
 
-    const user = await User.findOne({ email: decoded.email.trim().toLowerCase() });
+    const email = decoded.email.trim().toLowerCase();
 
-    if (!user) {
+    const internalUser = await User.findOne({ email });
+    const organizationUser = internalUser
+      ? null
+      : await OrganizationUser.findOne({ email });
+
+    if (!internalUser && !organizationUser) {
       return NextResponse.json(
         { message: "Account not found" },
         { status: 404 }
@@ -108,12 +114,21 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    user.password = hashedPassword;
-    user.isRegistered = true;
-    user.resetToken = null;
-    user.resetTokenExpiry = null;
+    if (internalUser) {
+      internalUser.password = hashedPassword;
+      internalUser.isRegistered = true;
+      internalUser.resetToken = null;
+      internalUser.resetTokenExpiry = null;
+      await internalUser.save();
+    }
 
-    await user.save();
+    if (organizationUser) {
+      organizationUser.passwordHash = hashedPassword;
+      organizationUser.isRegistered = true;
+      organizationUser.resetToken = null;
+      organizationUser.resetTokenExpiry = null;
+      await organizationUser.save();
+    }
 
     return NextResponse.json({
       message: "Password updated successfully",

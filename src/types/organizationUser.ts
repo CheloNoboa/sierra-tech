@@ -51,6 +51,8 @@ export interface OrganizationUser {
   email: string;
   role: OrganizationUserRole;
   status: OrganizationUserStatus;
+  isRegistered: boolean;
+  activationStatus: "pending" | "completed";
   lastLoginAt?: string;
   createdAt: string;
   updatedAt: string;

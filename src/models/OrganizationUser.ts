@@ -19,6 +19,8 @@
  *   - no eliminación física → uso de status
  *   - colección fijada explícitamente como "OrganizationUsers"
  *     para mantener consistencia con la convención del proyecto
+ *   - el flujo inicial usa contraseña temporal + token de activación
+ *   - el token de activación se guarda como hash, no en texto plano
  *
  *   Responsabilidad:
  *   - Persistencia de identidad de usuario
@@ -52,6 +54,15 @@ export interface OrganizationUserDocument {
 
   role: OrganizationUserRole;
   status: OrganizationUserStatus;
+
+  isRegistered: boolean;
+
+  activationTokenHash?: string | null;
+  activationTokenExpiresAt?: Date | null;
+  temporaryPasswordExpiresAt?: Date | null;
+
+  resetToken?: string | null;
+  resetTokenExpiry?: Date | null;
 
   lastLoginAt?: Date;
 
@@ -119,8 +130,41 @@ const OrganizationUserSchema = new Schema<OrganizationUserDocument>(
       index: true,
     },
 
+    isRegistered: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    activationTokenHash: {
+      type: String,
+      default: null,
+      index: true,
+    },
+
+    activationTokenExpiresAt: {
+      type: Date,
+      default: null,
+    },
+
+    temporaryPasswordExpiresAt: {
+      type: Date,
+      default: null,
+    },
+
+    resetToken: {
+      type: String,
+      default: null,
+    },
+
+    resetTokenExpiry: {
+      type: Date,
+      default: null,
+    },
+
     lastLoginAt: {
       type: Date,
+      default: null,
     },
   },
   {

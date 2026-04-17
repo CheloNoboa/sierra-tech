@@ -317,9 +317,8 @@ export const authOptions: NextAuthOptions = {
 
         const organizationUser = await OrganizationUserModel.findOne({ email })
           .select(
-            "+passwordHash +firstName +lastName +fullName +email +role +status +organizationId"
+            "+passwordHash +firstName +lastName +fullName +email +role +status +organizationId +isRegistered +lastLoginAt"
           )
-          .lean()
           .exec();
 
         if (!organizationUser) return null;
@@ -337,8 +336,32 @@ export const authOptions: NextAuthOptions = {
         const organizationUserStatus = normalizeStatus(organizationUser.status);
         if (organizationUserStatus !== "active") return null;
 
+        const isRegistered =
+          typeof organizationUser.isRegistered === "boolean"
+            ? organizationUser.isRegistered
+            : false;
+
+        /**
+         * ES:
+         * El portal cliente solo permite acceso después de la activación inicial.
+         * Esto evita que una contraseña temporal enviada por correo se use como
+         * acceso definitivo sin completar el proceso de onboarding.
+         */
+        if (!isRegistered) {
+          return null;
+        }
+
         const organizationId = toIdString(organizationUser.organizationId);
         if (!organizationId) return null;
+
+        /**
+         * ES:
+         * El último acceso debe persistirse en el momento en que las credenciales
+         * ya fueron validadas correctamente. Esto alimenta la grilla administrativa
+         * y evita mostrar "Nunca" para usuarios que ya ingresaron al portal.
+         */
+        organizationUser.lastLoginAt = new Date();
+        await organizationUser.save();
 
         const organization = await OrganizationModel.findById(organizationId)
           .select("legalName commercialName status")
@@ -370,7 +393,10 @@ export const authOptions: NextAuthOptions = {
           organizationId,
           organizationName,
           organizationUserRole: pickString(organizationUser.role),
-          isRegistered: true,
+          isRegistered:
+            typeof organizationUser.isRegistered === "boolean"
+              ? organizationUser.isRegistered
+              : false,
           phone: null,
         };
       },

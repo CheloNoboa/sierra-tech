@@ -26,6 +26,7 @@ import jwt from "jsonwebtoken";
 import { connectToDB } from "@/lib/connectToDB";
 import User from "@/models/User";
 import SystemSettings from "@/models/SystemSettings";
+import OrganizationUser from "@/models/OrganizationUser";
 
 interface ResetPasswordPayload {
   email: string;
@@ -92,16 +93,34 @@ export async function POST(req: Request) {
 
     await connectToDB();
 
-    const user = await User.findOne({ email }).exec();
-    if (!user) return genericOk();
+    const internalUser = await User.findOne({ email }).exec();
+    const organizationUser = internalUser
+      ? null
+      : await OrganizationUser.findOne({ email }).exec();
+
+    if (!internalUser && !organizationUser) {
+      return genericOk();
+    }
 
     let nameForEmail = "user";
-    if (typeof user.name === "string" && user.name.trim()) {
-      nameForEmail = user.name.trim();
+
+    if (internalUser && typeof internalUser.name === "string" && internalUser.name.trim()) {
+      nameForEmail = internalUser.name.trim();
+    }
+
+    if (
+      organizationUser &&
+      typeof organizationUser.fullName === "string" &&
+      organizationUser.fullName.trim()
+    ) {
+      nameForEmail = organizationUser.fullName.trim();
     }
 
     const token = jwt.sign(
-      { email } satisfies ResetJwtPayload,
+      {
+        email,
+        audience: organizationUser ? "organization_user_activation" : "password_reset",
+      } satisfies ResetJwtPayload & { audience: string },
       requireEnv("JWT_SECRET"),
       { expiresIn: "1h" }
     );

@@ -78,10 +78,6 @@ function getString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function getBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
 function buildInitialForm(
   user: OrganizationUserRow | null,
   organizations: OrganizationOptionDTO[]
@@ -168,6 +164,18 @@ function normalizeSavedUser(
         (organization) => organization._id === context.values.organizationId
       )?.label ?? context.existingUser.organizationName;
 
+    const resolvedStatus =
+      source?.status === "active" || source?.status === "inactive"
+        ? source.status
+        : context.values.active
+          ? "active"
+          : "inactive";
+
+    const resolvedIsRegistered =
+      typeof source?.isRegistered === "boolean"
+        ? source.isRegistered
+        : context.existingUser.isRegistered;
+
     const merged: OrganizationUserRow = {
       ...context.existingUser,
       _id: getString(source?._id) || context.existingUser._id,
@@ -184,9 +192,9 @@ function normalizeSavedUser(
         source?.role === "org_admin" || source?.role === "org_user"
           ? source.role
           : context.values.role,
-      status: getBoolean(source?.status === "active", context.values.active)
-        ? "active"
-        : "inactive",
+      status: resolvedStatus,
+      isRegistered: resolvedIsRegistered,
+      activationStatus: resolvedIsRegistered ? "completed" : "pending",
       lastLoginAt:
         typeof source?.lastLoginAt === "string"
           ? source.lastLoginAt
@@ -299,6 +307,15 @@ export default function OrganizationUserModal({
         locale === "es"
           ? "Ocultar confirmación de contraseña"
           : "Hide password confirmation",
+      activationNotice:
+        locale === "es"
+          ? "Al guardar, se enviará un correo al usuario para que active su acceso y defina su contraseña."
+          : "When saved, an email will be sent so the user can activate access and set a password.",
+
+      updatePasswordHint:
+        locale === "es"
+          ? "Opcional. Si escribes una nueva contraseña, reemplazará la actual."
+          : "Optional. If you type a new password, it will replace the current one.",
     }),
     [locale]
   );
@@ -336,8 +353,7 @@ export default function OrganizationUserModal({
     if (!form.email.trim()) return false;
     if (!form.role.trim()) return false;
 
-    if (!isEditing) {
-      if (!form.password.trim() || !form.confirmPassword.trim()) return false;
+    if (isEditing && (form.password.trim() || form.confirmPassword.trim())) {
       if (form.password.length < 8) return false;
       if (form.password !== form.confirmPassword) return false;
     }
@@ -385,14 +401,9 @@ export default function OrganizationUserModal({
             isEditing
               ? {
                   ...payload,
-                  ...(form.password.trim()
-                    ? { password: form.password }
-                    : {}),
+                  ...(form.password.trim() ? { password: form.password } : {}),
                 }
-              : {
-                  ...payload,
-                  password: form.password,
-                }
+              : payload
           ),
         }
       );
@@ -604,7 +615,11 @@ export default function OrganizationUserModal({
             </label>
           </div>
 
-          {!isEditing && (
+          {!isEditing ? (
+            <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {t.activationNotice}
+            </div>
+          ) : (
             <>
               <div>
                 <label
@@ -627,7 +642,6 @@ export default function OrganizationUserModal({
                         password: e.target.value,
                       }))
                     }
-                    required
                   />
 
                   <div className="absolute inset-y-0 right-0 flex items-center pr-2">
@@ -664,7 +678,6 @@ export default function OrganizationUserModal({
                         confirmPassword: e.target.value,
                       }))
                     }
-                    required
                   />
 
                   <div className="absolute inset-y-0 right-0 flex items-center pr-2">
@@ -679,11 +692,12 @@ export default function OrganizationUserModal({
                   </div>
                 </div>
 
-                {!isEditing &&
-                form.confirmPassword &&
+                {(form.password || form.confirmPassword) &&
                 form.password !== form.confirmPassword ? (
                   <p className="mt-1 text-xs text-status-error">{t.mismatch}</p>
                 ) : null}
+
+                <p className="mt-1 text-xs text-text-muted">{t.updatePasswordHint}</p>
               </div>
             </>
           )}

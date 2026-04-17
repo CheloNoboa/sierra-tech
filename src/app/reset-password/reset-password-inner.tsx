@@ -92,8 +92,31 @@ export default function ResetPasswordInner() {
           : "Password updated successfully."
       );
 
-      setTimeout(() => {
-        router.push("/");
+      setTimeout(async () => {
+        try {
+          const res = await fetch("/api/auth/session", {
+            method: "GET",
+            cache: "no-store",
+          });
+
+          const session = await res.json();
+
+          const user = session?.user;
+
+          if (user?.userType === "internal") {
+            router.push("/admin/dashboard");
+            return;
+          }
+
+          if (user?.userType === "client") {
+            router.push("/portal");
+            return;
+          }
+
+          router.push("/login");
+        } catch {
+          router.push("/login");
+        }
       }, 1500);
     } catch {
       toast.error(
@@ -110,13 +133,15 @@ export default function ResetPasswordInner() {
     <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4">
       <div className="relative w-full max-w-xl rounded-2xl border border-gray-800 bg-gray-900 p-8 shadow-2xl transition-all md:max-w-2xl">
         <h1 className="mb-4 text-center text-3xl font-bold text-yellow-400">
-          {locale === "es" ? "Restablecer Contraseña" : "Reset Password"}
+          {locale === "es"
+            ? "Crear / Restablecer contraseña"
+            : "Create / Reset password"}
         </h1>
 
         <p className="mb-8 text-center text-sm text-gray-400">
           {locale === "es"
-            ? "Ingresa tu nueva contraseña y confírmala para continuar."
-            : "Enter and confirm your new password to continue."}
+            ? "Define tu contraseña para acceder al sistema."
+            : "Set your password to access the system."}
         </p>
 
         <form onSubmit={handleReset} className="flex flex-col space-y-5">
