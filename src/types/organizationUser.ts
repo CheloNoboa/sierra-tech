@@ -56,7 +56,7 @@ export interface OrganizationUser {
   lastLoginAt?: string;
   createdAt: string;
   updatedAt: string;
-}
+} 
 
 /**
  * Variante interna usada cuando se necesita transportar también el password hash.
