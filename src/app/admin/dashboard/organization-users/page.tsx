@@ -28,9 +28,9 @@
 import OrganizationUsersDataGrid from "@/components/OrganizationUsersDataGrid";
 
 export default function OrganizationUsersPage() {
-  return (
-    <div className="p-4">
-      <OrganizationUsersDataGrid />
-    </div>
-  );
+	return (
+		<div className="p-4">
+			<OrganizationUsersDataGrid />
+		</div>
+	);
 }

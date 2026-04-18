@@ -41,18 +41,16 @@ import { useTranslation } from "@/hooks/useTranslation";
  * Types
  * ============================================================================= */
 
-type RegisterResponse =
-  | { message?: string }
-  | null;
+type RegisterResponse = { message?: string } | null;
 
 /* =============================================================================
  * Runtime helpers
  * ============================================================================= */
 
 function getMessageIfAny(v: unknown): string {
-  if (!v || typeof v !== "object") return "";
-  const maybe = (v as { message?: unknown }).message;
-  return typeof maybe === "string" ? maybe : "";
+	if (!v || typeof v !== "object") return "";
+	const maybe = (v as { message?: unknown }).message;
+	return typeof maybe === "string" ? maybe : "";
 }
 
 /* =============================================================================
@@ -60,214 +58,218 @@ function getMessageIfAny(v: unknown): string {
  * ============================================================================= */
 
 export default function GoogleCompletePage() {
-  const router = useRouter();
-  const { data: session, status, update } = useSession();
-  const { locale } = useTranslation();
+	const router = useRouter();
+	const { data: session, status, update } = useSession();
+	const { locale } = useTranslation();
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState<PhoneValue>({
-    countryCode: "US",
-    dialCode: "+1",
-    nationalNumber: "",
-    e164: "",
-  });
+	const [name, setName] = useState("");
+	const [phone, setPhone] = useState<PhoneValue>({
+		countryCode: "US",
+		dialCode: "+1",
+		nationalNumber: "",
+		e164: "",
+	});
 
-  const [errName, setErrName] = useState("");
-  const [errPhone, setErrPhone] = useState("");
-  const [submitError, setSubmitError] = useState("");
+	const [errName, setErrName] = useState("");
+	const [errPhone, setErrPhone] = useState("");
+	const [submitError, setSubmitError] = useState("");
 
-  const [success, setSuccess] = useState(false);
-  const [saving, setSaving] = useState(false);
+	const [success, setSuccess] = useState(false);
+	const [saving, setSaving] = useState(false);
 
-  const loading = status === "loading";
+	const loading = status === "loading";
 
-  /* ===========================================================================
-   * Initialize fields from session
-   * ======================================================================== */
-  useEffect(() => {
-    if (!session?.user) return;
+	/* ===========================================================================
+	 * Initialize fields from session
+	 * ======================================================================== */
+	useEffect(() => {
+		if (!session?.user) return;
 
-    setName(typeof session.user.name === "string" ? session.user.name : "");
-  }, [session]);
+		setName(typeof session.user.name === "string" ? session.user.name : "");
+	}, [session]);
 
-  /* ===========================================================================
-   * Auth/session guard
-   * ======================================================================== */
-  useEffect(() => {
-    if (loading) return;
+	/* ===========================================================================
+	 * Auth/session guard
+	 * ======================================================================== */
+	useEffect(() => {
+		if (loading) return;
 
-    if (!session?.user) {
-      router.replace("/");
-      return;
-    }
+		if (!session?.user) {
+			router.replace("/");
+			return;
+		}
 
-    const hasPhone =
-      typeof session.user.phone === "string" &&
-      session.user.phone.trim().length > 0;
+		const hasPhone =
+			typeof session.user.phone === "string" &&
+			session.user.phone.trim().length > 0;
 
-    if (session.user.isRegistered && hasPhone) {
-      router.replace("/user/home");
-    }
-  }, [loading, session, router]);
+		if (session.user.isRegistered && hasPhone) {
+			router.replace("/user/home");
+		}
+	}, [loading, session, router]);
 
-  /* ===========================================================================
-   * Validation
-   * ======================================================================== */
-  const validate = (): boolean => {
-    let valid = true;
+	/* ===========================================================================
+	 * Validation
+	 * ======================================================================== */
+	const validate = (): boolean => {
+		let valid = true;
 
-    setErrName("");
-    setErrPhone("");
-    setSubmitError("");
+		setErrName("");
+		setErrPhone("");
+		setSubmitError("");
 
-    if (!name.trim()) {
-      setErrName(locale === "es" ? "Ingresa tu nombre." : "Enter your name.");
-      valid = false;
-    }
+		if (!name.trim()) {
+			setErrName(locale === "es" ? "Ingresa tu nombre." : "Enter your name.");
+			valid = false;
+		}
 
-    if (!phone.nationalNumber.trim() || !phone.e164.trim()) {
-      setErrPhone(locale === "es" ? "Ingresa tu teléfono." : "Enter your phone.");
-      valid = false;
-    }
+		if (!phone.nationalNumber.trim() || !phone.e164.trim()) {
+			setErrPhone(
+				locale === "es" ? "Ingresa tu teléfono." : "Enter your phone.",
+			);
+			valid = false;
+		}
 
-    return valid;
-  };
+		return valid;
+	};
 
-  /* ===========================================================================
-   * Save completion
-   * - Uses generic /api/register
-   * ======================================================================== */
-  const handleComplete = async (): Promise<void> => {
-    if (!session?.user?.email) return;
-    if (!validate()) return;
+	/* ===========================================================================
+	 * Save completion
+	 * - Uses generic /api/register
+	 * ======================================================================== */
+	const handleComplete = async (): Promise<void> => {
+		if (!session?.user?.email) return;
+		if (!validate()) return;
 
-    setSaving(true);
-    setSubmitError("");
+		setSaving(true);
+		setSubmitError("");
 
-    try {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: session.user.email,
-          phone: phone.e164,
-          provider: "google",
-          role: "user",
-        }),
-      });
+		try {
+			const res = await fetch("/api/register", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: name.trim(),
+					email: session.user.email,
+					phone: phone.e164,
+					provider: "google",
+					role: "user",
+				}),
+			});
 
-      const json = (await res.json().catch(() => null)) as RegisterResponse;
+			const json = (await res.json().catch(() => null)) as RegisterResponse;
 
-      if (!res.ok) {
-        const msg =
-          getMessageIfAny(json) ||
-          (locale === "es"
-            ? "Error guardando registro."
-            : "Error saving registration.");
+			if (!res.ok) {
+				const msg =
+					getMessageIfAny(json) ||
+					(locale === "es"
+						? "Error guardando registro."
+						: "Error saving registration.");
 
-        setSubmitError(msg);
-        return;
-      }
+				setSubmitError(msg);
+				return;
+			}
 
-      setSuccess(true);
+			setSuccess(true);
 
-      await update();
+			await update();
 
-      setTimeout(() => {
-        router.replace("/user/home");
-      }, 1200);
-    } catch {
-      setSubmitError(
-        locale === "es"
-          ? "Error guardando registro."
-          : "Error saving registration."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+			setTimeout(() => {
+				router.replace("/user/home");
+			}, 1200);
+		} catch {
+			setSubmitError(
+				locale === "es"
+					? "Error guardando registro."
+					: "Error saving registration.",
+			);
+		} finally {
+			setSaving(false);
+		}
+	};
 
-  /* ===========================================================================
-   * Render
-   * ======================================================================== */
-  if (loading || !session?.user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-white">
-        {locale === "es" ? "Cargando..." : "Loading..."}
-      </div>
-    );
-  }
+	/* ===========================================================================
+	 * Render
+	 * ======================================================================== */
+	if (loading || !session?.user) {
+		return (
+			<div className="flex min-h-screen items-center justify-center text-white">
+				{locale === "es" ? "Cargando..." : "Loading..."}
+			</div>
+		);
+	}
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900 p-4 text-gray-100">
-      <div className="w-full max-w-md rounded-lg bg-gray-800 p-6 shadow-lg">
-        <h1 className="mb-4 text-center text-2xl font-bold">
-          {locale === "es"
-            ? "Completa tu registro"
-            : "Complete your registration"}
-        </h1>
+	return (
+		<div className="flex min-h-screen items-center justify-center bg-gray-900 p-4 text-gray-100">
+			<div className="w-full max-w-md rounded-lg bg-gray-800 p-6 shadow-lg">
+				<h1 className="mb-4 text-center text-2xl font-bold">
+					{locale === "es"
+						? "Completa tu registro"
+						: "Complete your registration"}
+				</h1>
 
-        {success ? (
-          <div className="py-8 text-center text-green-400">
-            {locale === "es" ? "Registro completo" : "Registration complete"}
-          </div>
-        ) : (
-          <>
-            <div className="mb-4">
-              <label className="mb-1 block text-sm">
-                {locale === "es" ? "Nombre" : "Name"}
-              </label>
+				{success ? (
+					<div className="py-8 text-center text-green-400">
+						{locale === "es" ? "Registro completo" : "Registration complete"}
+					</div>
+				) : (
+					<>
+						<div className="mb-4">
+							<label className="mb-1 block text-sm">
+								{locale === "es" ? "Nombre" : "Name"}
+							</label>
 
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className={`w-full rounded border bg-gray-700 p-2 ${
-                  errName ? "border-red-500" : "border-gray-600"
-                }`}
-                placeholder={locale === "es" ? "Nombre" : "Name"}
-              />
+							<input
+								type="text"
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								className={`w-full rounded border bg-gray-700 p-2 ${
+									errName ? "border-red-500" : "border-gray-600"
+								}`}
+								placeholder={locale === "es" ? "Nombre" : "Name"}
+							/>
 
-              {errName ? (
-                <p className="mt-1 text-xs text-red-400">{errName}</p>
-              ) : null}
-            </div>
+							{errName ? (
+								<p className="mt-1 text-xs text-red-400">{errName}</p>
+							) : null}
+						</div>
 
-            <div className="mb-4">
-              <label className="mb-1 block text-sm">
-                {locale === "es" ? "Teléfono" : "Phone"}
-              </label>
+						<div className="mb-4">
+							<label className="mb-1 block text-sm">
+								{locale === "es" ? "Teléfono" : "Phone"}
+							</label>
 
-              <div className={errPhone ? "rounded border border-red-500 p-1" : ""}>
-                <PhoneField value={phone} onChange={setPhone} />
-              </div>
+							<div
+								className={errPhone ? "rounded border border-red-500 p-1" : ""}
+							>
+								<PhoneField value={phone} onChange={setPhone} />
+							</div>
 
-              {errPhone ? (
-                <p className="mt-1 text-xs text-red-400">{errPhone}</p>
-              ) : null}
-            </div>
+							{errPhone ? (
+								<p className="mt-1 text-xs text-red-400">{errPhone}</p>
+							) : null}
+						</div>
 
-            {submitError ? (
-              <p className="mb-2 text-center text-red-400">{submitError}</p>
-            ) : null}
+						{submitError ? (
+							<p className="mb-2 text-center text-red-400">{submitError}</p>
+						) : null}
 
-            <button
-              onClick={() => void handleComplete()}
-              disabled={saving}
-              className="w-full rounded bg-yellow-600 py-2 font-semibold text-white hover:bg-yellow-700 disabled:opacity-50"
-            >
-              {saving
-                ? locale === "es"
-                  ? "Guardando..."
-                  : "Saving..."
-                : locale === "es"
-                  ? "Guardar"
-                  : "Save"}
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
+						<button
+							onClick={() => void handleComplete()}
+							disabled={saving}
+							className="w-full rounded bg-yellow-600 py-2 font-semibold text-white hover:bg-yellow-700 disabled:opacity-50"
+						>
+							{saving
+								? locale === "es"
+									? "Guardando..."
+									: "Saving..."
+								: locale === "es"
+									? "Guardar"
+									: "Save"}
+						</button>
+					</>
+				)}
+			</div>
+		</div>
+	);
 }

@@ -35,28 +35,28 @@ type AllowedRole = (typeof ALLOWED_ROLES)[number];
  * Hook de acceso para módulos administrativos.
  */
 export function useAdminAccess() {
-  const { locale } = useTranslation();
-  const { data: session, status } = useSession();
+	const { locale } = useTranslation();
+	const { data: session, status } = useSession();
 
-  const loading = status === "loading";
-  const role = session?.user?.role;
-  const allowed = !!role && ALLOWED_ROLES.includes(role as AllowedRole);
+	const loading = status === "loading";
+	const role = session?.user?.role;
+	const allowed = !!role && ALLOWED_ROLES.includes(role as AllowedRole);
 
-  const message = loading
-    ? locale === "es"
-      ? "Verificando sesión..."
-      : "Checking session..."
-    : !allowed
-      ? locale === "es"
-        ? "Acceso denegado. Solo administradores."
-        : "Access denied. Admins only."
-      : "";
+	const message = loading
+		? locale === "es"
+			? "Verificando sesión..."
+			: "Checking session..."
+		: !allowed
+			? locale === "es"
+				? "Acceso denegado. Solo administradores."
+				: "Access denied. Admins only."
+			: "";
 
-  return {
-    loading,
-    allowed,
-    role,
-    message,
-    locale,
-  };
+	return {
+		loading,
+		allowed,
+		role,
+		message,
+		locale,
+	};
 }

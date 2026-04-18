@@ -39,9 +39,9 @@
 import SettingsDataGrid from "@/components/SettingsDataGrid";
 
 export default function SettingsPage() {
-  return (
-    <div className="p-4">
-      <SettingsDataGrid />
-    </div>
-  );
+	return (
+		<div className="p-4">
+			<SettingsDataGrid />
+		</div>
+	);
 }

@@ -45,60 +45,60 @@ type Locale = "es" | "en";
 type DocumentLanguage = "es" | "en" | "both" | "other";
 
 interface LocalizedText {
-  es: string;
-  en: string;
+	es: string;
+	en: string;
 }
 
 interface ServiceGalleryItem {
-  url: string;
-  alt: LocalizedText;
-  order: number;
+	url: string;
+	alt: LocalizedText;
+	order: number;
 }
 
 interface ServiceAttachmentRef {
-  documentId: string;
-  title: string;
+	documentId: string;
+	title: string;
 }
 
 interface ServiceTechnicalSpecs {
-  capacity: LocalizedText;
-  flowRate: LocalizedText;
-  material: LocalizedText;
-  application: LocalizedText;
-  technology: LocalizedText;
+	capacity: LocalizedText;
+	flowRate: LocalizedText;
+	material: LocalizedText;
+	application: LocalizedText;
+	technology: LocalizedText;
 }
 
 interface ServiceDetail {
-  slug: string;
-  title: LocalizedText;
-  summary: LocalizedText;
-  description: LocalizedText;
-  coverImage: string;
-  category: string;
-  gallery: ServiceGalleryItem[];
-  technicalSpecs: ServiceTechnicalSpecs;
-  attachments: ServiceAttachmentRef[];
+	slug: string;
+	title: LocalizedText;
+	summary: LocalizedText;
+	description: LocalizedText;
+	coverImage: string;
+	category: string;
+	gallery: ServiceGalleryItem[];
+	technicalSpecs: ServiceTechnicalSpecs;
+	attachments: ServiceAttachmentRef[];
 }
 
 interface PublicAttachmentItem {
-  documentId: string;
-  title: string;
-  type: string;
-  language: DocumentLanguage;
-  fileUrl: string;
-  thumbnailUrl: string;
+	documentId: string;
+	title: string;
+	type: string;
+	language: DocumentLanguage;
+	fileUrl: string;
+	thumbnailUrl: string;
 }
 
 interface PageProps {
-  params: Promise<{
-    slug: string;
-  }>;
+	params: Promise<{
+		slug: string;
+	}>;
 }
 
 interface SpecItem {
-  key: string;
-  label: string;
-  value: string;
+	key: string;
+	label: string;
+	value: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -112,26 +112,26 @@ export const revalidate = 300;
 /* -------------------------------------------------------------------------- */
 
 const EMPTY_LOCALIZED_TEXT: LocalizedText = {
-  es: "",
-  en: "",
+	es: "",
+	en: "",
 };
 
 const EMPTY_SERVICE: ServiceDetail = {
-  slug: "",
-  title: { es: "", en: "" },
-  summary: { es: "", en: "" },
-  description: { es: "", en: "" },
-  coverImage: "",
-  category: "",
-  gallery: [],
-  technicalSpecs: {
-    capacity: { es: "", en: "" },
-    flowRate: { es: "", en: "" },
-    material: { es: "", en: "" },
-    application: { es: "", en: "" },
-    technology: { es: "", en: "" },
-  },
-  attachments: [],
+	slug: "",
+	title: { es: "", en: "" },
+	summary: { es: "", en: "" },
+	description: { es: "", en: "" },
+	coverImage: "",
+	category: "",
+	gallery: [],
+	technicalSpecs: {
+		capacity: { es: "", en: "" },
+		flowRate: { es: "", en: "" },
+		material: { es: "", en: "" },
+		application: { es: "", en: "" },
+		technology: { es: "", en: "" },
+	},
+	attachments: [],
 };
 
 /* -------------------------------------------------------------------------- */
@@ -139,248 +139,248 @@ const EMPTY_SERVICE: ServiceDetail = {
 /* -------------------------------------------------------------------------- */
 
 function resolveServerLocale(value: string | undefined): Locale {
-  return value === "en" ? "en" : "es";
+	return value === "en" ? "en" : "es";
 }
 
 function normalizeString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+	return typeof value === "string" ? value.trim() : "";
 }
 
 function getLocalizedText(
-  value: LocalizedText | undefined,
-  locale: Locale
+	value: LocalizedText | undefined,
+	locale: Locale,
 ): string {
-  if (!value) return "";
+	if (!value) return "";
 
-  const preferred = locale === "es" ? value.es.trim() : value.en.trim();
-  const fallback = locale === "es" ? value.en.trim() : value.es.trim();
+	const preferred = locale === "es" ? value.es.trim() : value.en.trim();
+	const fallback = locale === "es" ? value.en.trim() : value.es.trim();
 
-  return preferred || fallback || "";
+	return preferred || fallback || "";
 }
 
 function normalizeLocalizedText(value: unknown): LocalizedText {
-  if (!value || typeof value !== "object") {
-    return { ...EMPTY_LOCALIZED_TEXT };
-  }
+	if (!value || typeof value !== "object") {
+		return { ...EMPTY_LOCALIZED_TEXT };
+	}
 
-  const record = value as Record<string, unknown>;
+	const record = value as Record<string, unknown>;
 
-  return {
-    es: normalizeString(record.es),
-    en: normalizeString(record.en),
-  };
+	return {
+		es: normalizeString(record.es),
+		en: normalizeString(record.en),
+	};
 }
 
 function normalizeGallery(value: unknown): ServiceGalleryItem[] {
-  if (!Array.isArray(value)) return [];
+	if (!Array.isArray(value)) return [];
 
-  return value
-    .map((item, index) => {
-      const record =
-        item && typeof item === "object"
-          ? (item as Record<string, unknown>)
-          : null;
+	return value
+		.map((item, index) => {
+			const record =
+				item && typeof item === "object"
+					? (item as Record<string, unknown>)
+					: null;
 
-      const orderValue = record?.order;
+			const orderValue = record?.order;
 
-      return {
-        url: normalizeString(record?.url),
-        alt: normalizeLocalizedText(record?.alt),
-        order:
-          typeof orderValue === "number" && Number.isFinite(orderValue)
-            ? orderValue
-            : index + 1,
-      };
-    })
-    .filter((item) => item.url.length > 0)
-    .sort((a, b) => a.order - b.order);
+			return {
+				url: normalizeString(record?.url),
+				alt: normalizeLocalizedText(record?.alt),
+				order:
+					typeof orderValue === "number" && Number.isFinite(orderValue)
+						? orderValue
+						: index + 1,
+			};
+		})
+		.filter((item) => item.url.length > 0)
+		.sort((a, b) => a.order - b.order);
 }
 
 function normalizeAttachments(value: unknown): ServiceAttachmentRef[] {
-  if (!Array.isArray(value)) return [];
+	if (!Array.isArray(value)) return [];
 
-  return value
-    .map((item) => {
-      const record =
-        item && typeof item === "object"
-          ? (item as Record<string, unknown>)
-          : null;
+	return value
+		.map((item) => {
+			const record =
+				item && typeof item === "object"
+					? (item as Record<string, unknown>)
+					: null;
 
-      const rawDocumentId = record?.documentId;
+			const rawDocumentId = record?.documentId;
 
-      const documentId =
-        typeof rawDocumentId === "string"
-          ? rawDocumentId.trim()
-          : rawDocumentId &&
-              typeof rawDocumentId === "object" &&
-              "toString" in rawDocumentId
-            ? String(rawDocumentId).trim()
-            : "";
+			const documentId =
+				typeof rawDocumentId === "string"
+					? rawDocumentId.trim()
+					: rawDocumentId &&
+						  typeof rawDocumentId === "object" &&
+						  "toString" in rawDocumentId
+						? String(rawDocumentId).trim()
+						: "";
 
-      return {
-        documentId,
-        title: normalizeString(record?.title),
-      };
-    })
-    .filter((item) => item.documentId.length > 0);
+			return {
+				documentId,
+				title: normalizeString(record?.title),
+			};
+		})
+		.filter((item) => item.documentId.length > 0);
 }
 
 function normalizeService(value: unknown): ServiceDetail {
-  if (!value || typeof value !== "object") {
-    return structuredClone(EMPTY_SERVICE);
-  }
+	if (!value || typeof value !== "object") {
+		return structuredClone(EMPTY_SERVICE);
+	}
 
-  const record = value as Record<string, unknown>;
-  const technicalSpecs =
-    record.technicalSpecs && typeof record.technicalSpecs === "object"
-      ? (record.technicalSpecs as Record<string, unknown>)
-      : {};
+	const record = value as Record<string, unknown>;
+	const technicalSpecs =
+		record.technicalSpecs && typeof record.technicalSpecs === "object"
+			? (record.technicalSpecs as Record<string, unknown>)
+			: {};
 
-  return {
-    slug: normalizeString(record.slug).toLowerCase(),
-    title: normalizeLocalizedText(record.title),
-    summary: normalizeLocalizedText(record.summary),
-    description: normalizeLocalizedText(record.description),
-    coverImage: normalizeString(record.coverImage),
-    category: normalizeString(record.category),
-    gallery: normalizeGallery(record.gallery),
-    technicalSpecs: {
-      capacity: normalizeLocalizedText(technicalSpecs.capacity),
-      flowRate: normalizeLocalizedText(technicalSpecs.flowRate),
-      material: normalizeLocalizedText(technicalSpecs.material),
-      application: normalizeLocalizedText(technicalSpecs.application),
-      technology: normalizeLocalizedText(technicalSpecs.technology),
-    },
-    attachments: normalizeAttachments(record.attachments),
-  };
+	return {
+		slug: normalizeString(record.slug).toLowerCase(),
+		title: normalizeLocalizedText(record.title),
+		summary: normalizeLocalizedText(record.summary),
+		description: normalizeLocalizedText(record.description),
+		coverImage: normalizeString(record.coverImage),
+		category: normalizeString(record.category),
+		gallery: normalizeGallery(record.gallery),
+		technicalSpecs: {
+			capacity: normalizeLocalizedText(technicalSpecs.capacity),
+			flowRate: normalizeLocalizedText(technicalSpecs.flowRate),
+			material: normalizeLocalizedText(technicalSpecs.material),
+			application: normalizeLocalizedText(technicalSpecs.application),
+			technology: normalizeLocalizedText(technicalSpecs.technology),
+		},
+		attachments: normalizeAttachments(record.attachments),
+	};
 }
 
 function hasLocalizedContent(value: LocalizedText | undefined): boolean {
-  if (!value) return false;
-  return value.es.trim().length > 0 || value.en.trim().length > 0;
+	if (!value) return false;
+	return value.es.trim().length > 0 || value.en.trim().length > 0;
 }
 
 function hasTechnicalSpecs(specs: ServiceTechnicalSpecs): boolean {
-  return (
-    hasLocalizedContent(specs.capacity) ||
-    hasLocalizedContent(specs.flowRate) ||
-    hasLocalizedContent(specs.material) ||
-    hasLocalizedContent(specs.application) ||
-    hasLocalizedContent(specs.technology)
-  );
+	return (
+		hasLocalizedContent(specs.capacity) ||
+		hasLocalizedContent(specs.flowRate) ||
+		hasLocalizedContent(specs.material) ||
+		hasLocalizedContent(specs.application) ||
+		hasLocalizedContent(specs.technology)
+	);
 }
 
 function normalizeDocumentLanguage(value: unknown): DocumentLanguage {
-  return value === "en" || value === "both" || value === "other" ? value : "es";
+	return value === "en" || value === "both" || value === "other" ? value : "es";
 }
 
 function normalizePublicAttachmentDocument(
-  value: unknown,
-  locale: Locale,
-  fallbackTitleMap: Map<string, string>
+	value: unknown,
+	locale: Locale,
+	fallbackTitleMap: Map<string, string>,
 ): PublicAttachmentItem | null {
-  if (!value || typeof value !== "object") return null;
+	if (!value || typeof value !== "object") return null;
 
-  const record = value as Record<string, unknown>;
+	const record = value as Record<string, unknown>;
 
-  const rawId = record._id;
-  const documentId =
-    typeof rawId === "string"
-      ? rawId.trim()
-      : rawId && typeof rawId === "object" && "toString" in rawId
-        ? String(rawId).trim()
-        : "";
+	const rawId = record._id;
+	const documentId =
+		typeof rawId === "string"
+			? rawId.trim()
+			: rawId && typeof rawId === "object" && "toString" in rawId
+				? String(rawId).trim()
+				: "";
 
-  if (!documentId) return null;
+	if (!documentId) return null;
 
-  const localizedTitle = normalizeLocalizedText(record.title);
-  const fileUrl = resolveAssetUrl(normalizeString(record.fileUrl));
-  const thumbnailUrl = resolveAssetUrl(normalizeString(record.thumbnailUrl));
+	const localizedTitle = normalizeLocalizedText(record.title);
+	const fileUrl = resolveAssetUrl(normalizeString(record.fileUrl));
+	const thumbnailUrl = resolveAssetUrl(normalizeString(record.thumbnailUrl));
 
-  if (!fileUrl) return null;
+	if (!fileUrl) return null;
 
-  return {
-    documentId,
-    title:
-      getLocalizedText(localizedTitle, locale) ||
-      fallbackTitleMap.get(documentId) ||
-      "",
-    type: normalizeString(record.type) || "file",
-    language: normalizeDocumentLanguage(record.language),
-    fileUrl,
-    thumbnailUrl,
-  };
+	return {
+		documentId,
+		title:
+			getLocalizedText(localizedTitle, locale) ||
+			fallbackTitleMap.get(documentId) ||
+			"",
+		type: normalizeString(record.type) || "file",
+		language: normalizeDocumentLanguage(record.language),
+		fileUrl,
+		thumbnailUrl,
+	};
 }
 
 function getDocumentLanguageLabel(
-  value: DocumentLanguage,
-  locale: Locale
+	value: DocumentLanguage,
+	locale: Locale,
 ): string {
-  if (locale === "es") {
-    switch (value) {
-      case "es":
-        return "ES";
-      case "en":
-        return "EN";
-      case "both":
-        return "ES / EN";
-      case "other":
-        return "OTRO";
-      default:
-        return "ES";
-    }
-  }
+	if (locale === "es") {
+		switch (value) {
+			case "es":
+				return "ES";
+			case "en":
+				return "EN";
+			case "both":
+				return "ES / EN";
+			case "other":
+				return "OTRO";
+			default:
+				return "ES";
+		}
+	}
 
-  switch (value) {
-    case "es":
-      return "ES";
-    case "en":
-      return "EN";
-    case "both":
-      return "ES / EN";
-    case "other":
-      return "OTHER";
-    default:
-      return "ES";
-  }
+	switch (value) {
+		case "es":
+			return "ES";
+		case "en":
+			return "EN";
+		case "both":
+			return "ES / EN";
+		case "other":
+			return "OTHER";
+		default:
+			return "ES";
+	}
 }
 
 function formatCategoryLabel(value: string): string {
-  return value
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+	return value
+		.split("-")
+		.filter(Boolean)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(" ");
 }
 
 function renderNotFound(text: {
-  notFoundTitle: string;
-  notFoundText: string;
-  back: string;
+	notFoundTitle: string;
+	notFoundText: string;
+	back: string;
 }) {
-  return (
-    <main className="min-h-screen bg-white px-6 py-16 text-slate-900 md:px-10">
-      <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center">
-        <h1 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-          {text.notFoundTitle}
-        </h1>
+	return (
+		<main className="min-h-screen bg-white px-6 py-16 text-slate-900 md:px-10">
+			<div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center">
+				<h1 className="text-2xl font-semibold text-slate-950 md:text-3xl">
+					{text.notFoundTitle}
+				</h1>
 
-        <p className="mt-4 text-base leading-7 text-slate-600">
-          {text.notFoundText}
-        </p>
+				<p className="mt-4 text-base leading-7 text-slate-600">
+					{text.notFoundText}
+				</p>
 
-        <div className="mt-8">
-          <Link
-            href="/services"
-            className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {text.back}
-          </Link>
-        </div>
-      </div>
-    </main>
-  );
+				<div className="mt-8">
+					<Link
+						href="/services"
+						className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+					>
+						<ArrowLeft className="h-4 w-4" />
+						{text.back}
+					</Link>
+				</div>
+			</div>
+		</main>
+	);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -388,349 +388,349 @@ function renderNotFound(text: {
 /* -------------------------------------------------------------------------- */
 
 export default async function ServiceDetailPage({ params }: PageProps) {
-  const resolvedParams = await params;
-  const slug = resolvedParams.slug?.trim().toLowerCase() || "";
+	const resolvedParams = await params;
+	const slug = resolvedParams.slug?.trim().toLowerCase() || "";
 
-  const cookieStore = await cookies();
-  const locale = resolveServerLocale(
-    cookieStore.get("locale")?.value || cookieStore.get("NEXT_LOCALE")?.value
-  );
+	const cookieStore = await cookies();
+	const locale = resolveServerLocale(
+		cookieStore.get("locale")?.value || cookieStore.get("NEXT_LOCALE")?.value,
+	);
 
-  const text = {
-    notFoundTitle:
-      locale === "es" ? "Servicio no encontrado" : "Service not found",
-    notFoundText:
-      locale === "es"
-        ? "No fue posible encontrar el servicio solicitado."
-        : "The requested service could not be found.",
-    back: locale === "es" ? "Volver a servicios" : "Back to services",
-    descriptionTitle:
-      locale === "es" ? "Descripción del servicio" : "Service description",
-    specsTitle:
-      locale === "es"
-        ? "Especificaciones técnicas"
-        : "Technical specifications",
-    galleryTitle: locale === "es" ? "Galería" : "Gallery",
-    attachmentsTitle:
-      locale === "es" ? "Documentos relacionados" : "Related documents",
-    capacity: locale === "es" ? "Capacidad" : "Capacity",
-    flowRate: locale === "es" ? "Caudal" : "Flow rate",
-    material: locale === "es" ? "Material" : "Material",
-    application: locale === "es" ? "Aplicación" : "Application",
-    technology: locale === "es" ? "Tecnología" : "Technology",
-    document: locale === "es" ? "Documento" : "Document",
-    viewDocument: locale === "es" ? "Ver documento" : "View document",
-    finalTitle:
-      locale === "es"
-        ? "¿Necesitas este servicio para tu proyecto?"
-        : "Need this service for your project?",
-    finalText:
-      locale === "es"
-        ? "Podemos ayudarte a revisar requerimientos, alcance técnico y condiciones de implementación."
-        : "We can help you review requirements, technical scope, and implementation conditions.",
-    quote: locale === "es" ? "Solicitar cotización" : "Request a quote",
-  };
+	const text = {
+		notFoundTitle:
+			locale === "es" ? "Servicio no encontrado" : "Service not found",
+		notFoundText:
+			locale === "es"
+				? "No fue posible encontrar el servicio solicitado."
+				: "The requested service could not be found.",
+		back: locale === "es" ? "Volver a servicios" : "Back to services",
+		descriptionTitle:
+			locale === "es" ? "Descripción del servicio" : "Service description",
+		specsTitle:
+			locale === "es"
+				? "Especificaciones técnicas"
+				: "Technical specifications",
+		galleryTitle: locale === "es" ? "Galería" : "Gallery",
+		attachmentsTitle:
+			locale === "es" ? "Documentos relacionados" : "Related documents",
+		capacity: locale === "es" ? "Capacidad" : "Capacity",
+		flowRate: locale === "es" ? "Caudal" : "Flow rate",
+		material: locale === "es" ? "Material" : "Material",
+		application: locale === "es" ? "Aplicación" : "Application",
+		technology: locale === "es" ? "Tecnología" : "Technology",
+		document: locale === "es" ? "Documento" : "Document",
+		viewDocument: locale === "es" ? "Ver documento" : "View document",
+		finalTitle:
+			locale === "es"
+				? "¿Necesitas este servicio para tu proyecto?"
+				: "Need this service for your project?",
+		finalText:
+			locale === "es"
+				? "Podemos ayudarte a revisar requerimientos, alcance técnico y condiciones de implementación."
+				: "We can help you review requirements, technical scope, and implementation conditions.",
+		quote: locale === "es" ? "Solicitar cotización" : "Request a quote",
+	};
 
-  if (!slug) {
-    return renderNotFound(text);
-  }
+	if (!slug) {
+		return renderNotFound(text);
+	}
 
-  await connectToDB();
+	await connectToDB();
 
-  const rawService = await Service.findOne({
-    slug,
-    status: "published",
-  }).lean();
+	const rawService = await Service.findOne({
+		slug,
+		status: "published",
+	}).lean();
 
-  const service = rawService ? normalizeService(rawService) : null;
+	const service = rawService ? normalizeService(rawService) : null;
 
-  if (!service) {
-    return renderNotFound(text);
-  }
+	if (!service) {
+		return renderNotFound(text);
+	}
 
-  const title = getLocalizedText(service.title, locale);
-  const summary = getLocalizedText(service.summary, locale);
-  const description = getLocalizedText(service.description, locale);
-  const hasDescription = description.trim().length > 0;
-  const hasSpecs = hasTechnicalSpecs(service.technicalSpecs);
+	const title = getLocalizedText(service.title, locale);
+	const summary = getLocalizedText(service.summary, locale);
+	const description = getLocalizedText(service.description, locale);
+	const hasDescription = description.trim().length > 0;
+	const hasSpecs = hasTechnicalSpecs(service.technicalSpecs);
 
-  const specItems: SpecItem[] = [
-    {
-      key: "capacity",
-      label: text.capacity,
-      value: getLocalizedText(service.technicalSpecs.capacity, locale),
-    },
-    {
-      key: "flowRate",
-      label: text.flowRate,
-      value: getLocalizedText(service.technicalSpecs.flowRate, locale),
-    },
-    {
-      key: "material",
-      label: text.material,
-      value: getLocalizedText(service.technicalSpecs.material, locale),
-    },
-    {
-      key: "application",
-      label: text.application,
-      value: getLocalizedText(service.technicalSpecs.application, locale),
-    },
-    {
-      key: "technology",
-      label: text.technology,
-      value: getLocalizedText(service.technicalSpecs.technology, locale),
-    },
-  ].filter((item) => item.value.trim().length > 0);
+	const specItems: SpecItem[] = [
+		{
+			key: "capacity",
+			label: text.capacity,
+			value: getLocalizedText(service.technicalSpecs.capacity, locale),
+		},
+		{
+			key: "flowRate",
+			label: text.flowRate,
+			value: getLocalizedText(service.technicalSpecs.flowRate, locale),
+		},
+		{
+			key: "material",
+			label: text.material,
+			value: getLocalizedText(service.technicalSpecs.material, locale),
+		},
+		{
+			key: "application",
+			label: text.application,
+			value: getLocalizedText(service.technicalSpecs.application, locale),
+		},
+		{
+			key: "technology",
+			label: text.technology,
+			value: getLocalizedText(service.technicalSpecs.technology, locale),
+		},
+	].filter((item) => item.value.trim().length > 0);
 
-  const validAttachments = service.attachments.filter((item) =>
-    Types.ObjectId.isValid(item.documentId)
-  );
+	const validAttachments = service.attachments.filter((item) =>
+		Types.ObjectId.isValid(item.documentId),
+	);
 
-  const fallbackTitleMap = new Map<string, string>(
-    service.attachments.map((item) => [item.documentId, item.title])
-  );
+	const fallbackTitleMap = new Map<string, string>(
+		service.attachments.map((item) => [item.documentId, item.title]),
+	);
 
-  const publicDocumentsRaw =
-    validAttachments.length > 0
-      ? await Document.find({
-          _id: {
-            $in: validAttachments.map(
-              (item) => new Types.ObjectId(item.documentId)
-            ),
-          },
-          status: "published",
-          visibility: "public",
-        })
-          .select({
-            _id: 1,
-            title: 1,
-            type: 1,
-            language: 1,
-            fileUrl: 1,
-            thumbnailUrl: 1,
-          })
-          .lean()
-      : [];
+	const publicDocumentsRaw =
+		validAttachments.length > 0
+			? await Document.find({
+					_id: {
+						$in: validAttachments.map(
+							(item) => new Types.ObjectId(item.documentId),
+						),
+					},
+					status: "published",
+					visibility: "public",
+				})
+					.select({
+						_id: 1,
+						title: 1,
+						type: 1,
+						language: 1,
+						fileUrl: 1,
+						thumbnailUrl: 1,
+					})
+					.lean()
+			: [];
 
-  const publicDocumentsMap = new Map<string, PublicAttachmentItem>(
-    publicDocumentsRaw
-      .map((doc) =>
-        normalizePublicAttachmentDocument(doc, locale, fallbackTitleMap)
-      )
-      .filter((item): item is PublicAttachmentItem => item !== null)
-      .map((item) => [item.documentId, item])
-  );
+	const publicDocumentsMap = new Map<string, PublicAttachmentItem>(
+		publicDocumentsRaw
+			.map((doc) =>
+				normalizePublicAttachmentDocument(doc, locale, fallbackTitleMap),
+			)
+			.filter((item): item is PublicAttachmentItem => item !== null)
+			.map((item) => [item.documentId, item]),
+	);
 
-  const publicAttachments = validAttachments
-    .map((item) => publicDocumentsMap.get(item.documentId))
-    .filter((item): item is PublicAttachmentItem => Boolean(item));
+	const publicAttachments = validAttachments
+		.map((item) => publicDocumentsMap.get(item.documentId))
+		.filter((item): item is PublicAttachmentItem => Boolean(item));
 
-  return (
-    <main className="min-h-screen bg-white text-slate-900">
-      <section className="border-b border-slate-200 bg-gradient-to-br from-white via-slate-50 to-lime-50/70">
-        <div className="mx-auto max-w-6xl px-6 pb-14 pt-28 md:px-10 md:pt-32 lg:pt-36">
-          <div className="max-w-4xl">
-            <Link
-              href="/services"
-              className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              {text.back}
-            </Link>
+	return (
+		<main className="min-h-screen bg-white text-slate-900">
+			<section className="border-b border-slate-200 bg-gradient-to-br from-white via-slate-50 to-lime-50/70">
+				<div className="mx-auto max-w-6xl px-6 pb-14 pt-28 md:px-10 md:pt-32 lg:pt-36">
+					<div className="max-w-4xl">
+						<Link
+							href="/services"
+							className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+						>
+							<ArrowLeft className="h-4 w-4" />
+							{text.back}
+						</Link>
 
-            {service.category ? (
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-700">
-                {formatCategoryLabel(service.category)}
-              </p>
-            ) : null}
+						{service.category ? (
+							<p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-700">
+								{formatCategoryLabel(service.category)}
+							</p>
+						) : null}
 
-            <h1 className="mt-4 text-4xl font-semibold leading-tight text-slate-950 md:text-5xl">
-              {title || service.slug}
-            </h1>
+						<h1 className="mt-4 text-4xl font-semibold leading-tight text-slate-950 md:text-5xl">
+							{title || service.slug}
+						</h1>
 
-            {summary ? (
-              <p className="mt-6 text-base leading-8 text-slate-600 md:text-lg">
-                {summary}
-              </p>
-            ) : null}
-          </div>
+						{summary ? (
+							<p className="mt-6 text-base leading-8 text-slate-600 md:text-lg">
+								{summary}
+							</p>
+						) : null}
+					</div>
 
-          <div className="mt-10 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-100 shadow-sm">
-            <div className="relative aspect-[16/8] w-full">
-              {resolveAssetUrl(service.coverImage) ? (
-                <Image
-                  src={resolveAssetUrl(service.coverImage)}
-                  alt={title || "Service image"}
-                  fill
-                  sizes="100vw"
-                  unoptimized
-                  className="object-cover"
-                  priority
-                />
-              ) : (
-                <div className="h-full w-full bg-slate-200" />
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+					<div className="mt-10 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-100 shadow-sm">
+						<div className="relative aspect-[16/8] w-full">
+							{resolveAssetUrl(service.coverImage) ? (
+								<Image
+									src={resolveAssetUrl(service.coverImage)}
+									alt={title || "Service image"}
+									fill
+									sizes="100vw"
+									unoptimized
+									className="object-cover"
+									priority
+								/>
+							) : (
+								<div className="h-full w-full bg-slate-200" />
+							)}
+						</div>
+					</div>
+				</div>
+			</section>
 
-      {hasDescription ? (
-        <section className="mx-auto max-w-4xl px-6 py-14 md:px-10">
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm md:p-10">
-            <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-              {text.descriptionTitle}
-            </h2>
+			{hasDescription ? (
+				<section className="mx-auto max-w-4xl px-6 py-14 md:px-10">
+					<div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm md:p-10">
+						<h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
+							{text.descriptionTitle}
+						</h2>
 
-            <p className="mt-6 whitespace-pre-line text-base leading-8 text-slate-700">
-              {description}
-            </p>
-          </div>
-        </section>
-      ) : null}
+						<p className="mt-6 whitespace-pre-line text-base leading-8 text-slate-700">
+							{description}
+						</p>
+					</div>
+				</section>
+			) : null}
 
-      {hasSpecs ? (
-        <section className="mx-auto max-w-6xl px-6 pb-14 md:px-10">
-          <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-            {text.specsTitle}
-          </h2>
+			{hasSpecs ? (
+				<section className="mx-auto max-w-6xl px-6 pb-14 md:px-10">
+					<h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
+						{text.specsTitle}
+					</h2>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {specItems.map((item) => (
-              <article
-                key={item.key}
-                className="rounded-3xl border border-slate-200 bg-slate-50 p-6"
-              >
-                <p className="text-sm font-semibold uppercase tracking-[0.14em] text-lime-700">
-                  {item.label}
-                </p>
+					<div className="mt-8 grid gap-4 md:grid-cols-2">
+						{specItems.map((item) => (
+							<article
+								key={item.key}
+								className="rounded-3xl border border-slate-200 bg-slate-50 p-6"
+							>
+								<p className="text-sm font-semibold uppercase tracking-[0.14em] text-lime-700">
+									{item.label}
+								</p>
 
-                <p className="mt-3 text-base leading-7 text-slate-700">
-                  {item.value}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+								<p className="mt-3 text-base leading-7 text-slate-700">
+									{item.value}
+								</p>
+							</article>
+						))}
+					</div>
+				</section>
+			) : null}
 
-      {service.gallery.length > 0 ? (
-        <section className="mx-auto max-w-6xl px-6 pb-14 md:px-10">
-          <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-            {text.galleryTitle}
-          </h2>
+			{service.gallery.length > 0 ? (
+				<section className="mx-auto max-w-6xl px-6 pb-14 md:px-10">
+					<h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
+						{text.galleryTitle}
+					</h2>
 
-          <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {service.gallery.map((item) => (
-              <article
-                key={`${item.url}-${item.order}`}
-                className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
-              >
-                <div className="relative aspect-[16/11] bg-slate-100">
-                  {resolveAssetUrl(item.url) ? (
-                    <Image
-                      src={resolveAssetUrl(item.url)}
-                      alt={
-                        getLocalizedText(item.alt, locale) ||
-                        title ||
-                        "Gallery image"
-                      }
-                      fill
-                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                      unoptimized
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-slate-200" />
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+					<div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+						{service.gallery.map((item) => (
+							<article
+								key={`${item.url}-${item.order}`}
+								className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+							>
+								<div className="relative aspect-[16/11] bg-slate-100">
+									{resolveAssetUrl(item.url) ? (
+										<Image
+											src={resolveAssetUrl(item.url)}
+											alt={
+												getLocalizedText(item.alt, locale) ||
+												title ||
+												"Gallery image"
+											}
+											fill
+											sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+											unoptimized
+											className="object-cover"
+										/>
+									) : (
+										<div className="h-full w-full bg-slate-200" />
+									)}
+								</div>
+							</article>
+						))}
+					</div>
+				</section>
+			) : null}
 
-      {publicAttachments.length > 0 ? (
-        <section className="mx-auto max-w-4xl px-6 pb-16 md:px-10">
-          <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-            {text.attachmentsTitle}
-          </h2>
+			{publicAttachments.length > 0 ? (
+				<section className="mx-auto max-w-4xl px-6 pb-16 md:px-10">
+					<h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
+						{text.attachmentsTitle}
+					</h2>
 
-          <div className="mt-8 space-y-4">
-            {publicAttachments.map((attachment, index) => (
-              <a
-                key={`${attachment.documentId}-${index}`}
-                href={attachment.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-lime-300 hover:bg-lime-50/30"
-              >
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-                    {attachment.thumbnailUrl ? (
-                      <Image
-                        src={attachment.thumbnailUrl}
-                        alt={attachment.title || text.document}
-                        width={64}
-                        height={64}
-                        unoptimized
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="rounded-2xl bg-slate-900 p-3 text-lime-400">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
+					<div className="mt-8 space-y-4">
+						{publicAttachments.map((attachment, index) => (
+							<a
+								key={`${attachment.documentId}-${index}`}
+								href={attachment.fileUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-lime-300 hover:bg-lime-50/30"
+							>
+								<div className="flex min-w-0 items-center gap-4">
+									<div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+										{attachment.thumbnailUrl ? (
+											<Image
+												src={attachment.thumbnailUrl}
+												alt={attachment.title || text.document}
+												width={64}
+												height={64}
+												unoptimized
+												className="h-full w-full object-cover"
+											/>
+										) : (
+											<div className="rounded-2xl bg-slate-900 p-3 text-lime-400">
+												<FileText className="h-5 w-5" />
+											</div>
+										)}
+									</div>
 
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-slate-900">
-                      {attachment.title || text.document}
-                    </p>
+									<div className="min-w-0">
+										<p className="truncate text-base font-semibold text-slate-900">
+											{attachment.title || text.document}
+										</p>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-                      <span>{attachment.type || "file"}</span>
-                      <span>•</span>
-                      <span>
-                        {getDocumentLanguageLabel(attachment.language, locale)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+										<div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+											<span>{attachment.type || "file"}</span>
+											<span>•</span>
+											<span>
+												{getDocumentLanguageLabel(attachment.language, locale)}
+											</span>
+										</div>
+									</div>
+								</div>
 
-                <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800">
-                  {text.viewDocument}
-                  <ExternalLink className="h-4 w-4" />
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-      ) : null}
+								<span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800">
+									{text.viewDocument}
+									<ExternalLink className="h-4 w-4" />
+								</span>
+							</a>
+						))}
+					</div>
+				</section>
+			) : null}
 
-      <section className="border-t border-slate-200 bg-slate-950">
-        <div className="mx-auto grid max-w-6xl gap-8 px-6 py-16 md:px-10 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div>
-            <h2 className="text-3xl font-semibold text-white md:text-4xl">
-              {text.finalTitle}
-            </h2>
+			<section className="border-t border-slate-200 bg-slate-950">
+				<div className="mx-auto grid max-w-6xl gap-8 px-6 py-16 md:px-10 lg:grid-cols-[1fr_auto] lg:items-center">
+					<div>
+						<h2 className="text-3xl font-semibold text-white md:text-4xl">
+							{text.finalTitle}
+						</h2>
 
-            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-              {text.finalText}
-            </p>
-          </div>
+						<p className="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+							{text.finalText}
+						</p>
+					</div>
 
-          <div className="flex flex-wrap gap-4">
-            <Link
-              href="/contact"
-              className="inline-flex items-center gap-2 rounded-full bg-lime-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-lime-400"
-            >
-              {text.quote}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+					<div className="flex flex-wrap gap-4">
+						<Link
+							href="/contact"
+							className="inline-flex items-center gap-2 rounded-full bg-lime-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-lime-400"
+						>
+							{text.quote}
+							<ArrowRight className="h-4 w-4" />
+						</Link>
+					</div>
+				</div>
+			</section>
+		</main>
+	);
 }

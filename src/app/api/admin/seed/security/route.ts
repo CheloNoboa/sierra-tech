@@ -51,20 +51,20 @@ import { ROLES, type RoleDef } from "@/lib/security/roles";
  * =============================================================================
  */
 interface InsertPermission {
-  code: string;
-  module: PermissionDef["module"];
-  scope: PermissionDef["scope"];
-  name_es: string;
-  name_en: string;
-  description_es: string;
-  description_en: string;
+	code: string;
+	module: PermissionDef["module"];
+	scope: PermissionDef["scope"];
+	name_es: string;
+	name_en: string;
+	description_es: string;
+	description_en: string;
 }
 
 interface InsertRole {
-  code: string;
-  name_es: string;
-  name_en: string;
-  permissions: string[];
+	code: string;
+	name_es: string;
+	name_en: string;
+	permissions: string[];
 }
 
 /* =============================================================================
@@ -79,31 +79,35 @@ interface InsertRole {
  * =============================================================================
  */
 async function requireSuperadmin(
-  req: NextRequest
-): Promise<{ ok: true; session: Session } | { ok: false; response: NextResponse }> {
-  const session = (await getServerSession(authOptions)) as Session | null;
+	req: NextRequest,
+): Promise<
+	{ ok: true; session: Session } | { ok: false; response: NextResponse }
+> {
+	const session = (await getServerSession(authOptions)) as Session | null;
 
-  if (session?.user?.role !== "superadmin") {
-    const locale =
-      req.headers.get("accept-language")?.toLowerCase().startsWith("es")
-        ? "es"
-        : "en";
+	if (session?.user?.role !== "superadmin") {
+		const locale = req.headers
+			.get("accept-language")
+			?.toLowerCase()
+			.startsWith("es")
+			? "es"
+			: "en";
 
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error:
-            locale === "es"
-              ? "Solo el Superadmin puede ejecutar este seeder."
-              : "Only the Superadmin can run this seeder.",
-        },
-        { status: 403 }
-      ),
-    };
-  }
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{
+					error:
+						locale === "es"
+							? "Solo el Superadmin puede ejecutar este seeder."
+							: "Only the Superadmin can run this seeder.",
+				},
+				{ status: 403 },
+			),
+		};
+	}
 
-  return { ok: true, session };
+	return { ok: true, session };
 }
 
 /* =============================================================================
@@ -111,24 +115,24 @@ async function requireSuperadmin(
  * =============================================================================
  */
 function mapPermissionDefToInsert(p: PermissionDef): InsertPermission {
-  return {
-    code: p.code,
-    module: p.module,
-    scope: p.scope,
-    name_es: p.name_es,
-    name_en: p.name_en,
-    description_es: p.description_es,
-    description_en: p.description_en,
-  };
+	return {
+		code: p.code,
+		module: p.module,
+		scope: p.scope,
+		name_es: p.name_es,
+		name_en: p.name_en,
+		description_es: p.description_es,
+		description_en: p.description_en,
+	};
 }
 
 function mapRoleDefToInsert(r: RoleDef): InsertRole {
-  return {
-    code: r.code,
-    name_es: r.name_es,
-    name_en: r.name_en,
-    permissions: r.permissions,
-  };
+	return {
+		code: r.code,
+		name_es: r.name_es,
+		name_en: r.name_en,
+		permissions: r.permissions,
+	};
 }
 
 /* =============================================================================
@@ -146,58 +150,58 @@ function mapRoleDefToInsert(r: RoleDef): InsertRole {
  * =============================================================================
  */
 export async function POST(req: NextRequest) {
-  try {
-    // 1) Validar superadmin
-    const guard = await requireSuperadmin(req);
-    if (!guard.ok) return guard.response;
+	try {
+		// 1) Validar superadmin
+		const guard = await requireSuperadmin(req);
+		if (!guard.ok) return guard.response;
 
-    // 2) Conectar DB
-    await connectToDB();
+		// 2) Conectar DB
+		await connectToDB();
 
-    // 3) Borrar permisos y roles actuales
-    await Permission.deleteMany({});
-    await Role.deleteMany({});
+		// 3) Borrar permisos y roles actuales
+		await Permission.deleteMany({});
+		await Role.deleteMany({});
 
-    // 4) Insertar permisos base
-    const permissionDocs: InsertPermission[] = PERMISSIONS.map(
-      mapPermissionDefToInsert
-    );
-    await Permission.insertMany(permissionDocs);
+		// 4) Insertar permisos base
+		const permissionDocs: InsertPermission[] = PERMISSIONS.map(
+			mapPermissionDefToInsert,
+		);
+		await Permission.insertMany(permissionDocs);
 
-    // 5) Insertar roles base
-    const roleDocs: InsertRole[] = ROLES.map(mapRoleDefToInsert);
-    await Role.insertMany(roleDocs);
+		// 5) Insertar roles base
+		const roleDocs: InsertRole[] = ROLES.map(mapRoleDefToInsert);
+		await Role.insertMany(roleDocs);
 
-    const lang = req.headers.get("accept-language")?.startsWith("es")
-      ? "es"
-      : "en";
+		const lang = req.headers.get("accept-language")?.startsWith("es")
+			? "es"
+			: "en";
 
-    return NextResponse.json(
-      {
-        message:
-          lang === "es"
-            ? "Seeder ejecutado correctamente."
-            : "Seeder executed successfully.",
-        permissions: permissionDocs.length,
-        roles: roleDocs.length,
-      },
-      { status: 200 }
-    );
-  } catch (err) {
-    console.error("❌ SECURITY SEED ERROR:", err);
+		return NextResponse.json(
+			{
+				message:
+					lang === "es"
+						? "Seeder ejecutado correctamente."
+						: "Seeder executed successfully.",
+				permissions: permissionDocs.length,
+				roles: roleDocs.length,
+			},
+			{ status: 200 },
+		);
+	} catch (err) {
+		console.error("❌ SECURITY SEED ERROR:", err);
 
-    const lang = req.headers.get("accept-language")?.startsWith("es")
-      ? "es"
-      : "en";
+		const lang = req.headers.get("accept-language")?.startsWith("es")
+			? "es"
+			: "en";
 
-    return NextResponse.json(
-      {
-        error:
-          lang === "es"
-            ? "Error ejecutando el seeder de seguridad."
-            : "Error running security seeder.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				error:
+					lang === "es"
+						? "Error ejecutando el seeder de seguridad."
+						: "Error running security seeder.",
+			},
+			{ status: 500 },
+		);
+	}
 }

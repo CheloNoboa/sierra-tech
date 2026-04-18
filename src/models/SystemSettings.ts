@@ -85,15 +85,15 @@ import { Schema, model, models, type Document, type Model } from "mongoose";
  * -----------------------------------------------------------------------------
  */
 export interface ISystemSetting extends Document {
-  key: string;
-  value: unknown;
-  description: string;
-  module: string | null;
-  autoTranslate: boolean;
-  lastModifiedBy: string | null;
-  lastModifiedEmail: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+	key: string;
+	value: unknown;
+	description: string;
+	module: string | null;
+	autoTranslate: boolean;
+	lastModifiedBy: string | null;
+	lastModifiedEmail: string | null;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -130,54 +130,54 @@ export interface ISystemSetting extends Document {
  * -----------------------------------------------------------------------------
  */
 const SystemSettingsSchema = new Schema<ISystemSetting>(
-  {
-    key: {
-      type: String,
-      required: [true, "La clave del parámetro es obligatoria"],
-      unique: true,
-      trim: true,
-    },
+	{
+		key: {
+			type: String,
+			required: [true, "La clave del parámetro es obligatoria"],
+			unique: true,
+			trim: true,
+		},
 
-    value: {
-      type: Schema.Types.Mixed,
-      required: [true, "El valor del parámetro es obligatorio"],
-    },
+		value: {
+			type: Schema.Types.Mixed,
+			required: [true, "El valor del parámetro es obligatorio"],
+		},
 
-    description: {
-      type: String,
-      trim: true,
-      default: "",
-    },
+		description: {
+			type: String,
+			trim: true,
+			default: "",
+		},
 
-    module: {
-      type: String,
-      trim: true,
-      default: null,
-    },
+		module: {
+			type: String,
+			trim: true,
+			default: null,
+		},
 
-    autoTranslate: {
-      type: Boolean,
-      default: false,
-    },
+		autoTranslate: {
+			type: Boolean,
+			default: false,
+		},
 
-    lastModifiedBy: {
-      type: String,
-      trim: true,
-      default: null,
-    },
+		lastModifiedBy: {
+			type: String,
+			trim: true,
+			default: null,
+		},
 
-    lastModifiedEmail: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      default: null,
-    },
-  },
-  {
-    collection: "SystemSettings",
-    versionKey: false,
-    timestamps: true,
-  }
+		lastModifiedEmail: {
+			type: String,
+			trim: true,
+			lowercase: true,
+			default: null,
+		},
+	},
+	{
+		collection: "SystemSettings",
+		versionKey: false,
+		timestamps: true,
+	},
 );
 
 /* -------------------------------------------------------------------------- */
@@ -198,7 +198,7 @@ const SystemSettingsSchema = new Schema<ISystemSetting>(
  * -----------------------------------------------------------------------------
  */
 const SystemSettingsModel =
-  (models.SystemSettings as Model<ISystemSetting> | undefined) ||
-  model<ISystemSetting>("SystemSettings", SystemSettingsSchema);
+	(models.SystemSettings as Model<ISystemSetting> | undefined) ||
+	model<ISystemSetting>("SystemSettings", SystemSettingsSchema);
 
 export default SystemSettingsModel;

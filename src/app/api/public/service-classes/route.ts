@@ -11,26 +11,26 @@ import ServiceClass from "@/models/ServiceClass";
  */
 
 export async function GET() {
-  try {
-    await connectToDB();
+	try {
+		await connectToDB();
 
-    const items = await ServiceClass.find({ enabled: true })
-      .sort({ order: 1 })
-      .lean();
+		const items = await ServiceClass.find({ enabled: true })
+			.sort({ order: 1 })
+			.lean();
 
-    return NextResponse.json({
-      ok: true,
-      items: items.map((item) => ({
-        key: item.key,
-        label: item.label,
-      })),
-    });
-  } catch (error) {
-    console.error("[API service-classes public]", error);
+		return NextResponse.json({
+			ok: true,
+			items: items.map((item) => ({
+				key: item.key,
+				label: item.label,
+			})),
+		});
+	} catch (error) {
+		console.error("[API service-classes public]", error);
 
-    return NextResponse.json({
-      ok: false,
-      items: [],
-    });
-  }
+		return NextResponse.json({
+			ok: false,
+			items: [],
+		});
+	}
 }

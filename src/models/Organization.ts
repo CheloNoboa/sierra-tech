@@ -40,27 +40,27 @@ import mongoose, { Schema, Model, models } from "mongoose";
 export type OrganizationStatus = "active" | "inactive";
 
 export interface OrganizationDocument {
-  _id: mongoose.Types.ObjectId;
+	_id: mongoose.Types.ObjectId;
 
-  legalName: string;
-  commercialName: string;
-  taxId: string;
+	legalName: string;
+	commercialName: string;
+	taxId: string;
 
-  primaryEmail: string;
-  primaryPhone: string;
+	primaryEmail: string;
+	primaryPhone: string;
 
-  website?: string;
+	website?: string;
 
-  country?: string;
-  city?: string;
-  address?: string;
+	country?: string;
+	city?: string;
+	address?: string;
 
-  status: OrganizationStatus;
+	status: OrganizationStatus;
 
-  notes?: string;
+	notes?: string;
 
-  createdAt: Date;
-  updatedAt: Date;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -68,80 +68,80 @@ export interface OrganizationDocument {
 /* -------------------------------------------------------------------------- */
 
 const OrganizationSchema = new Schema<OrganizationDocument>(
-  {
-    legalName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+	{
+		legalName: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    commercialName: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		commercialName: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    taxId: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+		taxId: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    primaryEmail: {
-      type: String,
-      required: true,
-      trim: true,
-      lowercase: true,
-    },
+		primaryEmail: {
+			type: String,
+			required: true,
+			trim: true,
+			lowercase: true,
+		},
 
-    primaryPhone: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+		primaryPhone: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    website: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		website: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    country: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		country: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    city: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		city: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    address: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		address: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    status: {
-      type: String,
-      enum: ["active", "inactive"],
-      default: "active",
-      index: true,
-    },
+		status: {
+			type: String,
+			enum: ["active", "inactive"],
+			default: "active",
+			index: true,
+		},
 
-    notes: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-  },
-  {
-    timestamps: true,
-    versionKey: false,
-    collection: "Organizations",
-  }
+		notes: {
+			type: String,
+			default: "",
+			trim: true,
+		},
+	},
+	{
+		timestamps: true,
+		versionKey: false,
+		collection: "Organizations",
+	},
 );
 
 /* -------------------------------------------------------------------------- */
@@ -158,11 +158,11 @@ OrganizationSchema.index({ primaryEmail: 1 });
 /* -------------------------------------------------------------------------- */
 
 const OrganizationModel: Model<OrganizationDocument> =
-  models.Organization ||
-  mongoose.model<OrganizationDocument>(
-    "Organization",
-    OrganizationSchema,
-    "Organizations"
-  );
+	models.Organization ||
+	mongoose.model<OrganizationDocument>(
+		"Organization",
+		OrganizationSchema,
+		"Organizations",
+	);
 
 export default OrganizationModel;

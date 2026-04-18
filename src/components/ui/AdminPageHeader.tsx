@@ -33,37 +33,37 @@
 import type { ReactNode } from "react";
 
 interface AdminPageHeaderProps {
-  icon: ReactNode;
-  title: string;
-  subtitle?: string;
+	icon: ReactNode;
+	title: string;
+	subtitle?: string;
 }
 
 export function AdminPageHeader({
-  icon,
-  title,
-  subtitle,
+	icon,
+	title,
+	subtitle,
 }: AdminPageHeaderProps) {
-  return (
-    <div className="mb-6 rounded-2xl border border-border bg-surface p-5 shadow-sm">
-      <div className="flex items-start gap-4">
-        {/* Icon */}
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-soft text-brand-primaryStrong">
-          {icon}
-        </div>
+	return (
+		<div className="mb-6 rounded-2xl border border-border bg-surface p-5 shadow-sm">
+			<div className="flex items-start gap-4">
+				{/* Icon */}
+				<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-soft text-brand-primaryStrong">
+					{icon}
+				</div>
 
-        {/* Texts */}
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-text-primary md:text-2xl">
-            {title}
-          </h1>
+				{/* Texts */}
+				<div className="min-w-0">
+					<h1 className="text-xl font-semibold text-text-primary md:text-2xl">
+						{title}
+					</h1>
 
-          {subtitle ? (
-            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-text-secondary">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
+					{subtitle ? (
+						<p className="mt-1 max-w-3xl text-sm leading-relaxed text-text-secondary">
+							{subtitle}
+						</p>
+					) : null}
+				</div>
+			</div>
+		</div>
+	);
 }

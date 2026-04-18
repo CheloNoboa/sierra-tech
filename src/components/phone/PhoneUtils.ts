@@ -33,11 +33,11 @@
  */
 
 export interface CountryInfo {
-  code: string;
-  nameEs: string;
-  nameEn: string;
-  dialCode: string;
-  flag: string;
+	code: string;
+	nameEs: string;
+	nameEn: string;
+	dialCode: string;
+	flag: string;
 }
 
 /**
@@ -45,41 +45,41 @@ export interface CountryInfo {
  * Ecuador se coloca primero para que sea el default del sistema.
  */
 export const SUPPORTED_COUNTRIES: CountryInfo[] = [
-  {
-    code: "EC",
-    nameEs: "Ecuador",
-    nameEn: "Ecuador",
-    dialCode: "593",
-    flag: "🇪🇨",
-  },
-  {
-    code: "US",
-    nameEs: "Estados Unidos",
-    nameEn: "United States",
-    dialCode: "1",
-    flag: "🇺🇸",
-  },
-  {
-    code: "CA",
-    nameEs: "Canadá",
-    nameEn: "Canada",
-    dialCode: "1",
-    flag: "🇨🇦",
-  },
-  {
-    code: "MX",
-    nameEs: "México",
-    nameEn: "Mexico",
-    dialCode: "52",
-    flag: "🇲🇽",
-  },
-  {
-    code: "CO",
-    nameEs: "Colombia",
-    nameEn: "Colombia",
-    dialCode: "57",
-    flag: "🇨🇴",
-  },
+	{
+		code: "EC",
+		nameEs: "Ecuador",
+		nameEn: "Ecuador",
+		dialCode: "593",
+		flag: "🇪🇨",
+	},
+	{
+		code: "US",
+		nameEs: "Estados Unidos",
+		nameEn: "United States",
+		dialCode: "1",
+		flag: "🇺🇸",
+	},
+	{
+		code: "CA",
+		nameEs: "Canadá",
+		nameEn: "Canada",
+		dialCode: "1",
+		flag: "🇨🇦",
+	},
+	{
+		code: "MX",
+		nameEs: "México",
+		nameEn: "Mexico",
+		dialCode: "52",
+		flag: "🇲🇽",
+	},
+	{
+		code: "CO",
+		nameEs: "Colombia",
+		nameEn: "Colombia",
+		dialCode: "57",
+		flag: "🇨🇴",
+	},
 ];
 
 /**
@@ -95,8 +95,8 @@ export const DEFAULT_COUNTRY: CountryInfo = SUPPORTED_COUNTRIES[0];
  * Normaliza una cadena de teléfono conservando solo `+` y dígitos.
  */
 function normalizeE164(phone: string): string {
-  if (!phone) return "";
-  return phone.replace(/[^+\d]/g, "");
+	if (!phone) return "";
+	return phone.replace(/[^+\d]/g, "");
 }
 
 /**
@@ -111,26 +111,26 @@ function normalizeE164(phone: string): string {
  * - Attempts to detect country from an E.164 prefix.
  */
 export function detectCountryFromE164(
-  phone?: string | null
+	phone?: string | null,
 ): CountryInfo | undefined {
-  if (!phone) return undefined;
+	if (!phone) return undefined;
 
-  const normalized = normalizeE164(phone);
-  if (!normalized.startsWith("+")) return undefined;
+	const normalized = normalizeE164(phone);
+	if (!normalized.startsWith("+")) return undefined;
 
-  const digits = normalized.slice(1);
+	const digits = normalized.slice(1);
 
-  const sorted = [...SUPPORTED_COUNTRIES].sort(
-    (a, b) => b.dialCode.length - a.dialCode.length
-  );
+	const sorted = [...SUPPORTED_COUNTRIES].sort(
+		(a, b) => b.dialCode.length - a.dialCode.length,
+	);
 
-  for (const country of sorted) {
-    if (digits.startsWith(country.dialCode)) {
-      return country;
-    }
-  }
+	for (const country of sorted) {
+		if (digits.startsWith(country.dialCode)) {
+			return country;
+		}
+	}
 
-  return undefined;
+	return undefined;
 }
 
 /**
@@ -145,41 +145,41 @@ export function detectCountryFromE164(
  * - Falls back to `DEFAULT_COUNTRY` when detection fails.
  */
 export function extractNationalFromE164(phone?: string | null): {
-  country: CountryInfo;
-  nationalNumber: string;
+	country: CountryInfo;
+	nationalNumber: string;
 } {
-  if (!phone) {
-    return {
-      country: DEFAULT_COUNTRY,
-      nationalNumber: "",
-    };
-  }
+	if (!phone) {
+		return {
+			country: DEFAULT_COUNTRY,
+			nationalNumber: "",
+		};
+	}
 
-  const normalized = normalizeE164(phone);
+	const normalized = normalizeE164(phone);
 
-  if (!normalized.startsWith("+")) {
-    return {
-      country: DEFAULT_COUNTRY,
-      nationalNumber: normalized,
-    };
-  }
+	if (!normalized.startsWith("+")) {
+		return {
+			country: DEFAULT_COUNTRY,
+			nationalNumber: normalized,
+		};
+	}
 
-  const digits = normalized.slice(1);
-  const detected = detectCountryFromE164(normalized);
+	const digits = normalized.slice(1);
+	const detected = detectCountryFromE164(normalized);
 
-  if (!detected) {
-    return {
-      country: DEFAULT_COUNTRY,
-      nationalNumber: digits,
-    };
-  }
+	if (!detected) {
+		return {
+			country: DEFAULT_COUNTRY,
+			nationalNumber: digits,
+		};
+	}
 
-  const nationalNumber = digits.slice(detected.dialCode.length);
+	const nationalNumber = digits.slice(detected.dialCode.length);
 
-  return {
-    country: detected,
-    nationalNumber,
-  };
+	return {
+		country: detected,
+		nationalNumber,
+	};
 }
 
 /**
@@ -194,65 +194,65 @@ export function extractNationalFromE164(phone?: string | null): {
  * - Intentionally simple, not a full phone-number library replacement.
  */
 export function formatNationalNumber(
-  country: CountryInfo,
-  nationalNumber: string
+	country: CountryInfo,
+	nationalNumber: string,
 ): string {
-  const digits = nationalNumber.replace(/\D/g, "");
+	const digits = nationalNumber.replace(/\D/g, "");
 
-  if (!digits) return "";
+	if (!digits) return "";
 
-  if (country.code === "US" || country.code === "CA") {
-    if (digits.length === 10) {
-      const area = digits.slice(0, 3);
-      const mid = digits.slice(3, 6);
-      const last = digits.slice(6);
-      return `(${area}) ${mid}-${last}`;
-    }
+	if (country.code === "US" || country.code === "CA") {
+		if (digits.length === 10) {
+			const area = digits.slice(0, 3);
+			const mid = digits.slice(3, 6);
+			const last = digits.slice(6);
+			return `(${area}) ${mid}-${last}`;
+		}
 
-    return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
-  }
+		return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
+	}
 
-  if (country.code === "MX") {
-    if (digits.length === 10) {
-      const p1 = digits.slice(0, 2);
-      const p2 = digits.slice(2, 6);
-      const p3 = digits.slice(6);
-      return `${p1} ${p2} ${p3}`;
-    }
+	if (country.code === "MX") {
+		if (digits.length === 10) {
+			const p1 = digits.slice(0, 2);
+			const p2 = digits.slice(2, 6);
+			const p3 = digits.slice(6);
+			return `${p1} ${p2} ${p3}`;
+		}
 
-    return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
-  }
+		return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
+	}
 
-  if (country.code === "EC") {
-    if (digits.length === 10) {
-      const p1 = digits.slice(0, 3);
-      const p2 = digits.slice(3, 6);
-      const p3 = digits.slice(6);
-      return `${p1} ${p2} ${p3}`;
-    }
+	if (country.code === "EC") {
+		if (digits.length === 10) {
+			const p1 = digits.slice(0, 3);
+			const p2 = digits.slice(3, 6);
+			const p3 = digits.slice(6);
+			return `${p1} ${p2} ${p3}`;
+		}
 
-    if (digits.length === 9) {
-      const p1 = digits.slice(0, 2);
-      const p2 = digits.slice(2, 5);
-      const p3 = digits.slice(5);
-      return `${p1} ${p2} ${p3}`;
-    }
+		if (digits.length === 9) {
+			const p1 = digits.slice(0, 2);
+			const p2 = digits.slice(2, 5);
+			const p3 = digits.slice(5);
+			return `${p1} ${p2} ${p3}`;
+		}
 
-    return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
-  }
+		return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
+	}
 
-  if (country.code === "CO") {
-    if (digits.length === 10) {
-      const p1 = digits.slice(0, 3);
-      const p2 = digits.slice(3, 6);
-      const p3 = digits.slice(6);
-      return `${p1} ${p2} ${p3}`;
-    }
+	if (country.code === "CO") {
+		if (digits.length === 10) {
+			const p1 = digits.slice(0, 3);
+			const p2 = digits.slice(3, 6);
+			const p3 = digits.slice(6);
+			return `${p1} ${p2} ${p3}`;
+		}
 
-    return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
-  }
+		return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
+	}
 
-  return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
+	return digits.replace(/(\d{3})(?=\d)/g, "$1 ");
 }
 
 /**
@@ -267,17 +267,17 @@ export function formatNationalNumber(
  * - Formats an E.164 value for grid/table display.
  */
 export function formatPhoneForGrid(phone?: string | null): string {
-  if (!phone) return "—";
+	if (!phone) return "—";
 
-  const normalized = normalizeE164(phone);
-  if (!normalized) return "—";
+	const normalized = normalizeE164(phone);
+	if (!normalized) return "—";
 
-  const { country, nationalNumber } = extractNationalFromE164(normalized);
-  const pretty = formatNationalNumber(country, nationalNumber);
+	const { country, nationalNumber } = extractNationalFromE164(normalized);
+	const pretty = formatNationalNumber(country, nationalNumber);
 
-  if (!pretty) {
-    return `${country.flag} ${normalized}`;
-  }
+	if (!pretty) {
+		return `${country.flag} ${normalized}`;
+	}
 
-  return `${country.flag} +${country.dialCode} ${pretty}`;
+	return `${country.flag} +${country.dialCode} ${pretty}`;
 }

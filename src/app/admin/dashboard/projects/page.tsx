@@ -29,9 +29,9 @@
 import ProjectsDataGrid from "@/components/ProjectsDataGrid";
 
 export default function ProjectsPage() {
-  return (
-    <div className="p-4">
-      <ProjectsDataGrid />
-    </div>
-  );
+	return (
+		<div className="p-4">
+			<ProjectsDataGrid />
+		</div>
+	);
 }

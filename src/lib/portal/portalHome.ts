@@ -34,17 +34,17 @@ import { connectToDB } from "@/lib/connectToDB";
 import Project from "@/models/Project";
 import { normalizeProjectEntity } from "@/lib/projects/projectPayload";
 import {
-  extractPortalAlertsFromProject,
-  extractPortalDocumentsFromProject,
-  isPortalVisibleProject,
-  mapProjectEntityToPortalProjectCard,
-  sortPortalProjects,
+	extractPortalAlertsFromProject,
+	extractPortalDocumentsFromProject,
+	isPortalVisibleProject,
+	mapProjectEntityToPortalProjectCard,
+	sortPortalProjects,
 } from "@/lib/portal/portalProjectMappers";
 import type {
-  PortalAlertItem,
-  PortalDocumentItem,
-  PortalHomeData,
-  PortalProjectCard,
+	PortalAlertItem,
+	PortalDocumentItem,
+	PortalHomeData,
+	PortalProjectCard,
 } from "@/types/portal";
 
 /* -------------------------------------------------------------------------- */
@@ -52,35 +52,35 @@ import type {
 /* -------------------------------------------------------------------------- */
 
 function compareIsoDesc(a: string, b: string): number {
-  return new Date(b).getTime() - new Date(a).getTime();
+	return new Date(b).getTime() - new Date(a).getTime();
 }
 
 function sortRecentDocuments(
-  items: PortalDocumentItem[]
+	items: PortalDocumentItem[],
 ): PortalDocumentItem[] {
-  return [...items].sort((a, b) => {
-    const aDate = a.uploadedAt ?? a.documentDate ?? a.expiresAt ?? "";
-    const bDate = b.uploadedAt ?? b.documentDate ?? b.expiresAt ?? "";
+	return [...items].sort((a, b) => {
+		const aDate = a.uploadedAt ?? a.documentDate ?? a.expiresAt ?? "";
+		const bDate = b.uploadedAt ?? b.documentDate ?? b.expiresAt ?? "";
 
-    if (!aDate && !bDate) return 0;
-    if (!aDate) return 1;
-    if (!bDate) return -1;
+		if (!aDate && !bDate) return 0;
+		if (!aDate) return 1;
+		if (!bDate) return -1;
 
-    return compareIsoDesc(aDate, bDate);
-  });
+		return compareIsoDesc(aDate, bDate);
+	});
 }
 
 function sortRecentAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
-  return [...items].sort((a, b) => {
-    const aDate = a.dueDate ?? a.createdAt ?? "";
-    const bDate = b.dueDate ?? b.createdAt ?? "";
+	return [...items].sort((a, b) => {
+		const aDate = a.dueDate ?? a.createdAt ?? "";
+		const bDate = b.dueDate ?? b.createdAt ?? "";
 
-    if (!aDate && !bDate) return 0;
-    if (!aDate) return 1;
-    if (!bDate) return -1;
+		if (!aDate && !bDate) return 0;
+		if (!aDate) return 1;
+		if (!bDate) return -1;
 
-    return compareIsoDesc(aDate, bDate);
-  });
+		return compareIsoDesc(aDate, bDate);
+	});
 }
 
 /* -------------------------------------------------------------------------- */
@@ -88,74 +88,74 @@ function sortRecentAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
 /* -------------------------------------------------------------------------- */
 
 export async function getPortalHomeDataByOrganization(params: {
-  organizationId: string;
-  organizationName: string;
-  userName: string;
+	organizationId: string;
+	organizationName: string;
+	userName: string;
 }): Promise<PortalHomeData> {
-  const { organizationId, organizationName, userName } = params;
-  const normalizedOrganizationId = organizationId.trim();
+	const { organizationId, organizationName, userName } = params;
+	const normalizedOrganizationId = organizationId.trim();
 
-  if (!normalizedOrganizationId) {
-    return {
-      organizationName,
-      userName,
-      summary: {
-        activeProjects: 0,
-        recentDocuments: 0,
-        activeAlerts: 0,
-        upcomingMaintenances: 0,
-      },
-      featuredProjects: [],
-      recentDocuments: [],
-      alerts: [],
-    };
-  }
+	if (!normalizedOrganizationId) {
+		return {
+			organizationName,
+			userName,
+			summary: {
+				activeProjects: 0,
+				recentDocuments: 0,
+				activeAlerts: 0,
+				upcomingMaintenances: 0,
+			},
+			featuredProjects: [],
+			recentDocuments: [],
+			alerts: [],
+		};
+	}
 
-  await connectToDB();
+	await connectToDB();
 
-  const items = await Project.find({
-    primaryClientId: normalizedOrganizationId,
-  })
-    .sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
-    .lean();
+	const items = await Project.find({
+		primaryClientId: normalizedOrganizationId,
+	})
+		.sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
+		.lean();
 
-  const normalizedProjects = items.map((item) => normalizeProjectEntity(item));
-  const visibleProjects = sortPortalProjects(
-    normalizedProjects.filter(isPortalVisibleProject)
-  );
+	const normalizedProjects = items.map((item) => normalizeProjectEntity(item));
+	const visibleProjects = sortPortalProjects(
+		normalizedProjects.filter(isPortalVisibleProject),
+	);
 
-  const projectCards: PortalProjectCard[] = visibleProjects.map((project) =>
-    mapProjectEntityToPortalProjectCard(project)
-  );
+	const projectCards: PortalProjectCard[] = visibleProjects.map((project) =>
+		mapProjectEntityToPortalProjectCard(project),
+	);
 
-  const portalDocuments: PortalDocumentItem[] = visibleProjects.flatMap((project) =>
-    extractPortalDocumentsFromProject(project)
-  );
+	const portalDocuments: PortalDocumentItem[] = visibleProjects.flatMap(
+		(project) => extractPortalDocumentsFromProject(project),
+	);
 
-  const portalAlerts: PortalAlertItem[] = visibleProjects.flatMap((project) =>
-    extractPortalAlertsFromProject(project)
-  );
+	const portalAlerts: PortalAlertItem[] = visibleProjects.flatMap((project) =>
+		extractPortalAlertsFromProject(project),
+	);
 
-  const upcomingMaintenances = visibleProjects.reduce((count, project) => {
-    return (
-      count +
-      project.maintenanceItems.filter((item) => {
-        return item.status === "scheduled" && !!item.nextDueDate;
-      }).length
-    );
-  }, 0);
+	const upcomingMaintenances = visibleProjects.reduce((count, project) => {
+		return (
+			count +
+			project.maintenanceItems.filter((item) => {
+				return item.status === "scheduled" && !!item.nextDueDate;
+			}).length
+		);
+	}, 0);
 
-  return {
-    organizationName,
-    userName,
-    summary: {
-      activeProjects: projectCards.length,
-      recentDocuments: portalDocuments.length,
-      activeAlerts: portalAlerts.length,
-      upcomingMaintenances,
-    },
-    featuredProjects: projectCards.slice(0, 3),
-    recentDocuments: sortRecentDocuments(portalDocuments).slice(0, 5),
-    alerts: sortRecentAlerts(portalAlerts).slice(0, 5),
-  };
+	return {
+		organizationName,
+		userName,
+		summary: {
+			activeProjects: projectCards.length,
+			recentDocuments: portalDocuments.length,
+			activeAlerts: portalAlerts.length,
+			upcomingMaintenances,
+		},
+		featuredProjects: projectCards.slice(0, 3),
+		recentDocuments: sortRecentDocuments(portalDocuments).slice(0, 5),
+		alerts: sortRecentAlerts(portalAlerts).slice(0, 5),
+	};
 }

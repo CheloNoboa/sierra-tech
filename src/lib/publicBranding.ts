@@ -16,10 +16,10 @@
  */
 
 type Branding = {
-  siteName: string;
-  siteNameShort: string;
-  logoLight: string;
-  logoDark: string;
+	siteName: string;
+	siteNameShort: string;
+	logoLight: string;
+	logoDark: string;
 };
 
 const STORAGE_KEY = "st.branding";
@@ -32,23 +32,23 @@ let inMemoryCache: Branding | null = null;
 /* -------------------------------------------------------------------------- */
 
 async function fetchBranding(): Promise<Branding> {
-  const res = await fetch("/api/site-settings", {
-    method: "GET",
-    cache: "no-store",
-  });
+	const res = await fetch("/api/site-settings", {
+		method: "GET",
+		cache: "no-store",
+	});
 
-  if (!res.ok) {
-    throw new Error(`HTTP_${res.status}`);
-  }
+	if (!res.ok) {
+		throw new Error(`HTTP_${res.status}`);
+	}
 
-  const json = await res.json();
+	const json = await res.json();
 
-  return {
-    siteName: json?.identity?.siteName ?? "",
-    siteNameShort: json?.identity?.siteNameShort ?? "",
-    logoLight: json?.identity?.logoLight ?? "",
-    logoDark: json?.identity?.logoDark ?? "",
-  };
+	return {
+		siteName: json?.identity?.siteName ?? "",
+		siteNameShort: json?.identity?.siteNameShort ?? "",
+		logoLight: json?.identity?.logoLight ?? "",
+		logoDark: json?.identity?.logoDark ?? "",
+	};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -56,36 +56,36 @@ async function fetchBranding(): Promise<Branding> {
 /* -------------------------------------------------------------------------- */
 
 export async function getPublicBranding(): Promise<Branding> {
-  // 1. Memory
-  if (inMemoryCache) {
-    return inMemoryCache;
-  }
+	// 1. Memory
+	if (inMemoryCache) {
+		return inMemoryCache;
+	}
 
-  // 2. localStorage
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Branding;
-      inMemoryCache = parsed;
-      return parsed;
-    }
-  } catch {
-    // ignore
-  }
+	// 2. localStorage
+	try {
+		const stored = localStorage.getItem(STORAGE_KEY);
+		if (stored) {
+			const parsed = JSON.parse(stored) as Branding;
+			inMemoryCache = parsed;
+			return parsed;
+		}
+	} catch {
+		// ignore
+	}
 
-  // 3. fetch
-  const data = await fetchBranding();
+	// 3. fetch
+	const data = await fetchBranding();
 
-  inMemoryCache = data;
+	inMemoryCache = data;
 
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    localStorage.setItem(STORAGE_TS_KEY, Date.now().toString());
-  } catch {
-    // ignore
-  }
+	try {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+		localStorage.setItem(STORAGE_TS_KEY, Date.now().toString());
+	} catch {
+		// ignore
+	}
 
-  return data;
+	return data;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -93,38 +93,38 @@ export async function getPublicBranding(): Promise<Branding> {
 /* -------------------------------------------------------------------------- */
 
 export function notifyBrandingUpdated(): void {
-  inMemoryCache = null;
+	inMemoryCache = null;
 
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.setItem(STORAGE_TS_KEY, Date.now().toString());
-  } catch {
-    // ignore
-  }
+	try {
+		localStorage.removeItem(STORAGE_KEY);
+		localStorage.setItem(STORAGE_TS_KEY, Date.now().toString());
+	} catch {
+		// ignore
+	}
 
-  window.dispatchEvent(new Event("st:branding-updated"));
+	window.dispatchEvent(new Event("st:branding-updated"));
 }
 
 export function listenBrandingUpdates(callback: () => void): () => void {
-  const handleWindowEvent = () => {
-    inMemoryCache = null;
-    callback();
-  };
+	const handleWindowEvent = () => {
+		inMemoryCache = null;
+		callback();
+	};
 
-  const handleStorageEvent = (event: StorageEvent) => {
-    if (event.key !== STORAGE_TS_KEY) {
-      return;
-    }
+	const handleStorageEvent = (event: StorageEvent) => {
+		if (event.key !== STORAGE_TS_KEY) {
+			return;
+		}
 
-    inMemoryCache = null;
-    callback();
-  };
+		inMemoryCache = null;
+		callback();
+	};
 
-  window.addEventListener("st:branding-updated", handleWindowEvent);
-  window.addEventListener("storage", handleStorageEvent);
+	window.addEventListener("st:branding-updated", handleWindowEvent);
+	window.addEventListener("storage", handleStorageEvent);
 
-  return () => {
-    window.removeEventListener("st:branding-updated", handleWindowEvent);
-    window.removeEventListener("storage", handleStorageEvent);
-  };
+	return () => {
+		window.removeEventListener("st:branding-updated", handleWindowEvent);
+		window.removeEventListener("storage", handleStorageEvent);
+	};
 }

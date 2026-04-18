@@ -21,51 +21,51 @@ import { Schema, model, models, Document } from "mongoose";
  * Interface del registro de auditoría
  */
 export interface IPrivacyAuditLog extends Document {
-  lang: "es" | "en";
-  modifiedBy: string;
-  modifiedEmail: string;
-  modifiedAt: Date;
-  changes: string;
+	lang: "es" | "en";
+	modifiedBy: string;
+	modifiedEmail: string;
+	modifiedAt: Date;
+	changes: string;
 }
 
 const PrivacyAuditLogSchema = new Schema<IPrivacyAuditLog>(
-  {
-    lang: {
-      type: String,
-      enum: ["es", "en"],
-      required: [true, "El idioma es obligatorio"],
-      trim: true,
-    },
-    modifiedBy: {
-      type: String,
-      required: [true, "El nombre del administrador es obligatorio"],
-      trim: true,
-    },
-    modifiedEmail: {
-      type: String,
-      required: [true, "El email del administrador es obligatorio"],
-      trim: true,
-      lowercase: true,
-    },
-    modifiedAt: {
-      type: Date,
-      default: Date.now,
-    },
-    changes: {
-      type: String,
-      required: [true, "La descripción del cambio es obligatoria"],
-      trim: true,
-    },
-  },
-  {
-    timestamps: false,
-    versionKey: false,
-    collection: "PrivacyAuditLog",
-  }
+	{
+		lang: {
+			type: String,
+			enum: ["es", "en"],
+			required: [true, "El idioma es obligatorio"],
+			trim: true,
+		},
+		modifiedBy: {
+			type: String,
+			required: [true, "El nombre del administrador es obligatorio"],
+			trim: true,
+		},
+		modifiedEmail: {
+			type: String,
+			required: [true, "El email del administrador es obligatorio"],
+			trim: true,
+			lowercase: true,
+		},
+		modifiedAt: {
+			type: Date,
+			default: Date.now,
+		},
+		changes: {
+			type: String,
+			required: [true, "La descripción del cambio es obligatoria"],
+			trim: true,
+		},
+	},
+	{
+		timestamps: false,
+		versionKey: false,
+		collection: "PrivacyAuditLog",
+	},
 );
 
 /**
  * Previene recompilación del modelo durante Hot Reload en Next.js
  */
 export default models.PrivacyAuditLog ||
-  model<IPrivacyAuditLog>("PrivacyAuditLog", PrivacyAuditLogSchema);
+	model<IPrivacyAuditLog>("PrivacyAuditLog", PrivacyAuditLogSchema);

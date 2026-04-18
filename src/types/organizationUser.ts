@@ -43,20 +43,20 @@ export type OrganizationUserStatus = "active" | "inactive";
  * de una organización específica.
  */
 export interface OrganizationUser {
-  _id: string;
-  organizationId: string;
-  firstName: string;
-  lastName: string;
-  fullName: string;
-  email: string;
-  role: OrganizationUserRole;
-  status: OrganizationUserStatus;
-  isRegistered: boolean;
-  activationStatus: "pending" | "completed";
-  lastLoginAt?: string;
-  createdAt: string;
-  updatedAt: string;
-} 
+	_id: string;
+	organizationId: string;
+	firstName: string;
+	lastName: string;
+	fullName: string;
+	email: string;
+	role: OrganizationUserRole;
+	status: OrganizationUserStatus;
+	isRegistered: boolean;
+	activationStatus: "pending" | "completed";
+	lastLoginAt?: string;
+	createdAt: string;
+	updatedAt: string;
+}
 
 /**
  * Variante interna usada cuando se necesita transportar también el password hash.
@@ -64,7 +64,7 @@ export interface OrganizationUser {
  * Debe reservarse para backend/modelo y no para respuestas UI.
  */
 export interface OrganizationUserRecord extends OrganizationUser {
-  passwordHash: string;
+	passwordHash: string;
 }
 
 /**
@@ -73,13 +73,13 @@ export interface OrganizationUserRecord extends OrganizationUser {
  * password plano se recibe solo en entrada; el hash se resuelve en backend.
  */
 export interface CreateOrganizationUserInput {
-  organizationId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  password: string;
-  role?: OrganizationUserRole;
-  status?: OrganizationUserStatus;
+	organizationId: string;
+	firstName: string;
+	lastName: string;
+	email: string;
+	password: string;
+	role?: OrganizationUserRole;
+	status?: OrganizationUserStatus;
 }
 
 /**
@@ -88,23 +88,23 @@ export interface CreateOrganizationUserInput {
  * password es opcional y solo aplica cuando se desea reemplazar la credencial.
  */
 export interface UpdateOrganizationUserInput {
-  organizationId?: string;
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  password?: string;
-  role?: OrganizationUserRole;
-  status?: OrganizationUserStatus;
+	organizationId?: string;
+	firstName?: string;
+	lastName?: string;
+	email?: string;
+	password?: string;
+	role?: OrganizationUserRole;
+	status?: OrganizationUserStatus;
 }
 
 /**
  * Filtros mínimos para listados administrativos de usuarios.
  */
 export interface OrganizationUserFilters {
-  query: string;
-  organizationId: string | "all";
-  role: OrganizationUserRole | "all";
-  status: OrganizationUserStatus | "all";
+	query: string;
+	organizationId: string | "all";
+	role: OrganizationUserRole | "all";
+	status: OrganizationUserStatus | "all";
 }
 
 /**
@@ -113,5 +113,5 @@ export interface OrganizationUserFilters {
  * Incluye datos resueltos de organización para evitar lógica repetida en UI.
  */
 export interface OrganizationUserRow extends OrganizationUser {
-  organizationName: string;
+	organizationName: string;
 }

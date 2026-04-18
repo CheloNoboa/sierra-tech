@@ -24,9 +24,7 @@ import mongoose, { Mongoose } from "mongoose";
 const MONGO_URI: string = process.env.MONGO_URI || "";
 
 if (!MONGO_URI) {
-  throw new Error(
-    "❌ Missing MONGO_URI in environment variables"
-  );
+	throw new Error("❌ Missing MONGO_URI in environment variables");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -34,43 +32,45 @@ if (!MONGO_URI) {
 /* -------------------------------------------------------------------------- */
 
 interface MongooseCache {
-  conn: Mongoose | null;
-  promise: Promise<Mongoose> | null;
+	conn: Mongoose | null;
+	promise: Promise<Mongoose> | null;
 }
 
 const globalForMongoose = globalThis as unknown as {
-  mongoose?: MongooseCache;
+	mongoose?: MongooseCache;
 };
 
-const cached: MongooseCache =
-  globalForMongoose.mongoose || { conn: null, promise: null };
+const cached: MongooseCache = globalForMongoose.mongoose || {
+	conn: null,
+	promise: null,
+};
 
 /* -------------------------------------------------------------------------- */
 /* Connect                                                                    */
 /* -------------------------------------------------------------------------- */
 
 export async function connectToDB(): Promise<Mongoose> {
-  if (cached.conn) return cached.conn;
+	if (cached.conn) return cached.conn;
 
-  if (!cached.promise) {
-    cached.promise = mongoose
-      .connect(MONGO_URI, {
-        dbName: "sierratech", // ✅ FIX CRÍTICO
-      })
-      .then((mongooseInstance) => {
-        console.log("🔗 MongoDB connected → sierratech");
-        return mongooseInstance;
-      })
-      .catch((err) => {
-        console.error("❌ MongoDB connection error:", err);
-        throw err;
-      });
-  }
+	if (!cached.promise) {
+		cached.promise = mongoose
+			.connect(MONGO_URI, {
+				dbName: "sierratech", // ✅ FIX CRÍTICO
+			})
+			.then((mongooseInstance) => {
+				console.log("🔗 MongoDB connected → sierratech");
+				return mongooseInstance;
+			})
+			.catch((err) => {
+				console.error("❌ MongoDB connection error:", err);
+				throw err;
+			});
+	}
 
-  cached.conn = await cached.promise;
-  globalForMongoose.mongoose = cached;
+	cached.conn = await cached.promise;
+	globalForMongoose.mongoose = cached;
 
-  return cached.conn;
+	return cached.conn;
 }
 
 export const connectDB = connectToDB;

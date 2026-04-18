@@ -29,128 +29,140 @@ import SystemSettings from "@/models/SystemSettings";
 import OrganizationUser from "@/models/OrganizationUser";
 
 interface ResetPasswordPayload {
-  email: string;
+	email: string;
 }
 
 interface ResetJwtPayload {
-  email: string;
+	email: string;
 }
 
 function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required env variable: ${name}`);
-  }
-  return value;
+	const value = process.env[name];
+	if (!value) {
+		throw new Error(`Missing required env variable: ${name}`);
+	}
+	return value;
 }
 
 function requireEnvInt(name: string): number {
-  const raw = requireEnv(name);
-  const parsed = Number(raw);
+	const raw = requireEnv(name);
+	const parsed = Number(raw);
 
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid numeric env variable: ${name}`);
-  }
+	if (!Number.isFinite(parsed)) {
+		throw new Error(`Invalid numeric env variable: ${name}`);
+	}
 
-  return parsed;
+	return parsed;
 }
 
 function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function genericOk() {
-  return NextResponse.json({
-    message: "If the email exists, a reset link will be sent.",
-  });
+	return NextResponse.json({
+		message: "If the email exists, a reset link will be sent.",
+	});
 }
 
 async function resolveBrandName(): Promise<string> {
-  try {
-    const setting = await SystemSettings.findOne({ key: "businessName" })
-      .lean()
-      .exec();
+	try {
+		const setting = await SystemSettings.findOne({ key: "businessName" })
+			.lean()
+			.exec();
 
-    const value =
-      setting && typeof setting === "object" && "value" in setting
-        ? (setting as { value?: unknown }).value
-        : null;
+		const value =
+			setting && typeof setting === "object" && "value" in setting
+				? (setting as { value?: unknown }).value
+				: null;
 
-    return typeof value === "string" && value.trim() ? value.trim() : "Platform";
-  } catch {
-    return "Platform";
-  }
+		return typeof value === "string" && value.trim()
+			? value.trim()
+			: "Platform";
+	} catch {
+		return "Platform";
+	}
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = (await req.json()) as Partial<ResetPasswordPayload>;
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+	try {
+		const body = (await req.json()) as Partial<ResetPasswordPayload>;
+		const email =
+			typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
 
-    if (!email || !isValidEmail(email)) {
-      return NextResponse.json({ message: "Email is required" }, { status: 400 });
-    }
+		if (!email || !isValidEmail(email)) {
+			return NextResponse.json(
+				{ message: "Email is required" },
+				{ status: 400 },
+			);
+		}
 
-    await connectToDB();
+		await connectToDB();
 
-    const internalUser = await User.findOne({ email }).exec();
-    const organizationUser = internalUser
-      ? null
-      : await OrganizationUser.findOne({ email }).exec();
+		const internalUser = await User.findOne({ email }).exec();
+		const organizationUser = internalUser
+			? null
+			: await OrganizationUser.findOne({ email }).exec();
 
-    if (!internalUser && !organizationUser) {
-      return genericOk();
-    }
+		if (!internalUser && !organizationUser) {
+			return genericOk();
+		}
 
-    let nameForEmail = "user";
+		let nameForEmail = "user";
 
-    if (internalUser && typeof internalUser.name === "string" && internalUser.name.trim()) {
-      nameForEmail = internalUser.name.trim();
-    }
+		if (
+			internalUser &&
+			typeof internalUser.name === "string" &&
+			internalUser.name.trim()
+		) {
+			nameForEmail = internalUser.name.trim();
+		}
 
-    if (
-      organizationUser &&
-      typeof organizationUser.fullName === "string" &&
-      organizationUser.fullName.trim()
-    ) {
-      nameForEmail = organizationUser.fullName.trim();
-    }
+		if (
+			organizationUser &&
+			typeof organizationUser.fullName === "string" &&
+			organizationUser.fullName.trim()
+		) {
+			nameForEmail = organizationUser.fullName.trim();
+		}
 
-    const token = jwt.sign(
-      {
-        email,
-        audience: organizationUser ? "organization_user_activation" : "password_reset",
-      } satisfies ResetJwtPayload & { audience: string },
-      requireEnv("JWT_SECRET"),
-      { expiresIn: "1h" }
-    );
+		const token = jwt.sign(
+			{
+				email,
+				audience: organizationUser
+					? "organization_user_activation"
+					: "password_reset",
+			} satisfies ResetJwtPayload & { audience: string },
+			requireEnv("JWT_SECRET"),
+			{ expiresIn: "1h" },
+		);
 
-    const baseUrl = requireEnv("NEXTAUTH_URL");
-    const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+		const baseUrl = requireEnv("NEXTAUTH_URL");
+		const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
-    const smtpHost = requireEnv("SMTP_HOST");
-    const smtpPort = requireEnvInt("SMTP_PORT");
-    const smtpUser = requireEnv("SMTP_USER");
-    const smtpPass = requireEnv("SMTP_PASS");
-    const smtpFrom = requireEnv("SMTP_FROM");
+		const smtpHost = requireEnv("SMTP_HOST");
+		const smtpPort = requireEnvInt("SMTP_PORT");
+		const smtpUser = requireEnv("SMTP_USER");
+		const smtpPass = requireEnv("SMTP_PASS");
+		const smtpFrom = requireEnv("SMTP_FROM");
 
-    const brandName = await resolveBrandName();
+		const brandName = await resolveBrandName();
 
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    });
+		const transporter = nodemailer.createTransport({
+			host: smtpHost,
+			port: smtpPort,
+			secure: smtpPort === 465,
+			auth: {
+				user: smtpUser,
+				pass: smtpPass,
+			},
+		});
 
-    await transporter.sendMail({
-      from: smtpFrom,
-      to: email,
-      subject: "Password Reset / Restablecimiento de contraseña",
-      html: `
+		await transporter.sendMail({
+			from: smtpFrom,
+			to: email,
+			subject: "Password Reset / Restablecimiento de contraseña",
+			html: `
         <div style="font-family: Arial, sans-serif; color: #333;">
           <h2 style="color:#D97706;">${brandName}</h2>
 
@@ -172,11 +184,14 @@ export async function POST(req: Request) {
           </p>
         </div>
       `,
-    });
+		});
 
-    return genericOk();
-  } catch (error) {
-    console.error("❌ Error in reset-password:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
-  }
+		return genericOk();
+	} catch (error) {
+		console.error("❌ Error in reset-password:", error);
+		return NextResponse.json(
+			{ message: "Internal server error" },
+			{ status: 500 },
+		);
+	}
 }

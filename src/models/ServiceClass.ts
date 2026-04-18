@@ -52,21 +52,21 @@ import { Schema, model, models, type Document, type Model } from "mongoose";
  * Texto bilingüe reutilizable.
  */
 export interface LocalizedText {
-  es: string;
-  en: string;
+	es: string;
+	en: string;
 }
 
 /**
  * Documento persistido para una clase de servicio.
  */
 export interface ServiceClassDocument extends Document {
-  key: string;
-  label: LocalizedText;
-  description: LocalizedText;
-  enabled: boolean;
-  order: number;
-  createdAt: Date;
-  updatedAt: Date;
+	key: string;
+	label: LocalizedText;
+	description: LocalizedText;
+	enabled: boolean;
+	order: number;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -80,21 +80,21 @@ export interface ServiceClassDocument extends Document {
  * - `_id: false` evita identificadores innecesarios en objetos embebidos.
  */
 const LocalizedTextSchema = new Schema<LocalizedText>(
-  {
-    es: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-    en: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-  },
-  {
-    _id: false,
-  }
+	{
+		es: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+		en: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+	},
+	{
+		_id: false,
+	},
 );
 
 /* -------------------------------------------------------------------------- */
@@ -110,47 +110,47 @@ const LocalizedTextSchema = new Schema<LocalizedText>(
  * - No agregar índices adicionales para `key`.
  */
 const ServiceClassSchema = new Schema<ServiceClassDocument>(
-  {
-    key: {
-      type: String,
-      required: [true, "La clave es obligatoria"],
-      trim: true,
-      unique: true,
-    },
+	{
+		key: {
+			type: String,
+			required: [true, "La clave es obligatoria"],
+			trim: true,
+			unique: true,
+		},
 
-    label: {
-      type: LocalizedTextSchema,
-      required: true,
-      default: () => ({
-        es: "",
-        en: "",
-      }),
-    },
+		label: {
+			type: LocalizedTextSchema,
+			required: true,
+			default: () => ({
+				es: "",
+				en: "",
+			}),
+		},
 
-    description: {
-      type: LocalizedTextSchema,
-      required: true,
-      default: () => ({
-        es: "",
-        en: "",
-      }),
-    },
+		description: {
+			type: LocalizedTextSchema,
+			required: true,
+			default: () => ({
+				es: "",
+				en: "",
+			}),
+		},
 
-    enabled: {
-      type: Boolean,
-      default: true,
-    },
+		enabled: {
+			type: Boolean,
+			default: true,
+		},
 
-    order: {
-      type: Number,
-      default: 0,
-    },
-  },
-  {
-    collection: "ServiceClass",
-    versionKey: false,
-    timestamps: true,
-  }
+		order: {
+			type: Number,
+			default: 0,
+		},
+	},
+	{
+		collection: "ServiceClass",
+		versionKey: false,
+		timestamps: true,
+	},
 );
 
 /* -------------------------------------------------------------------------- */
@@ -162,7 +162,7 @@ const ServiceClassSchema = new Schema<ServiceClassDocument>(
  * múltiple del schema en entornos de desarrollo y build de Next.js.
  */
 const ServiceClassModel =
-  (models.ServiceClass as Model<ServiceClassDocument> | undefined) ||
-  model<ServiceClassDocument>("ServiceClass", ServiceClassSchema);
+	(models.ServiceClass as Model<ServiceClassDocument> | undefined) ||
+	model<ServiceClassDocument>("ServiceClass", ServiceClassSchema);
 
 export default ServiceClassModel;

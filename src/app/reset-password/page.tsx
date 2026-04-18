@@ -19,17 +19,17 @@ import { Suspense } from "react";
 import ResetPasswordInner from "./reset-password-inner";
 
 function ResetPasswordFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center text-gray-400">
-      Loading...
-    </div>
-  );
+	return (
+		<div className="flex min-h-screen items-center justify-center text-gray-400">
+			Loading...
+		</div>
+	);
 }
 
 export default function ResetPasswordPageWrapper() {
-  return (
-    <Suspense fallback={<ResetPasswordFallback />}>
-      <ResetPasswordInner />
-    </Suspense>
-  );
+	return (
+		<Suspense fallback={<ResetPasswordFallback />}>
+			<ResetPasswordInner />
+		</Suspense>
+	);
 }

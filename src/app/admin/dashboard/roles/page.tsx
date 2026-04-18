@@ -19,9 +19,9 @@
 import RoleDataGrid from "@/components/RoleDataGrid";
 
 export default function RolesPage() {
-  return (
-    <div className="p-4">
-      <RoleDataGrid />
-    </div>
-  );
+	return (
+		<div className="p-4">
+			<RoleDataGrid />
+		</div>
+	);
 }

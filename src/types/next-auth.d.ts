@@ -58,92 +58,92 @@ export type AppUserStatus = "active" | "inactive";
 /* -------------------------------------------------------------------------- */
 
 declare module "next-auth" {
-  /**
-   * ===========================================================================
-   * User
-   * ---------------------------------------------------------------------------
-   * Disponible durante authorize() y primeros callbacks de login.
-   * Debe reflejar exactamente lo que retorna authorize() en credentials
-   * y lo que se hidrata para Google OAuth.
-   * ===========================================================================
-   */
-  interface User extends DefaultUser {
-    /**
-     * Id real persistido del usuario autenticado.
-     */
-    _id: string;
+	/**
+	 * ===========================================================================
+	 * User
+	 * ---------------------------------------------------------------------------
+	 * Disponible durante authorize() y primeros callbacks de login.
+	 * Debe reflejar exactamente lo que retorna authorize() en credentials
+	 * y lo que se hidrata para Google OAuth.
+	 * ===========================================================================
+	 */
+	interface User extends DefaultUser {
+		/**
+		 * Id real persistido del usuario autenticado.
+		 */
+		_id: string;
 
-    /**
-     * Rol principal del usuario.
-     * - internal: rol dinámico desde Roles
-     * - client:   "organization_user" a nivel de gateway
-     */
-    role: string;
+		/**
+		 * Rol principal del usuario.
+		 * - internal: rol dinámico desde Roles
+		 * - client:   "organization_user" a nivel de gateway
+		 */
+		role: string;
 
-    /**
-     * Permisos resueltos para usuarios internos.
-     * En portal cliente normalmente será [].
-     */
-    permissions: string[];
+		/**
+		 * Permisos resueltos para usuarios internos.
+		 * En portal cliente normalmente será [].
+		 */
+		permissions: string[];
 
-    /**
-     * Tipo de audiencia autenticada.
-     */
-    userType: AppUserType;
+		/**
+		 * Tipo de audiencia autenticada.
+		 */
+		userType: AppUserType;
 
-    /**
-     * Estado del usuario autenticado.
-     */
-    status: AppUserStatus;
+		/**
+		 * Estado del usuario autenticado.
+		 */
+		status: AppUserStatus;
 
-    /**
-     * Identidad básica.
-     */
-    name: string | null;
-    email: string | null;
+		/**
+		 * Identidad básica.
+		 */
+		name: string | null;
+		email: string | null;
 
-    /**
-     * Datos del portal cliente.
-     * Solo aplican cuando userType = "client".
-     */
-    organizationId?: string | null;
-    organizationName?: string | null;
-    organizationUserRole?: string | null;
+		/**
+		 * Datos del portal cliente.
+		 * Solo aplican cuando userType = "client".
+		 */
+		organizationId?: string | null;
+		organizationName?: string | null;
+		organizationUserRole?: string | null;
 
-    /**
-     * Campos heredados del sistema base que se mantienen por compatibilidad.
-     */
-    isRegistered?: boolean;
-    phone?: string | null;
-  }
+		/**
+		 * Campos heredados del sistema base que se mantienen por compatibilidad.
+		 */
+		isRegistered?: boolean;
+		phone?: string | null;
+	}
 
-  /**
-   * ===========================================================================
-   * Session
-   * ---------------------------------------------------------------------------
-   * Shape consumido por frontend y server-side session reads.
-   * ===========================================================================
-   */
-  interface Session extends DefaultSession {
-    user: DefaultSession["user"] & {
-      _id: string;
-      role: string;
-      permissions: string[];
+	/**
+	 * ===========================================================================
+	 * Session
+	 * ---------------------------------------------------------------------------
+	 * Shape consumido por frontend y server-side session reads.
+	 * ===========================================================================
+	 */
+	interface Session extends DefaultSession {
+		user: DefaultSession["user"] & {
+			_id: string;
+			role: string;
+			permissions: string[];
 
-      userType: AppUserType;
-      status: AppUserStatus;
+			userType: AppUserType;
+			status: AppUserStatus;
 
-      name: string | null;
-      email: string | null;
+			name: string | null;
+			email: string | null;
 
-      organizationId?: string | null;
-      organizationName?: string | null;
-      organizationUserRole?: string | null;
+			organizationId?: string | null;
+			organizationName?: string | null;
+			organizationUserRole?: string | null;
 
-      isRegistered?: boolean;
-      phone?: string | null;
-    };
-  }
+			isRegistered?: boolean;
+			phone?: string | null;
+		};
+	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -151,38 +151,38 @@ declare module "next-auth" {
 /* -------------------------------------------------------------------------- */
 
 declare module "next-auth/jwt" {
-  /**
-   * ===========================================================================
-   * JWT
-   * ---------------------------------------------------------------------------
-   * Shape interno del token usado por callbacks y middleware.
-   * Debe incluir toda la identidad mínima necesaria para:
-   * - separar admin vs portal cliente
-   * - proteger rutas
-   * - inyectar headers mínimos a /api/**
-   * ===========================================================================
-   */
-  interface JWT {
-    _id?: string;
-    role?: string;
-    permissions?: string[];
+	/**
+	 * ===========================================================================
+	 * JWT
+	 * ---------------------------------------------------------------------------
+	 * Shape interno del token usado por callbacks y middleware.
+	 * Debe incluir toda la identidad mínima necesaria para:
+	 * - separar admin vs portal cliente
+	 * - proteger rutas
+	 * - inyectar headers mínimos a /api/**
+	 * ===========================================================================
+	 */
+	interface JWT {
+		_id?: string;
+		role?: string;
+		permissions?: string[];
 
-    userType?: AppUserType;
-    status?: AppUserStatus;
+		userType?: AppUserType;
+		status?: AppUserStatus;
 
-    name?: string | null;
-    email?: string | null;
+		name?: string | null;
+		email?: string | null;
 
-    organizationId?: string | null;
-    organizationName?: string | null;
-    organizationUserRole?: string | null;
+		organizationId?: string | null;
+		organizationName?: string | null;
+		organizationUserRole?: string | null;
 
-    isRegistered?: boolean;
-    phone?: string | null;
+		isRegistered?: boolean;
+		phone?: string | null;
 
-    /**
-     * Epoch seconds calculado manualmente desde loadTimeout().
-     */
-    exp?: number;
-  }
+		/**
+		 * Epoch seconds calculado manualmente desde loadTimeout().
+		 */
+		exp?: number;
+	}
 }

@@ -33,27 +33,27 @@ type ContactStatus = "new" | "in_review" | "closed";
 /* -------------------------------------------------------------------------- */
 
 function normalizeIntent(value: string | null): ContactIntent | "" {
-  if (
-    value === "general" ||
-    value === "advisory" ||
-    value === "quote" ||
-    value === "support"
-  ) {
-    return value;
-  }
+	if (
+		value === "general" ||
+		value === "advisory" ||
+		value === "quote" ||
+		value === "support"
+	) {
+		return value;
+	}
 
-  return "";
+	return "";
 }
 
 function normalizeStatus(value: string | null): ContactStatus | "" {
-  if (value === "new" || value === "in_review" || value === "closed") {
-    return value;
-  }
-  return "";
+	if (value === "new" || value === "in_review" || value === "closed") {
+		return value;
+	}
+	return "";
 }
 
 function normalizeSearch(value: string | null): string {
-  return typeof value === "string" ? value.trim() : "";
+	return typeof value === "string" ? value.trim() : "";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -61,68 +61,70 @@ function normalizeSearch(value: string | null): string {
 /* -------------------------------------------------------------------------- */
 
 export async function GET(req: NextRequest) {
-  try {
-    await connectToDB();
+	try {
+		await connectToDB();
 
-    const { searchParams } = new URL(req.url);
+		const { searchParams } = new URL(req.url);
 
-    const intent = normalizeIntent(searchParams.get("intent"));
-    const status = normalizeStatus(searchParams.get("status"));
-    const q = normalizeSearch(searchParams.get("q"));
+		const intent = normalizeIntent(searchParams.get("intent"));
+		const status = normalizeStatus(searchParams.get("status"));
+		const q = normalizeSearch(searchParams.get("q"));
 
-    const filter: Record<string, unknown> = {};
+		const filter: Record<string, unknown> = {};
 
-    if (intent) {
-      filter.intent = intent;
-    }
+		if (intent) {
+			filter.intent = intent;
+		}
 
-    if (status) {
-      filter.status = status;
-    }
+		if (status) {
+			filter.status = status;
+		}
 
-    if (q) {
-      filter.$or = [
-        { name: { $regex: q, $options: "i" } },
-        { email: { $regex: q, $options: "i" } },
-        { company: { $regex: q, $options: "i" } },
-        { message: { $regex: q, $options: "i" } },
-      ];
-    }
+		if (q) {
+			filter.$or = [
+				{ name: { $regex: q, $options: "i" } },
+				{ email: { $regex: q, $options: "i" } },
+				{ company: { $regex: q, $options: "i" } },
+				{ message: { $regex: q, $options: "i" } },
+			];
+		}
 
-    const items = await ContactRequest.find(filter).sort({ createdAt: -1 }).lean();
+		const items = await ContactRequest.find(filter)
+			.sort({ createdAt: -1 })
+			.lean();
 
-    return NextResponse.json(
-      {
-        ok: true,
-        items: items.map((item) => ({
-          _id: String(item._id),
-          intent: item.intent ?? "general",
-          name: item.name ?? "",
-          company: item.company ?? "",
-          email: item.email ?? "",
-          phone: item.phone ?? "",
-          location: item.location ?? "",
-          serviceClassKey: item.serviceClassKey ?? "",
-          serviceClassSnapshot: item.serviceClassSnapshot ?? { es: "", en: "" },
-          message: item.message ?? "",
-          source: item.source ?? "public_site",
-          status: item.status ?? "new",
-          createdAt: item.createdAt ?? null,
-          updatedAt: item.updatedAt ?? null,
-        })),
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("[API /admin/contact-requests] GET error:", error);
+		return NextResponse.json(
+			{
+				ok: true,
+				items: items.map((item) => ({
+					_id: String(item._id),
+					intent: item.intent ?? "general",
+					name: item.name ?? "",
+					company: item.company ?? "",
+					email: item.email ?? "",
+					phone: item.phone ?? "",
+					location: item.location ?? "",
+					serviceClassKey: item.serviceClassKey ?? "",
+					serviceClassSnapshot: item.serviceClassSnapshot ?? { es: "", en: "" },
+					message: item.message ?? "",
+					source: item.source ?? "public_site",
+					status: item.status ?? "new",
+					createdAt: item.createdAt ?? null,
+					updatedAt: item.updatedAt ?? null,
+				})),
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		console.error("[API /admin/contact-requests] GET error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        message: "Internal server error.",
-        items: [],
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				ok: false,
+				message: "Internal server error.",
+				items: [],
+			},
+			{ status: 500 },
+		);
+	}
 }

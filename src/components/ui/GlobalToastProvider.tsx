@@ -37,12 +37,12 @@
  */
 
 import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useState,
+	type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import GlobalToast from "./GlobalToast";
@@ -50,16 +50,16 @@ import GlobalToast from "./GlobalToast";
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
 export interface ToastData {
-  id: string;
-  message: string;
-  variant: ToastVariant;
+	id: string;
+	message: string;
+	variant: ToastVariant;
 }
 
 interface ToastContextValue {
-  success: (msg: string) => void;
-  error: (msg: string) => void;
-  warning: (msg: string) => void;
-  info: (msg: string) => void;
+	success: (msg: string) => void;
+	error: (msg: string) => void;
+	warning: (msg: string) => void;
+	info: (msg: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
@@ -78,112 +78,112 @@ const ToastContext = createContext<ToastContextValue | undefined>(undefined);
  * =============================================================================
  */
 function safeToastId(): string {
-  try {
-    const cryptoRef: Crypto | undefined =
-      typeof globalThis !== "undefined" && "crypto" in globalThis
-        ? (globalThis.crypto as Crypto)
-        : undefined;
+	try {
+		const cryptoRef: Crypto | undefined =
+			typeof globalThis !== "undefined" && "crypto" in globalThis
+				? (globalThis.crypto as Crypto)
+				: undefined;
 
-    if (
-      cryptoRef &&
-      "randomUUID" in cryptoRef &&
-      typeof cryptoRef.randomUUID === "function"
-    ) {
-      return String(cryptoRef.randomUUID());
-    }
+		if (
+			cryptoRef &&
+			"randomUUID" in cryptoRef &&
+			typeof cryptoRef.randomUUID === "function"
+		) {
+			return String(cryptoRef.randomUUID());
+		}
 
-    if (cryptoRef && typeof cryptoRef.getRandomValues === "function") {
-      const bytes = new Uint8Array(16);
-      cryptoRef.getRandomValues(bytes);
+		if (cryptoRef && typeof cryptoRef.getRandomValues === "function") {
+			const bytes = new Uint8Array(16);
+			cryptoRef.getRandomValues(bytes);
 
-      // UUID v4-like
-      bytes[6] = (bytes[6] & 0x0f) | 0x40;
-      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+			// UUID v4-like
+			bytes[6] = (bytes[6] & 0x0f) | 0x40;
+			bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
-      const hex = Array.from(bytes, (byte) =>
-        byte.toString(16).padStart(2, "0")
-      ).join("");
+			const hex = Array.from(bytes, (byte) =>
+				byte.toString(16).padStart(2, "0"),
+			).join("");
 
-      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(
-        12,
-        16
-      )}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-    }
-  } catch {
-    // Fallback silencioso
-  }
+			return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(
+				12,
+				16,
+			)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+		}
+	} catch {
+		// Fallback silencioso
+	}
 
-  return `t_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+	return `t_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
 }
 
 export function GlobalToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastData[]>([]);
-  const [mounted, setMounted] = useState(false);
+	const [toasts, setToasts] = useState<ToastData[]>([]);
+	const [mounted, setMounted] = useState(false);
 
-  /**
-   * SSR-safe portal:
-   * el portal solo debe existir en cliente.
-   */
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+	/**
+	 * SSR-safe portal:
+	 * el portal solo debe existir en cliente.
+	 */
+	useEffect(() => {
+		setMounted(true);
+	}, []);
 
-  /**
-   * Elimina un toast por id.
-   */
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
+	/**
+	 * Elimina un toast por id.
+	 */
+	const removeToast = useCallback((id: string) => {
+		setToasts((prev) => prev.filter((toast) => toast.id !== id));
+	}, []);
 
-  /**
-   * Agrega un nuevo toast.
-   * Mantiene máximo 3 visibles para evitar saturación visual.
-   */
-  const push = useCallback(
-    (message: string, variant: ToastVariant) => {
-      const id = safeToastId();
+	/**
+	 * Agrega un nuevo toast.
+	 * Mantiene máximo 3 visibles para evitar saturación visual.
+	 */
+	const push = useCallback(
+		(message: string, variant: ToastVariant) => {
+			const id = safeToastId();
 
-      setToasts((prev) => {
-        const updated = [...prev, { id, message, variant }];
-        return updated.slice(-3);
-      });
+			setToasts((prev) => {
+				const updated = [...prev, { id, message, variant }];
+				return updated.slice(-3);
+			});
 
-      setTimeout(() => {
-        removeToast(id);
-      }, 3000);
-    },
-    [removeToast]
-  );
+			setTimeout(() => {
+				removeToast(id);
+			}, 3000);
+		},
+		[removeToast],
+	);
 
-  const contextValue: ToastContextValue = {
-    success: (message) => push(message, "success"),
-    error: (message) => push(message, "error"),
-    warning: (message) => push(message, "warning"),
-    info: (message) => push(message, "info"),
-  };
+	const contextValue: ToastContextValue = {
+		success: (message) => push(message, "success"),
+		error: (message) => push(message, "error"),
+		warning: (message) => push(message, "warning"),
+		info: (message) => push(message, "info"),
+	};
 
-  return (
-    <ToastContext.Provider value={contextValue}>
-      {children}
+	return (
+		<ToastContext.Provider value={contextValue}>
+			{children}
 
-      {mounted &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div className="fixed right-4 top-4 z-[10000] flex flex-col gap-3">
-            {toasts.map((toast) => (
-              <GlobalToast
-                key={toast.id}
-                id={toast.id}
-                message={toast.message}
-                variant={toast.variant}
-                onClose={removeToast}
-              />
-            ))}
-          </div>,
-          document.body
-        )}
-    </ToastContext.Provider>
-  );
+			{mounted &&
+				typeof document !== "undefined" &&
+				createPortal(
+					<div className="fixed right-4 top-4 z-[10000] flex flex-col gap-3">
+						{toasts.map((toast) => (
+							<GlobalToast
+								key={toast.id}
+								id={toast.id}
+								message={toast.message}
+								variant={toast.variant}
+								onClose={removeToast}
+							/>
+						))}
+					</div>,
+					document.body,
+				)}
+		</ToastContext.Provider>
+	);
 }
 
 /**
@@ -191,11 +191,11 @@ export function GlobalToastProvider({ children }: { children: ReactNode }) {
  * Debe usarse bajo <GlobalToastProvider>.
  */
 export function useToast() {
-  const context = useContext(ToastContext);
+	const context = useContext(ToastContext);
 
-  if (!context) {
-    throw new Error("useToast must be used within <GlobalToastProvider>");
-  }
+	if (!context) {
+		throw new Error("useToast must be used within <GlobalToastProvider>");
+	}
 
-  return context;
+	return context;
 }

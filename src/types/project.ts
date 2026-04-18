@@ -35,8 +35,8 @@
 export type Locale = "es" | "en";
 
 export type LocalizedText = {
-  es: string;
-  en: string;
+	es: string;
+	en: string;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -59,20 +59,20 @@ export type ProjectVisibility = "private" | "public";
  * - `alt` se usa para accesibilidad y render público
  */
 export type ProjectImage = {
-  url: string;
-  alt: LocalizedText;
-  storageKey: string;
+	url: string;
+	alt: LocalizedText;
+	storageKey: string;
 };
 
 /**
  * Archivo adjunto genérico asociado al proyecto o a un mantenimiento.
  */
 export type ProjectFileAttachment = {
-  name: string;
-  url: string;
-  storageKey: string;
-  mimeType: string;
-  size: number;
+	name: string;
+	url: string;
+	storageKey: string;
+	mimeType: string;
+	size: number;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -80,24 +80,24 @@ export type ProjectFileAttachment = {
 /* -------------------------------------------------------------------------- */
 
 export type ProjectDocumentType =
-  | "contract"
-  | "planning"
-  | "schedule"
-  | "technical_design"
-  | "plan"
-  | "technical_report"
-  | "technical_sheet"
-  | "operation_manual"
-  | "maintenance_manual"
-  | "inspection_report"
-  | "maintenance_report"
-  | "delivery_record"
-  | "certificate"
-  | "warranty"
-  | "invoice"
-  | "permit"
-  | "photo_evidence"
-  | "other";
+	| "contract"
+	| "planning"
+	| "schedule"
+	| "technical_design"
+	| "plan"
+	| "technical_report"
+	| "technical_sheet"
+	| "operation_manual"
+	| "maintenance_manual"
+	| "inspection_report"
+	| "maintenance_report"
+	| "delivery_record"
+	| "certificate"
+	| "warranty"
+	| "invoice"
+	| "permit"
+	| "photo_evidence"
+	| "other";
 
 export type ProjectDocumentVisibility = "public" | "private" | "internal";
 export type ProjectDocumentLanguage = "none" | "es" | "en" | "both";
@@ -110,38 +110,38 @@ export type ProjectDocumentLanguage = "none" | "es" | "en" | "both";
  * - no se mezcla metadata documental con texto libre sin estructura
  */
 export type ProjectDocumentLink = {
-  documentId: string;
+	documentId: string;
 
-  title: string;
-  documentType: ProjectDocumentType;
-  description: string;
+	title: string;
+	documentType: ProjectDocumentType;
+	description: string;
 
-  visibility: ProjectDocumentVisibility;
-  language: ProjectDocumentLanguage;
+	visibility: ProjectDocumentVisibility;
+	language: ProjectDocumentLanguage;
 
-  documentDate: string | null;
+	documentDate: string | null;
 
-  fileName: string;
-  fileUrl: string;
-  storageKey: string;
-  mimeType: string;
-  size: number | null;
+	fileName: string;
+	fileUrl: string;
+	storageKey: string;
+	mimeType: string;
+	size: number | null;
 
-  version: string;
+	version: string;
 
-  isPublic: boolean;
-  visibleInPortal: boolean;
-  visibleInPublicSite: boolean;
-  visibleToInternalOnly: boolean;
+	isPublic: boolean;
+	visibleInPortal: boolean;
+	visibleInPublicSite: boolean;
+	visibleToInternalOnly: boolean;
 
-  requiresAlert: boolean;
-  alertDate: string | null;
-  nextDueDate: string | null;
-  maintenanceFrequency: string | null;
+	requiresAlert: boolean;
+	alertDate: string | null;
+	nextDueDate: string | null;
+	maintenanceFrequency: string | null;
 
-  isCritical: boolean;
-  sortOrder: number;
-  notes: string;
+	isCritical: boolean;
+	sortOrder: number;
+	notes: string;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -149,20 +149,20 @@ export type ProjectDocumentLink = {
 /* -------------------------------------------------------------------------- */
 
 export type MaintenanceType =
-  | "preventive"
-  | "corrective"
-  | "cleaning"
-  | "inspection"
-  | "replacement"
-  | "other";
+	| "preventive"
+	| "corrective"
+	| "cleaning"
+	| "inspection"
+	| "replacement"
+	| "other";
 
 export type MaintenanceFrequencyUnit = "days" | "weeks" | "months" | "years";
 
 export type MaintenanceStatus =
-  | "scheduled"
-  | "completed"
-  | "overdue"
-  | "cancelled";
+	| "scheduled"
+	| "completed"
+	| "overdue"
+	| "cancelled";
 
 /**
  * Estado de la alerta previa del evento.
@@ -173,10 +173,10 @@ export type MaintenanceAlertStatus = "pending" | "emitted";
  * Estado real del evento de mantenimiento.
  */
 export type MaintenanceExecutionStatus =
-  | "pending"
-  | "done"
-  | "overdue"
-  | "cancelled";
+	| "pending"
+	| "done"
+	| "overdue"
+	| "cancelled";
 
 /**
  * =============================================================================
@@ -202,49 +202,49 @@ export type MaintenanceExecutionStatus =
  * - evolución posterior del flujo sin duplicar lógica
  */
 export type MaintenanceScheduleEntry = {
-  eventId: string;
+	eventId: string;
 
-  /** Índice del ciclo dentro del mantenimiento */
-  cycleIndex: number;
+	/** Índice del ciclo dentro del mantenimiento */
+	cycleIndex: number;
 
-  /** Fecha planificada para el mantenimiento */
-  maintenanceDate: string;
+	/** Fecha planificada para el mantenimiento */
+	maintenanceDate: string;
 
-  /** Fecha del aviso previo */
-  alertDate: string | null;
+	/** Fecha del aviso previo */
+	alertDate: string | null;
 
-  alertStatus: MaintenanceAlertStatus;
-  maintenanceStatus: MaintenanceExecutionStatus;
+	alertStatus: MaintenanceAlertStatus;
+	maintenanceStatus: MaintenanceExecutionStatus;
 
-  channels: Array<"platform" | "email">;
-  recipients: Array<"client" | "internal">;
+	channels: Array<"platform" | "email">;
+	recipients: Array<"client" | "internal">;
 
-  /**
-   * Correo del cliente cuando aplique.
-   * Para eventos internos puede quedar vacío.
-   */
-  recipientEmail: string;
+	/**
+	 * Correo del cliente cuando aplique.
+	 * Para eventos internos puede quedar vacío.
+	 */
+	recipientEmail: string;
 
-  /**
-   * Fecha en la que la alerta fue efectivamente emitida.
-   * Puede venir null en preview o antes de la ejecución real.
-   */
-  emittedAt: string | null;
+	/**
+	 * Fecha en la que la alerta fue efectivamente emitida.
+	 * Puede venir null en preview o antes de la ejecución real.
+	 */
+	emittedAt: string | null;
 
-  /**
-   * Fecha en la que el mantenimiento se registró como realizado.
-   */
-  completedAt: string | null;
+	/**
+	 * Fecha en la que el mantenimiento se registró como realizado.
+	 */
+	completedAt: string | null;
 
-  /**
-   * Marca si el cliente confirmó / ejecutó el mantenimiento.
-   */
-  completedByClient: boolean;
+	/**
+	 * Marca si el cliente confirmó / ejecutó el mantenimiento.
+	 */
+	completedByClient: boolean;
 
-  /**
-   * Nota operativa libre asociada al evento.
-   */
-  note: string;
+	/**
+	 * Nota operativa libre asociada al evento.
+	 */
+	note: string;
 };
 
 /**
@@ -265,50 +265,50 @@ export type MaintenanceScheduleEntry = {
  * - `schedule` es la fuente de verdad del detalle operativo
  */
 export type ProjectMaintenanceItem = {
-  maintenanceType: MaintenanceType;
+	maintenanceType: MaintenanceType;
 
-  title: string;
-  description: string;
+	title: string;
+	description: string;
 
-  frequencyValue: number | null;
-  frequencyUnit: MaintenanceFrequencyUnit | null;
+	frequencyValue: number | null;
+	frequencyUnit: MaintenanceFrequencyUnit | null;
 
-  /**
-   * Última fecha real de mantenimiento realizado.
-   * Solo aplica cuando el proyecto ya arrancó y existe historial.
-   */
-  lastCompletedDate: string | null;
+	/**
+	 * Última fecha real de mantenimiento realizado.
+	 * Solo aplica cuando el proyecto ya arrancó y existe historial.
+	 */
+	lastCompletedDate: string | null;
 
-  /**
-   * Próxima fecha agregada / principal del mantenimiento.
-   * Puede derivarse del primer evento del schedule.
-   */
-  nextDueDate: string | null;
+	/**
+	 * Próxima fecha agregada / principal del mantenimiento.
+	 * Puede derivarse del primer evento del schedule.
+	 */
+	nextDueDate: string | null;
 
-  status: MaintenanceStatus;
+	status: MaintenanceStatus;
 
-  notifyClient: boolean;
-  notifyInternal: boolean;
+	notifyClient: boolean;
+	notifyInternal: boolean;
 
-  /**
-   * Días previos al mantenimiento en que debe generarse el aviso.
-   */
-  alertDaysBefore: number | null;
+	/**
+	 * Días previos al mantenimiento en que debe generarse el aviso.
+	 */
+	alertDaysBefore: number | null;
 
-  isRecurring: boolean;
+	isRecurring: boolean;
 
-  instructions: string;
+	instructions: string;
 
-  relatedDocumentIds: string[];
+	relatedDocumentIds: string[];
 
-  attachments: ProjectFileAttachment[];
+	attachments: ProjectFileAttachment[];
 
-  notes: string;
+	notes: string;
 
-  /**
-   * Fuente de verdad para alertas, ejecución y edición de fechas.
-   */
-  schedule: MaintenanceScheduleEntry[];
+	/**
+	 * Fuente de verdad para alertas, ejecución y edición de fechas.
+	 */
+	schedule: MaintenanceScheduleEntry[];
 };
 
 /* -------------------------------------------------------------------------- */
@@ -323,11 +323,11 @@ export type ProjectMaintenanceItem = {
  * - solo se habilita / deshabilita qué partes del contenido salen
  */
 export type ProjectPublicSiteSettings = {
-  enabled: boolean;
-  showTitle: boolean;
-  showSummary: boolean;
-  showCoverImage: boolean;
-  showGallery: boolean;
+	enabled: boolean;
+	showTitle: boolean;
+	showSummary: boolean;
+	showCoverImage: boolean;
+	showGallery: boolean;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -338,48 +338,48 @@ export type ProjectPublicSiteSettings = {
  * Payload principal compartido entre UI, API y DB.
  */
 export type ProjectPayload = {
-  slug: string;
+	slug: string;
 
-  status: ProjectStatus;
-  visibility: ProjectVisibility;
+	status: ProjectStatus;
+	visibility: ProjectVisibility;
 
-  featured: boolean;
-  sortOrder: number;
+	featured: boolean;
+	sortOrder: number;
 
-  title: LocalizedText;
-  summary: LocalizedText;
-  description: LocalizedText;
+	title: LocalizedText;
+	summary: LocalizedText;
+	description: LocalizedText;
 
-  primaryClientId: string | null;
-  clientDisplayName: string;
-  clientEmail: string;
+	primaryClientId: string | null;
+	clientDisplayName: string;
+	clientEmail: string;
 
-  coverImage: ProjectImage | null;
-  gallery: ProjectImage[];
+	coverImage: ProjectImage | null;
+	gallery: ProjectImage[];
 
-  publicSiteSettings: ProjectPublicSiteSettings;
+	publicSiteSettings: ProjectPublicSiteSettings;
 
-  documents: ProjectDocumentLink[];
-  maintenanceItems: ProjectMaintenanceItem[];
+	documents: ProjectDocumentLink[];
+	maintenanceItems: ProjectMaintenanceItem[];
 
-  contractStartDate: string | null;
-  contractDurationMonths: number | null;
-  contractEndDate: string | null;
+	contractStartDate: string | null;
+	contractDurationMonths: number | null;
+	contractEndDate: string | null;
 
-  technicalOverview: LocalizedText;
+	technicalOverview: LocalizedText;
 
-  systemType: LocalizedText;
-  treatedMedium: LocalizedText;
-  technologyUsed: {
-    es: string[];
-    en: string[];
-  };
+	systemType: LocalizedText;
+	treatedMedium: LocalizedText;
+	technologyUsed: {
+		es: string[];
+		en: string[];
+	};
 
-  operationalNotes: string;
-  internalNotes: string;
+	operationalNotes: string;
+	internalNotes: string;
 
-  locationLabel: string;
-  isPublicLocationVisible: boolean;
+	locationLabel: string;
+	isPublicLocationVisible: boolean;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -390,38 +390,38 @@ export type ProjectPayload = {
  * Entidad persistida completa.
  */
 export type ProjectEntity = ProjectPayload & {
-  _id: string;
-  createdAt: string;
-  updatedAt: string;
+	_id: string;
+	createdAt: string;
+	updatedAt: string;
 };
 
 /**
  * Shape resumido para listados / grillas.
  */
 export type ProjectListItem = {
-  _id: string;
-  slug: string;
+	_id: string;
+	slug: string;
 
-  status: ProjectStatus;
-  visibility: ProjectVisibility;
+	status: ProjectStatus;
+	visibility: ProjectVisibility;
 
-  featured: boolean;
-  sortOrder: number;
+	featured: boolean;
+	sortOrder: number;
 
-  title: LocalizedText;
-  summary: LocalizedText;
+	title: LocalizedText;
+	summary: LocalizedText;
 
-  primaryClientId: string | null;
-  clientDisplayName: string;
+	primaryClientId: string | null;
+	clientDisplayName: string;
 
-  coverImage: ProjectImage | null;
+	coverImage: ProjectImage | null;
 
-  publicSiteSettings: ProjectPublicSiteSettings;
+	publicSiteSettings: ProjectPublicSiteSettings;
 
-  contractStartDate: string | null;
-  contractDurationMonths: number | null;
-  contractEndDate: string | null;
+	contractStartDate: string | null;
+	contractDurationMonths: number | null;
+	contractEndDate: string | null;
 
-  createdAt: string;
-  updatedAt: string;
+	createdAt: string;
+	updatedAt: string;
 };

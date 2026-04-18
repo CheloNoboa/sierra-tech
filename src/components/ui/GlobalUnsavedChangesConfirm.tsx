@@ -26,65 +26,62 @@ import GlobalModal from "./GlobalModal";
 import GlobalButton from "./GlobalButton";
 
 export interface GlobalUnsavedChangesConfirmProps {
-  open: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  title?: string;
-  message?: string;
-  cancelLabel?: string;
-  confirmLabel?: string;
+	open: boolean;
+	onCancel: () => void;
+	onConfirm: () => void;
+	title?: string;
+	message?: string;
+	cancelLabel?: string;
+	confirmLabel?: string;
 }
 
 export default function GlobalUnsavedChangesConfirm({
-  open,
-  onCancel,
-  onConfirm,
-  title,
-  message,
-  cancelLabel,
-  confirmLabel,
+	open,
+	onCancel,
+	onConfirm,
+	title,
+	message,
+	cancelLabel,
+	confirmLabel,
 }: GlobalUnsavedChangesConfirmProps) {
-  const { locale } = useTranslation();
-  const lang: "es" | "en" = locale === "es" ? "es" : "en";
+	const { locale } = useTranslation();
+	const lang: "es" | "en" = locale === "es" ? "es" : "en";
 
-  const t = {
-    title:
-      title ?? (lang === "es" ? "Cambios sin guardar" : "Unsaved changes"),
-    message:
-      message ??
-      (lang === "es"
-        ? "Tienes cambios sin guardar. ¿Salir sin guardar?"
-        : "You have unsaved changes. Leave without saving?"),
-    cancel:
-      cancelLabel ??
-      (lang === "es" ? "Seguir editando" : "Continue editing"),
-    confirm:
-      confirmLabel ??
-      (lang === "es" ? "Descartar cambios" : "Discard changes"),
-  };
+	const t = {
+		title: title ?? (lang === "es" ? "Cambios sin guardar" : "Unsaved changes"),
+		message:
+			message ??
+			(lang === "es"
+				? "Tienes cambios sin guardar. ¿Salir sin guardar?"
+				: "You have unsaved changes. Leave without saving?"),
+		cancel:
+			cancelLabel ?? (lang === "es" ? "Seguir editando" : "Continue editing"),
+		confirm:
+			confirmLabel ?? (lang === "es" ? "Descartar cambios" : "Discard changes"),
+	};
 
-  if (!open) return null;
+	if (!open) return null;
 
-  return (
-    <GlobalModal open={open} onClose={onCancel} title={t.title} size="sm">
-      <div className="space-y-6 text-sm">
-        {/* Main message */}
-        <div className="flex items-start gap-2 text-sm">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning" />
-          <span className="text-text-secondary">{t.message}</span>
-        </div>
+	return (
+		<GlobalModal open={open} onClose={onCancel} title={t.title} size="sm">
+			<div className="space-y-6 text-sm">
+				{/* Main message */}
+				<div className="flex items-start gap-2 text-sm">
+					<AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning" />
+					<span className="text-text-secondary">{t.message}</span>
+				</div>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-2">
-          <GlobalButton variant="secondary" size="sm" onClick={onCancel}>
-            {t.cancel}
-          </GlobalButton>
+				{/* Actions */}
+				<div className="flex justify-end gap-3 pt-2">
+					<GlobalButton variant="secondary" size="sm" onClick={onCancel}>
+						{t.cancel}
+					</GlobalButton>
 
-          <GlobalButton variant="danger" size="sm" onClick={onConfirm}>
-            {t.confirm}
-          </GlobalButton>
-        </div>
-      </div>
-    </GlobalModal>
-  );
+					<GlobalButton variant="danger" size="sm" onClick={onConfirm}>
+						{t.confirm}
+					</GlobalButton>
+				</div>
+			</div>
+		</GlobalModal>
+	);
 }

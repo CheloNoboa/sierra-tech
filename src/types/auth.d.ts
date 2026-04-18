@@ -6,17 +6,17 @@
  */
 
 export interface AuthUserPayload {
-  id: string;
-  name: string;
-  email: string;
-  // authorize() NO acepta superadmin → lo suavizamos
-  role: "user" | "admin";
+	id: string;
+	name: string;
+	email: string;
+	// authorize() NO acepta superadmin → lo suavizamos
+	role: "user" | "admin";
 }
 
 export interface FullDBUser {
-  _id: string;
-  name: string;
-  email: string;
-  role: "user" | "admin" | "superadmin";
-  password?: string;
+	_id: string;
+	name: string;
+	email: string;
+	role: "user" | "admin" | "superadmin";
+	password?: string;
 }

@@ -64,25 +64,25 @@ type PolicyType = "Privacy" | "Terms" | "Cookies";
 type AdminRole = "admin" | "superadmin";
 
 interface BasePolicyDoc {
-  _id: string | { toString(): string };
-  lang?: Lang;
-  lastModifiedBy?: string;
-  lastModifiedEmail?: string;
-  updatedAt?: Date | string;
+	_id: string | { toString(): string };
+	lang?: Lang;
+	lastModifiedBy?: string;
+	lastModifiedEmail?: string;
+	updatedAt?: Date | string;
 }
 
 interface HistoryItem {
-  _id: string;
-  policyType: PolicyType;
-  lang: Lang;
-  lastModifiedBy: string;
-  lastModifiedEmail: string;
-  updatedAt: string;
+	_id: string;
+	policyType: PolicyType;
+	lang: Lang;
+	lastModifiedBy: string;
+	lastModifiedEmail: string;
+	updatedAt: string;
 }
 
 type AdminGuardResult =
-  | { ok: true; role: AdminRole }
-  | { ok: false; response: NextResponse };
+	| { ok: true; role: AdminRole }
+	| { ok: false; response: NextResponse };
 
 /* -------------------------------------------------------------------------- */
 /* Security                                                                   */
@@ -96,37 +96,37 @@ type AdminGuardResult =
  * - 403: authenticated user without sufficient privileges
  */
 async function requireAdmin(): Promise<AdminGuardResult> {
-  const session = await getServerSession(authOptions);
+	const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error_es: "Sesión no válida o expirada.",
-          error_en: "Invalid or expired session.",
-        },
-        { status: 401 }
-      ),
-    };
-  }
+	if (!session?.user) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{
+					error_es: "Sesión no válida o expirada.",
+					error_en: "Invalid or expired session.",
+				},
+				{ status: 401 },
+			),
+		};
+	}
 
-  const role = session.user.role;
+	const role = session.user.role;
 
-  if (role !== "admin" && role !== "superadmin") {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error_es: "No tienes permisos para acceder a este recurso.",
-          error_en: "You do not have permission to access this resource.",
-        },
-        { status: 403 }
-      ),
-    };
-  }
+	if (role !== "admin" && role !== "superadmin") {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{
+					error_es: "No tienes permisos para acceder a este recurso.",
+					error_en: "You do not have permission to access this resource.",
+				},
+				{ status: 403 },
+			),
+		};
+	}
 
-  return { ok: true, role };
+	return { ok: true, role };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -138,29 +138,29 @@ async function requireAdmin(): Promise<AdminGuardResult> {
  * the admin UI.
  */
 function mapPolicyDocToHistoryItem(
-  policyType: PolicyType,
-  doc: BasePolicyDoc
+	policyType: PolicyType,
+	doc: BasePolicyDoc,
 ): HistoryItem {
-  return {
-    _id: typeof doc._id === "string" ? doc._id : doc._id.toString(),
-    policyType,
-    lang: doc.lang === "es" ? "es" : "en",
-    lastModifiedBy: doc.lastModifiedBy?.trim() || "—",
-    lastModifiedEmail: doc.lastModifiedEmail?.trim() || "—",
-    updatedAt: doc.updatedAt
-      ? new Date(doc.updatedAt).toISOString()
-      : new Date(0).toISOString(),
-  };
+	return {
+		_id: typeof doc._id === "string" ? doc._id : doc._id.toString(),
+		policyType,
+		lang: doc.lang === "es" ? "es" : "en",
+		lastModifiedBy: doc.lastModifiedBy?.trim() || "—",
+		lastModifiedEmail: doc.lastModifiedEmail?.trim() || "—",
+		updatedAt: doc.updatedAt
+			? new Date(doc.updatedAt).toISOString()
+			: new Date(0).toISOString(),
+	};
 }
 
 /**
  * Maps a collection of raw policy documents into normalized history items.
  */
 function mapPolicyDocs(
-  policyType: PolicyType,
-  docs: BasePolicyDoc[]
+	policyType: PolicyType,
+	docs: BasePolicyDoc[],
 ): HistoryItem[] {
-  return docs.map((doc) => mapPolicyDocToHistoryItem(policyType, doc));
+	return docs.map((doc) => mapPolicyDocToHistoryItem(policyType, doc));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -168,38 +168,36 @@ function mapPolicyDocs(
 /* -------------------------------------------------------------------------- */
 
 export async function GET() {
-  try {
-    const guard = await requireAdmin();
-    if (!guard.ok) return guard.response;
+	try {
+		const guard = await requireAdmin();
+		if (!guard.ok) return guard.response;
 
-    await connectToDB();
+		await connectToDB();
 
-    const [privacyDocs, termsDocs, cookieDocs] = await Promise.all([
-      PrivacyPolicy.find({}).lean<BasePolicyDoc[]>(),
-      TermsPolicy.find({}).lean<BasePolicyDoc[]>(),
-      CookiePolicy.find({}).lean<BasePolicyDoc[]>(),
-    ]);
+		const [privacyDocs, termsDocs, cookieDocs] = await Promise.all([
+			PrivacyPolicy.find({}).lean<BasePolicyDoc[]>(),
+			TermsPolicy.find({}).lean<BasePolicyDoc[]>(),
+			CookiePolicy.find({}).lean<BasePolicyDoc[]>(),
+		]);
 
-    const history: HistoryItem[] = [
-      ...mapPolicyDocs("Privacy", privacyDocs),
-      ...mapPolicyDocs("Terms", termsDocs),
-      ...mapPolicyDocs("Cookies", cookieDocs),
-    ].sort((a, b) => {
-      return (
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      );
-    });
+		const history: HistoryItem[] = [
+			...mapPolicyDocs("Privacy", privacyDocs),
+			...mapPolicyDocs("Terms", termsDocs),
+			...mapPolicyDocs("Cookies", cookieDocs),
+		].sort((a, b) => {
+			return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+		});
 
-    return NextResponse.json(history, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching admin policies history:", error);
+		return NextResponse.json(history, { status: 200 });
+	} catch (error) {
+		console.error("Error fetching admin policies history:", error);
 
-    return NextResponse.json(
-      {
-        error_es: "Error interno al obtener el historial de políticas.",
-        error_en: "Internal error while fetching policies history.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				error_es: "Error interno al obtener el historial de políticas.",
+				error_en: "Internal error while fetching policies history.",
+			},
+			{ status: 500 },
+		);
+	}
 }

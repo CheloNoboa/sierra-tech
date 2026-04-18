@@ -21,122 +21,122 @@ export type Locale = "es" | "en";
 export type AllowedRole = "admin" | "superadmin";
 
 export interface LocalizedText {
-  es: string;
-  en: string;
+	es: string;
+	en: string;
 }
 
 export interface SiteSettingsPayload {
-  identity: {
-    siteName: string;
-    siteNameShort: string;
-    tagline: LocalizedText;
-    logoLight: string;
-    logoDark: string;
-    favicon: string;
-  };
+	identity: {
+		siteName: string;
+		siteNameShort: string;
+		tagline: LocalizedText;
+		logoLight: string;
+		logoDark: string;
+		favicon: string;
+	};
 
-  contact: {
-    primaryEmail: string;
-    secondaryEmail: string;
-    phonePrimary: string;
-    phoneSecondary: string;
-    whatsapp: string;
-    addressLine1: string;
-    addressLine2: string;
-    city: string;
-    country: string;
-  };
+	contact: {
+		primaryEmail: string;
+		secondaryEmail: string;
+		phonePrimary: string;
+		phoneSecondary: string;
+		whatsapp: string;
+		addressLine1: string;
+		addressLine2: string;
+		city: string;
+		country: string;
+	};
 
-  socialLinks: {
-    facebook: string;
-    instagram: string;
-    linkedin: string;
-    youtube: string;
-    x: string;
-  };
+	socialLinks: {
+		facebook: string;
+		instagram: string;
+		linkedin: string;
+		youtube: string;
+		x: string;
+	};
 
-  globalPrimaryCta: {
-    label: LocalizedText;
-    href: string;
-    enabled: boolean;
-  };
+	globalPrimaryCta: {
+		label: LocalizedText;
+		href: string;
+		enabled: boolean;
+	};
 
-  footer: {
-    aboutText: LocalizedText;
-    copyrightText: string;
-    legalLinksEnabled: boolean;
-  };
+	footer: {
+		aboutText: LocalizedText;
+		copyrightText: string;
+		legalLinksEnabled: boolean;
+	};
 
-  seo: {
-    defaultTitle: LocalizedText;
-    defaultDescription: LocalizedText;
-    defaultOgImage: string;
-  };
+	seo: {
+		defaultTitle: LocalizedText;
+		defaultDescription: LocalizedText;
+		defaultOgImage: string;
+	};
 
-  i18n: {
-    defaultLocale: Locale;
-    supportedLocales: Locale[];
-  };
+	i18n: {
+		defaultLocale: Locale;
+		supportedLocales: Locale[];
+	};
 
-  updatedAt?: string;
-  updatedBy?: string;
-  updatedByEmail?: string;
+	updatedAt?: string;
+	updatedBy?: string;
+	updatedByEmail?: string;
 }
 
 export const SITE_SETTINGS_DEFAULTS: SiteSettingsPayload = {
-  identity: {
-    siteName: "",
-    siteNameShort: "",
-    tagline: { es: "", en: "" },
-    logoLight: "",
-    logoDark: "",
-    favicon: "",
-  },
+	identity: {
+		siteName: "",
+		siteNameShort: "",
+		tagline: { es: "", en: "" },
+		logoLight: "",
+		logoDark: "",
+		favicon: "",
+	},
 
-  contact: {
-    primaryEmail: "",
-    secondaryEmail: "",
-    phonePrimary: "",
-    phoneSecondary: "",
-    whatsapp: "",
-    addressLine1: "",
-    addressLine2: "",
-    city: "",
-    country: "",
-  },
+	contact: {
+		primaryEmail: "",
+		secondaryEmail: "",
+		phonePrimary: "",
+		phoneSecondary: "",
+		whatsapp: "",
+		addressLine1: "",
+		addressLine2: "",
+		city: "",
+		country: "",
+	},
 
-  socialLinks: {
-    facebook: "",
-    instagram: "",
-    linkedin: "",
-    youtube: "",
-    x: "",
-  },
+	socialLinks: {
+		facebook: "",
+		instagram: "",
+		linkedin: "",
+		youtube: "",
+		x: "",
+	},
 
-  globalPrimaryCta: {
-    label: { es: "", en: "" },
-    href: "",
-    enabled: true,
-  },
+	globalPrimaryCta: {
+		label: { es: "", en: "" },
+		href: "",
+		enabled: true,
+	},
 
-  footer: {
-    aboutText: { es: "", en: "" },
-    copyrightText: "",
-    legalLinksEnabled: true,
-  },
+	footer: {
+		aboutText: { es: "", en: "" },
+		copyrightText: "",
+		legalLinksEnabled: true,
+	},
 
-  seo: {
-    defaultTitle: { es: "", en: "" },
-    defaultDescription: { es: "", en: "" },
-    defaultOgImage: "",
-  },
+	seo: {
+		defaultTitle: { es: "", en: "" },
+		defaultDescription: { es: "", en: "" },
+		defaultOgImage: "",
+	},
 
-  i18n: {
-    defaultLocale: "es",
-    supportedLocales: ["es", "en"],
-  },
+	i18n: {
+		defaultLocale: "es",
+		supportedLocales: ["es", "en"],
+	},
 
-  updatedAt: "",
-  updatedBy: "",
-  updatedByEmail: "",
+	updatedAt: "",
+	updatedBy: "",
+	updatedByEmail: "",
 };

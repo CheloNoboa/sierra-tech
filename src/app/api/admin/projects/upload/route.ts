@@ -47,11 +47,11 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 /* -------------------------------------------------------------------------- */
 
 const {
-  R2_ENDPOINT,
-  R2_ACCESS_KEY_ID,
-  R2_SECRET_ACCESS_KEY,
-  R2_BUCKET_NAME,
-  R2_PUBLIC_BASE_URL,
+	R2_ENDPOINT,
+	R2_ACCESS_KEY_ID,
+	R2_SECRET_ACCESS_KEY,
+	R2_BUCKET_NAME,
+	R2_PUBLIC_BASE_URL,
 } = process.env;
 
 /* -------------------------------------------------------------------------- */
@@ -59,25 +59,22 @@ const {
 /* -------------------------------------------------------------------------- */
 
 function requireEnv(value: string | undefined, name: string): string {
-  if (!value) {
-    throw new Error(`Missing env variable: ${name}`);
-  }
-  return value;
+	if (!value) {
+		throw new Error(`Missing env variable: ${name}`);
+	}
+	return value;
 }
 
 const R2_ENDPOINT_SAFE = requireEnv(R2_ENDPOINT, "R2_ENDPOINT");
 const R2_ACCESS_KEY_ID_SAFE = requireEnv(R2_ACCESS_KEY_ID, "R2_ACCESS_KEY_ID");
 const R2_SECRET_ACCESS_KEY_SAFE = requireEnv(
-  R2_SECRET_ACCESS_KEY,
-  "R2_SECRET_ACCESS_KEY"
+	R2_SECRET_ACCESS_KEY,
+	"R2_SECRET_ACCESS_KEY",
 );
-const R2_BUCKET_NAME_SAFE = requireEnv(
-  R2_BUCKET_NAME,
-  "R2_BUCKET_NAME"
-);
+const R2_BUCKET_NAME_SAFE = requireEnv(R2_BUCKET_NAME, "R2_BUCKET_NAME");
 const R2_PUBLIC_BASE_URL_SAFE = requireEnv(
-  R2_PUBLIC_BASE_URL,
-  "R2_PUBLIC_BASE_URL"
+	R2_PUBLIC_BASE_URL,
+	"R2_PUBLIC_BASE_URL",
 );
 
 /* -------------------------------------------------------------------------- */
@@ -85,12 +82,12 @@ const R2_PUBLIC_BASE_URL_SAFE = requireEnv(
 /* -------------------------------------------------------------------------- */
 
 const r2Client = new S3Client({
-  region: "auto",
-  endpoint: R2_ENDPOINT_SAFE,
-  credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID_SAFE,
-    secretAccessKey: R2_SECRET_ACCESS_KEY_SAFE,
-  },
+	region: "auto",
+	endpoint: R2_ENDPOINT_SAFE,
+	credentials: {
+		accessKeyId: R2_ACCESS_KEY_ID_SAFE,
+		secretAccessKey: R2_SECRET_ACCESS_KEY_SAFE,
+	},
 });
 
 /* -------------------------------------------------------------------------- */
@@ -98,10 +95,10 @@ const r2Client = new S3Client({
 /* -------------------------------------------------------------------------- */
 
 function sanitizeFileName(value: string): string {
-  return value
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9._-]/g, "");
+	return value
+		.trim()
+		.replace(/\s+/g, "-")
+		.replace(/[^a-zA-Z0-9._-]/g, "");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -109,74 +106,72 @@ function sanitizeFileName(value: string): string {
 /* -------------------------------------------------------------------------- */
 
 export async function POST(req: Request) {
-  try {
-    const formData = await req.formData();
-    const rawFile = formData.get("file");
+	try {
+		const formData = await req.formData();
+		const rawFile = formData.get("file");
 
-    if (!(rawFile instanceof File)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "File is required.",
-        },
-        { status: 400 }
-      );
-    }
+		if (!(rawFile instanceof File)) {
+			return NextResponse.json(
+				{
+					ok: false,
+					error: "File is required.",
+				},
+				{ status: 400 },
+			);
+		}
 
-    /* ---------------------------------------------------------------------- */
-    /* Prepare file                                                           */
-    /* ---------------------------------------------------------------------- */
+		/* ---------------------------------------------------------------------- */
+		/* Prepare file                                                           */
+		/* ---------------------------------------------------------------------- */
 
-    const buffer = Buffer.from(await rawFile.arrayBuffer());
+		const buffer = Buffer.from(await rawFile.arrayBuffer());
 
-    const safeName = sanitizeFileName(rawFile.name || "file");
-    const timestamp = Date.now();
+		const safeName = sanitizeFileName(rawFile.name || "file");
+		const timestamp = Date.now();
 
-    const storageKey = `projects/${timestamp}-${safeName}`;
+		const storageKey = `projects/${timestamp}-${safeName}`;
 
-    /* ---------------------------------------------------------------------- */
-    /* Upload to R2                                                           */
-    /* ---------------------------------------------------------------------- */
+		/* ---------------------------------------------------------------------- */
+		/* Upload to R2                                                           */
+		/* ---------------------------------------------------------------------- */
 
-    await r2Client.send(
-      new PutObjectCommand({
-        Bucket: R2_BUCKET_NAME_SAFE,
-        Key: storageKey,
-        Body: buffer,
-        ContentType: rawFile.type || "application/octet-stream",
-      })
-    );
+		await r2Client.send(
+			new PutObjectCommand({
+				Bucket: R2_BUCKET_NAME_SAFE,
+				Key: storageKey,
+				Body: buffer,
+				ContentType: rawFile.type || "application/octet-stream",
+			}),
+		);
 
-    /* ---------------------------------------------------------------------- */
-    /* Public URL                                                             */
-    /* ---------------------------------------------------------------------- */
+		/* ---------------------------------------------------------------------- */
+		/* Public URL                                                             */
+		/* ---------------------------------------------------------------------- */
 
-    const baseUrl = R2_PUBLIC_BASE_URL_SAFE.replace(/\/+$/, "");
-    const url = `${baseUrl}/${storageKey}`;
+		const baseUrl = R2_PUBLIC_BASE_URL_SAFE.replace(/\/+$/, "");
+		const url = `${baseUrl}/${storageKey}`;
 
-    /* ---------------------------------------------------------------------- */
-    /* Response                                                               */
-    /* ---------------------------------------------------------------------- */
+		/* ---------------------------------------------------------------------- */
+		/* Response                                                               */
+		/* ---------------------------------------------------------------------- */
 
-    return NextResponse.json({
-      ok: true,
-      item: {
-        url,
-        storageKey,
-      },
-    });
-  } catch (error) {
-    console.error("[admin/projects/upload] Upload error:", error);
+		return NextResponse.json({
+			ok: true,
+			item: {
+				url,
+				storageKey,
+			},
+		});
+	} catch (error) {
+		console.error("[admin/projects/upload] Upload error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unexpected upload error.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				ok: false,
+				error:
+					error instanceof Error ? error.message : "Unexpected upload error.",
+			},
+			{ status: 500 },
+		);
+	}
 }

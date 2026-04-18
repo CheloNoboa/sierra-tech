@@ -22,50 +22,53 @@ import { useSession } from "next-auth/react";
 import { useTranslation } from "@/hooks/useTranslation";
 
 export default function CloseButton() {
-  const router = useRouter();
-  const { data: session } = useSession();
-  const { locale } = useTranslation();
+	const router = useRouter();
+	const { data: session } = useSession();
+	const { locale } = useTranslation();
 
-  const handleClose = () => {
-    const prevPath = sessionStorage.getItem("prevPath");
+	const handleClose = () => {
+		const prevPath = sessionStorage.getItem("prevPath");
 
-    // 🧹 Evita navegación inconsistente en futuros usos
-    sessionStorage.removeItem("prevPath");
+		// 🧹 Evita navegación inconsistente en futuros usos
+		sessionStorage.removeItem("prevPath");
 
-    if (prevPath && !prevPath.includes("/login")) {
-      router.push(prevPath);
-      return;
-    }
+		if (prevPath && !prevPath.includes("/login")) {
+			router.push(prevPath);
+			return;
+		}
 
-    // 🔐 Fallback por rol
-    if (session?.user?.role === "admin" || session?.user?.role === "superadmin") {
-      router.push("/admin/dashboard");
-      return;
-    }
+		// 🔐 Fallback por rol
+		if (
+			session?.user?.role === "admin" ||
+			session?.user?.role === "superadmin"
+		) {
+			router.push("/admin/dashboard");
+			return;
+		}
 
-    if (session?.user?.role === "user") {
-      router.push("/user/home");
-      return;
-    }
+		if (session?.user?.role === "user") {
+			router.push("/user/home");
+			return;
+		}
 
-    router.push("/");
-  };
+		router.push("/");
+	};
 
-  return (
-    <div className="text-center mt-12">
-      <button
-        type="button"
-        onClick={handleClose}
-        className="
+	return (
+		<div className="text-center mt-12">
+			<button
+				type="button"
+				onClick={handleClose}
+				className="
           px-6 py-2 rounded-xl font-semibold transition
           bg-brand-primary
           text-text-primary
           hover:bg-brand-primaryStrong
           hover:text-white
         "
-      >
-        {locale === "es" ? "Cerrar" : "Close"}
-      </button>
-    </div>
-  );
+			>
+				{locale === "es" ? "Cerrar" : "Close"}
+			</button>
+		</div>
+	);
 }

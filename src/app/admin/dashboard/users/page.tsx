@@ -38,9 +38,9 @@
 import UsersDataGrid from "@/components/UsersDataGrid";
 
 export default function UsersPage() {
-  return (
-    <div className="p-4">
-      <UsersDataGrid />
-    </div>
-  );
+	return (
+		<div className="p-4">
+			<UsersDataGrid />
+		</div>
+	);
 }

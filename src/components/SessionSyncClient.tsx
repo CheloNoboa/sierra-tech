@@ -38,10 +38,10 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 type SessionUpdateMessage =
-  | "refresh-session"
-  | "logout"
-  | { type: "refresh-session"; sourceId?: string }
-  | { type: "logout"; sourceId?: string };
+	| "refresh-session"
+	| "logout"
+	| { type: "refresh-session"; sourceId?: string }
+	| { type: "logout"; sourceId?: string };
 
 /**
  * ES:
@@ -53,64 +53,64 @@ type SessionUpdateMessage =
  *   messages when `sourceId` is present.
  */
 function makeTabId(): string {
-  try {
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-      return crypto.randomUUID();
-    }
-  } catch {
-    /* ignore */
-  }
-  return `tab_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+	try {
+		if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+			return crypto.randomUUID();
+		}
+	} catch {
+		/* ignore */
+	}
+	return `tab_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 }
 
 export default function SessionSyncClient() {
-  const router = useRouter();
-  const tabIdRef = useRef<string>(makeTabId());
+	const router = useRouter();
+	const tabIdRef = useRef<string>(makeTabId());
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+	useEffect(() => {
+		if (typeof window === "undefined") return;
 
-    const channel = new BroadcastChannel("session-updates");
+		const channel = new BroadcastChannel("session-updates");
 
-    const handler = (event: MessageEvent) => {
-      const msg = event.data as SessionUpdateMessage;
+		const handler = (event: MessageEvent) => {
+			const msg = event.data as SessionUpdateMessage;
 
-      if (msg === "refresh-session") {
-        router.refresh();
-        return;
-      }
+			if (msg === "refresh-session") {
+				router.refresh();
+				return;
+			}
 
-      if (msg === "logout") {
-        router.replace("/");
-        return;
-      }
+			if (msg === "logout") {
+				router.replace("/");
+				return;
+			}
 
-      if (typeof msg === "object" && msg?.type) {
-        if (msg.sourceId && msg.sourceId === tabIdRef.current) return;
+			if (typeof msg === "object" && msg?.type) {
+				if (msg.sourceId && msg.sourceId === tabIdRef.current) return;
 
-        if (msg.type === "refresh-session") {
-          router.refresh();
-          return;
-        }
+				if (msg.type === "refresh-session") {
+					router.refresh();
+					return;
+				}
 
-        if (msg.type === "logout") {
-          router.replace("/");
-          return;
-        }
-      }
-    };
+				if (msg.type === "logout") {
+					router.replace("/");
+					return;
+				}
+			}
+		};
 
-    channel.addEventListener("message", handler);
+		channel.addEventListener("message", handler);
 
-    return () => {
-      channel.removeEventListener("message", handler);
-      try {
-        channel.close();
-      } catch {
-        /* silent cleanup */
-      }
-    };
-  }, [router]);
+		return () => {
+			channel.removeEventListener("message", handler);
+			try {
+				channel.close();
+			} catch {
+				/* silent cleanup */
+			}
+		};
+	}, [router]);
 
-  return null;
+	return null;
 }

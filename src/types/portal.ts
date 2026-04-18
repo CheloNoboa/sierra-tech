@@ -44,30 +44,30 @@
  * Se evita exponer al portal estados internos técnicos o ambiguos.
  */
 export type PortalProjectVisibleStatus =
-  | "active"
-  | "follow_up"
-  | "completed"
-  | "maintenance";
+	| "active"
+	| "follow_up"
+	| "completed"
+	| "maintenance";
 
 /**
  * Estado operativo simplificado para mantenimientos.
  */
 export type PortalMaintenanceStatus =
-  | "scheduled"
-  | "upcoming"
-  | "overdue"
-  | "completed";
+	| "scheduled"
+	| "upcoming"
+	| "overdue"
+	| "completed";
 
 /**
  * Tipos de alerta visibles en el portal.
  */
 export type PortalAlertType =
-  | "maintenance_upcoming"
-  | "maintenance_overdue"
-  | "document_expiring"
-  | "warranty_expiring"
-  | "scheduled_review"
-  | "critical";
+	| "maintenance_upcoming"
+	| "maintenance_overdue"
+	| "document_expiring"
+	| "warranty_expiring"
+	| "scheduled_review"
+	| "critical";
 
 /**
  * Prioridad visible de alerta.
@@ -78,9 +78,9 @@ export type PortalAlertPriority = "high" | "medium" | "low";
  * Acción principal sugerida por una alerta.
  */
 export type PortalAlertAction =
-  | "view_project"
-  | "view_document"
-  | "contact_support";
+	| "view_project"
+	| "view_document"
+	| "contact_support";
 
 /* -------------------------------------------------------------------------- */
 /* 📄 Documentos                                                              */
@@ -91,24 +91,24 @@ export type PortalAlertAction =
  * Basada en el contrato documental-operativo del módulo Projects.
  */
 export type PortalDocumentType =
-  | "contract"
-  | "planning"
-  | "schedule"
-  | "technical_design"
-  | "plan"
-  | "technical_report"
-  | "technical_sheet"
-  | "operation_manual"
-  | "maintenance_manual"
-  | "inspection_report"
-  | "maintenance_report"
-  | "delivery_record"
-  | "certificate"
-  | "warranty"
-  | "invoice"
-  | "permit"
-  | "photo_evidence"
-  | "other";
+	| "contract"
+	| "planning"
+	| "schedule"
+	| "technical_design"
+	| "plan"
+	| "technical_report"
+	| "technical_sheet"
+	| "operation_manual"
+	| "maintenance_manual"
+	| "inspection_report"
+	| "maintenance_report"
+	| "delivery_record"
+	| "certificate"
+	| "warranty"
+	| "invoice"
+	| "permit"
+	| "photo_evidence"
+	| "other";
 
 /**
  * Origen funcional del documento dentro del portal.
@@ -119,8 +119,8 @@ export type PortalDocumentType =
  *   de un mantenimiento, pero deben quedar disponibles para el cliente
  */
 export type PortalDocumentSource =
-  | "project_document"
-  | "maintenance_attachment";
+	| "project_document"
+	| "maintenance_attachment";
 
 /**
  * Documento visible dentro del portal cliente.
@@ -130,36 +130,36 @@ export type PortalDocumentSource =
  * - detalle de proyecto
  */
 export interface PortalDocumentItem {
-  documentId: string;
+	documentId: string;
 
-  title: string;
-  description?: string | null;
+	title: string;
+	description?: string | null;
 
-  type: PortalDocumentType;
-  source: PortalDocumentSource;
+	type: PortalDocumentType;
+	source: PortalDocumentSource;
 
-  projectId?: string | null;
-  projectTitle?: string | null;
+	projectId?: string | null;
+	projectTitle?: string | null;
 
-  /**
-   * Contexto adicional cuando el archivo proviene de un mantenimiento.
-   */
-  maintenanceId?: string | null;
-  maintenanceTitle?: string | null;
+	/**
+	 * Contexto adicional cuando el archivo proviene de un mantenimiento.
+	 */
+	maintenanceId?: string | null;
+	maintenanceTitle?: string | null;
 
-  fileUrl: string;
-  fileName?: string | null;
-  mimeType?: string | null;
-  fileSizeBytes?: number | null;
+	fileUrl: string;
+	fileName?: string | null;
+	mimeType?: string | null;
+	fileSizeBytes?: number | null;
 
-  language?: "es" | "en" | "both" | "other" | null;
+	language?: "es" | "en" | "both" | "other" | null;
 
-  documentDate?: string | null;
-  effectiveDate?: string | null;
-  expiresAt?: string | null;
-  uploadedAt?: string | null;
+	documentDate?: string | null;
+	effectiveDate?: string | null;
+	expiresAt?: string | null;
+	uploadedAt?: string | null;
 
-  thumbnailUrl?: string | null;
+	thumbnailUrl?: string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -167,9 +167,9 @@ export interface PortalDocumentItem {
 /* -------------------------------------------------------------------------- */
 
 export interface PortalMaintenanceAttachment {
-  fileName?: string | null;
-  fileUrl: string;
-  mimeType?: string | null;
+	fileName?: string | null;
+	fileUrl: string;
+	mimeType?: string | null;
 }
 
 /**
@@ -178,27 +178,27 @@ export interface PortalMaintenanceAttachment {
  * alimenta la vista global de alertas.
  */
 export interface PortalMaintenanceItem {
-  maintenanceId: string;
+	maintenanceId: string;
 
-  projectId: string;
-  projectTitle?: string | null;
+	projectId: string;
+	projectTitle?: string | null;
 
-  title: string;
-  description?: string | null;
+	title: string;
+	description?: string | null;
 
-  maintenanceType?: string | null;
+	maintenanceType?: string | null;
 
-  frequencyValue?: number | null;
-  frequencyUnit?: "days" | "weeks" | "months" | "years" | null;
+	frequencyValue?: number | null;
+	frequencyUnit?: "days" | "weeks" | "months" | "years" | null;
 
-  lastCompletedDate?: string | null;
-  nextDueDate?: string | null;
+	lastCompletedDate?: string | null;
+	nextDueDate?: string | null;
 
-  status: PortalMaintenanceStatus;
+	status: PortalMaintenanceStatus;
 
-  instructions?: string | null;
+	instructions?: string | null;
 
-  attachments?: PortalMaintenanceAttachment[];
+	attachments?: PortalMaintenanceAttachment[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -217,24 +217,24 @@ export interface PortalMaintenanceItem {
  * una colección separada desde el día uno.
  */
 export interface PortalAlertItem {
-  alertId: string;
+	alertId: string;
 
-  type: PortalAlertType;
-  priority: PortalAlertPriority;
+	type: PortalAlertType;
+	priority: PortalAlertPriority;
 
-  title: string;
-  description: string;
+	title: string;
+	description: string;
 
-  projectId?: string | null;
-  projectTitle?: string | null;
+	projectId?: string | null;
+	projectTitle?: string | null;
 
-  documentId?: string | null;
-  documentTitle?: string | null;
+	documentId?: string | null;
+	documentTitle?: string | null;
 
-  dueDate?: string | null;
-  createdAt?: string | null;
+	dueDate?: string | null;
+	createdAt?: string | null;
 
-  action: PortalAlertAction;
+	action: PortalAlertAction;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -247,54 +247,54 @@ export interface PortalAlertItem {
  * - listado de proyectos
  */
 export interface PortalProjectCard {
-  projectId: string;
+	projectId: string;
 
-  title: string;
-  summary: string;
+	title: string;
+	summary: string;
 
-  category?: string | null;
-  projectDate?: string | null;
+	category?: string | null;
+	projectDate?: string | null;
 
-  coverImageUrl?: string | null;
+	coverImageUrl?: string | null;
 
-  visibleStatus: PortalProjectVisibleStatus;
+	visibleStatus: PortalProjectVisibleStatus;
 
-  documentsCount: number;
-  activeAlertsCount: number;
+	documentsCount: number;
+	activeAlertsCount: number;
 
-  nextMaintenanceDate?: string | null;
-  nextRelevantDate?: string | null;
+	nextMaintenanceDate?: string | null;
+	nextRelevantDate?: string | null;
 }
 
 /**
  * Detalle completo del proyecto visible en portal cliente.
  */
 export interface PortalProjectGalleryItem {
-  url: string;
-  alt?: string | null;
+	url: string;
+	alt?: string | null;
 }
 
 export interface PortalProjectDetail {
-  projectId: string;
+	projectId: string;
 
-  title: string;
-  summary: string;
-  description: string;
+	title: string;
+	summary: string;
+	description: string;
 
-  category?: string | null;
-  projectDate?: string | null;
+	category?: string | null;
+	projectDate?: string | null;
 
-  coverImageUrl?: string | null;
-  gallery?: PortalProjectGalleryItem[];
+	coverImageUrl?: string | null;
+	gallery?: PortalProjectGalleryItem[];
 
-  visibleStatus: PortalProjectVisibleStatus;
+	visibleStatus: PortalProjectVisibleStatus;
 
-  organizationId: string;
-  organizationName?: string | null;
+	organizationId: string;
+	organizationName?: string | null;
 
-  documents: PortalDocumentItem[];
-  maintenanceItems: PortalMaintenanceItem[];
-  alerts: PortalAlertItem[];
+	documents: PortalDocumentItem[];
+	maintenanceItems: PortalMaintenanceItem[];
+	alerts: PortalAlertItem[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -302,24 +302,24 @@ export interface PortalProjectDetail {
 /* -------------------------------------------------------------------------- */
 
 export interface PortalHomeSummary {
-  activeProjects: number;
-  recentDocuments: number;
-  activeAlerts: number;
-  upcomingMaintenances: number;
+	activeProjects: number;
+	recentDocuments: number;
+	activeAlerts: number;
+	upcomingMaintenances: number;
 }
 
 /**
  * Contrato de datos para la home del portal cliente.
  */
 export interface PortalHomeData {
-  organizationName: string;
-  userName: string;
+	organizationName: string;
+	userName: string;
 
-  summary: PortalHomeSummary;
+	summary: PortalHomeSummary;
 
-  featuredProjects: PortalProjectCard[];
-  recentDocuments: PortalDocumentItem[];
-  alerts: PortalAlertItem[];
+	featuredProjects: PortalProjectCard[];
+	recentDocuments: PortalDocumentItem[];
+	alerts: PortalAlertItem[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -327,19 +327,19 @@ export interface PortalHomeData {
 /* -------------------------------------------------------------------------- */
 
 export interface PortalProjectsFilters {
-  q?: string;
-  status?: PortalProjectVisibleStatus | "all";
+	q?: string;
+	status?: PortalProjectVisibleStatus | "all";
 }
 
 export interface PortalDocumentsFilters {
-  q?: string;
-  projectId?: string | "all";
-  type?: PortalDocumentType | "all";
-  language?: "es" | "en" | "both" | "other" | "all";
+	q?: string;
+	projectId?: string | "all";
+	type?: PortalDocumentType | "all";
+	language?: "es" | "en" | "both" | "other" | "all";
 }
 
 export interface PortalAlertsFilters {
-  projectId?: string | "all";
-  type?: PortalAlertType | "all";
-  priority?: PortalAlertPriority | "all";
+	projectId?: string | "all";
+	type?: PortalAlertType | "all";
+	priority?: PortalAlertPriority | "all";
 }

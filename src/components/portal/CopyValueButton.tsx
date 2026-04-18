@@ -27,46 +27,46 @@
 import { useEffect, useState } from "react";
 
 interface CopyValueButtonProps {
-  value: string;
-  defaultLabel?: string;
-  copiedLabel?: string;
+	value: string;
+	defaultLabel?: string;
+	copiedLabel?: string;
 }
 
 export default function CopyValueButton({
-  value,
-  defaultLabel = "Copiar",
-  copiedLabel = "Copiado",
+	value,
+	defaultLabel = "Copiar",
+	copiedLabel = "Copiado",
 }: CopyValueButtonProps) {
-  const [copied, setCopied] = useState(false);
+	const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!copied) return;
+	useEffect(() => {
+		if (!copied) return;
 
-    const timer = window.setTimeout(() => {
-      setCopied(false);
-    }, 1800);
+		const timer = window.setTimeout(() => {
+			setCopied(false);
+		}, 1800);
 
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [copied]);
+		return () => {
+			window.clearTimeout(timer);
+		};
+	}, [copied]);
 
-  async function handleCopy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  }
+	async function handleCopy(): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(value);
+			setCopied(true);
+		} catch {
+			setCopied(false);
+		}
+	}
 
-  return (
-    <button
-      type="button"
-      onClick={() => void handleCopy()}
-      className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
-    >
-      {copied ? copiedLabel : defaultLabel}
-    </button>
-  );
+	return (
+		<button
+			type="button"
+			onClick={() => void handleCopy()}
+			className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+		>
+			{copied ? copiedLabel : defaultLabel}
+		</button>
+	);
 }

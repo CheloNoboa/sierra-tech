@@ -47,56 +47,54 @@ import Footer from "@/components/Footer";
 import { GlobalToastProvider } from "@/components/ui/GlobalToastProvider";
 
 interface ProvidersProps {
-  children: ReactNode;
+	children: ReactNode;
 }
 
 export default function Providers({ children }: ProvidersProps) {
-  const pathname = usePathname();
+	const pathname = usePathname();
 
-  /**
-   * ---------------------------------------------------------------------------
-   * Determina si la ruta actual pertenece al sitio público.
-   *
-   * Rutas privadas:
-   * - /admin/**
-   * - /portal/**
-   *
-   * Todo lo demás se considera público dentro de la estructura actual.
-   * ---------------------------------------------------------------------------
-   */
-  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isPortalRoute =
-    pathname === "/portal" || pathname.startsWith("/portal/");
-  const showPublicChrome = !isAdminRoute && !isPortalRoute;
+	/**
+	 * ---------------------------------------------------------------------------
+	 * Determina si la ruta actual pertenece al sitio público.
+	 *
+	 * Rutas privadas:
+	 * - /admin/**
+	 * - /portal/**
+	 *
+	 * Todo lo demás se considera público dentro de la estructura actual.
+	 * ---------------------------------------------------------------------------
+	 */
+	const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+	const isPortalRoute =
+		pathname === "/portal" || pathname.startsWith("/portal/");
+	const showPublicChrome = !isAdminRoute && !isPortalRoute;
 
-  return (
-    <SessionProvider refetchOnWindowFocus={false} refetchInterval={0}>
-      <LanguageProvider>
-        <GlobalToastProvider>
-          {/* Sincronización de login/logout entre pestañas */}
-          <SessionSyncClient />
+	return (
+		<SessionProvider refetchOnWindowFocus={false} refetchInterval={0}>
+			<LanguageProvider>
+				<GlobalToastProvider>
+					{/* Sincronización de login/logout entre pestañas */}
+					<SessionSyncClient />
 
-          {/* Guard global de inactividad */}
-          <AutoLogoutGuard />
+					{/* Guard global de inactividad */}
+					<AutoLogoutGuard />
 
-          {/* Header público solo en rutas públicas */}
-          {showPublicChrome ? <Header /> : null}
+					{/* Header público solo en rutas públicas */}
+					{showPublicChrome ? <Header /> : null}
 
-          {/* Contenido dinámico */}
-          <main
-            className={
-              showPublicChrome
-                ? "flex-1 bg-white text-text-primary"
-                : "flex-1"
-            }
-          >
-            {children}
-          </main>
+					{/* Contenido dinámico */}
+					<main
+						className={
+							showPublicChrome ? "flex-1 bg-white text-text-primary" : "flex-1"
+						}
+					>
+						{children}
+					</main>
 
-          {/* Footer público solo en rutas públicas */}
-          {showPublicChrome ? <Footer /> : null}
-        </GlobalToastProvider>
-      </LanguageProvider>
-    </SessionProvider>
-  );
+					{/* Footer público solo en rutas públicas */}
+					{showPublicChrome ? <Footer /> : null}
+				</GlobalToastProvider>
+			</LanguageProvider>
+		</SessionProvider>
+	);
 }

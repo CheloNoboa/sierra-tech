@@ -43,9 +43,9 @@ import { getPortalProjectDetailByOrganization } from "@/lib/portal/portalProject
 /* -------------------------------------------------------------------------- */
 
 type RouteContext = {
-  params: Promise<{
-    id: string;
-  }>;
+	params: Promise<{
+		id: string;
+	}>;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -53,60 +53,60 @@ type RouteContext = {
 /* -------------------------------------------------------------------------- */
 
 export async function GET(_: Request, context: RouteContext) {
-  try {
-    const session = await getServerSession(authOptions);
-    const user = session?.user;
+	try {
+		const session = await getServerSession(authOptions);
+		const user = session?.user;
 
-    /**
-     * Solo usuarios cliente activos con organizationId válido.
-     */
-    if (
-      !user ||
-      user.userType !== "client" ||
-      user.status !== "active" ||
-      !user.organizationId
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Unauthorized.",
-        },
-        { status: 401 }
-      );
-    }
+		/**
+		 * Solo usuarios cliente activos con organizationId válido.
+		 */
+		if (
+			!user ||
+			user.userType !== "client" ||
+			user.status !== "active" ||
+			!user.organizationId
+		) {
+			return NextResponse.json(
+				{
+					ok: false,
+					error: "Unauthorized.",
+				},
+				{ status: 401 },
+			);
+		}
 
-    const { id } = await context.params;
+		const { id } = await context.params;
 
-    const item = await getPortalProjectDetailByOrganization({
-      organizationId: user.organizationId,
-      projectId: id,
-      organizationName: user.organizationName ?? null,
-    });
+		const item = await getPortalProjectDetailByOrganization({
+			organizationId: user.organizationId,
+			projectId: id,
+			organizationName: user.organizationName ?? null,
+		});
 
-    if (!item) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Project not found.",
-        },
-        { status: 404 }
-      );
-    }
+		if (!item) {
+			return NextResponse.json(
+				{
+					ok: false,
+					error: "Project not found.",
+				},
+				{ status: 404 },
+			);
+		}
 
-    return NextResponse.json({
-      ok: true,
-      item,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Error loading portal project.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json({
+			ok: true,
+			item,
+		});
+	} catch (error) {
+		return NextResponse.json(
+			{
+				ok: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Error loading portal project.",
+			},
+			{ status: 500 },
+		);
+	}
 }

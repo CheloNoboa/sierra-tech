@@ -19,24 +19,24 @@
  */
 
 export function formatLastAccess(
-  value: string | Date | null | undefined,
-  locale: "es" | "en" = "es"
+	value: string | Date | null | undefined,
+	locale: "es" | "en" = "es",
 ): string {
-  if (!value) {
-    return locale === "es" ? "Nunca" : "Never";
-  }
+	if (!value) {
+		return locale === "es" ? "Nunca" : "Never";
+	}
 
-  const date = value instanceof Date ? value : new Date(value);
+	const date = value instanceof Date ? value : new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return locale === "es" ? "Nunca" : "Never";
-  }
+	if (Number.isNaN(date.getTime())) {
+		return locale === "es" ? "Nunca" : "Never";
+	}
 
-  return new Intl.DateTimeFormat(locale === "es" ? "es-EC" : "en-US", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+	return new Intl.DateTimeFormat(locale === "es" ? "es-EC" : "en-US", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	}).format(date);
 }

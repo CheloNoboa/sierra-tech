@@ -7,22 +7,22 @@
  * ------------------------------------------------------------
  */
 export const UI_TEXTS = {
-  loading: {
-    es: "Cargando...",
-    en: "Loading...",
-  },
-  maintenance: {
-    title: {
-      es: "Mantenimiento",
-      en: "Maintenance",
-    },
-    sectionTitle: {
-      es: "Mantenimiento de Condiciones de Uso y Privacidad",
-      en: "Privacy & Terms Maintenance",
-    },
-  },
-  lastUpdated: {
-    es: "Última actualización",
-    en: "Last updated",
-  },
+	loading: {
+		es: "Cargando...",
+		en: "Loading...",
+	},
+	maintenance: {
+		title: {
+			es: "Mantenimiento",
+			en: "Maintenance",
+		},
+		sectionTitle: {
+			es: "Mantenimiento de Condiciones de Uso y Privacidad",
+			en: "Privacy & Terms Maintenance",
+		},
+	},
+	lastUpdated: {
+		es: "Última actualización",
+		en: "Last updated",
+	},
 } as const;

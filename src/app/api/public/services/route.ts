@@ -44,26 +44,26 @@ import HomeSettings from "@/models/HomeSettings";
 /* -------------------------------------------------------------------------- */
 
 interface LocalizedText {
-  es: string;
-  en: string;
+	es: string;
+	en: string;
 }
 
 interface ServicesPageHeader {
-  eyebrow: LocalizedText;
-  title: LocalizedText;
-  subtitle: LocalizedText;
-  primaryCtaLabel: LocalizedText;
-  primaryCtaHref: string;
-  secondaryCtaLabel: LocalizedText;
-  secondaryCtaHref: string;
+	eyebrow: LocalizedText;
+	title: LocalizedText;
+	subtitle: LocalizedText;
+	primaryCtaLabel: LocalizedText;
+	primaryCtaHref: string;
+	secondaryCtaLabel: LocalizedText;
+	secondaryCtaHref: string;
 }
 
 interface FeaturedCard {
-  id: string;
-  title: LocalizedText;
-  description: LocalizedText;
-  order: number;
-  enabled: boolean;
+	id: string;
+	title: LocalizedText;
+	description: LocalizedText;
+	order: number;
+	enabled: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -73,13 +73,13 @@ interface FeaturedCard {
 const EMPTY_LOCALIZED_TEXT: LocalizedText = { es: "", en: "" };
 
 const EMPTY_PAGE_HEADER: ServicesPageHeader = {
-  eyebrow: { es: "", en: "" },
-  title: { es: "", en: "" },
-  subtitle: { es: "", en: "" },
-  primaryCtaLabel: { es: "", en: "" },
-  primaryCtaHref: "",
-  secondaryCtaLabel: { es: "", en: "" },
-  secondaryCtaHref: "",
+	eyebrow: { es: "", en: "" },
+	title: { es: "", en: "" },
+	subtitle: { es: "", en: "" },
+	primaryCtaLabel: { es: "", en: "" },
+	primaryCtaHref: "",
+	secondaryCtaLabel: { es: "", en: "" },
+	secondaryCtaHref: "",
 };
 
 /* -------------------------------------------------------------------------- */
@@ -87,78 +87,78 @@ const EMPTY_PAGE_HEADER: ServicesPageHeader = {
 /* -------------------------------------------------------------------------- */
 
 function normalizeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
+	return typeof value === "string" ? value : fallback;
 }
 
 function normalizeNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function normalizeBoolean(value: unknown, fallback = false): boolean {
-  return typeof value === "boolean" ? value : fallback;
+	return typeof value === "boolean" ? value : fallback;
 }
 
 function normalizeLocalizedText(
-  value: unknown,
-  fallback: LocalizedText = EMPTY_LOCALIZED_TEXT
+	value: unknown,
+	fallback: LocalizedText = EMPTY_LOCALIZED_TEXT,
 ): LocalizedText {
-  if (!value || typeof value !== "object") return fallback;
+	if (!value || typeof value !== "object") return fallback;
 
-  const record = value as Record<string, unknown>;
+	const record = value as Record<string, unknown>;
 
-  return {
-    es: normalizeString(record.es, fallback.es),
-    en: normalizeString(record.en, fallback.en),
-  };
+	return {
+		es: normalizeString(record.es, fallback.es),
+		en: normalizeString(record.en, fallback.en),
+	};
 }
 
 function normalizePageHeader(value: unknown): ServicesPageHeader {
-  if (!value || typeof value !== "object") {
-    return structuredClone(EMPTY_PAGE_HEADER);
-  }
+	if (!value || typeof value !== "object") {
+		return structuredClone(EMPTY_PAGE_HEADER);
+	}
 
-  const record = value as Record<string, unknown>;
+	const record = value as Record<string, unknown>;
 
-  return {
-    eyebrow: normalizeLocalizedText(record.eyebrow),
-    title: normalizeLocalizedText(record.title),
-    subtitle: normalizeLocalizedText(record.subtitle),
-    primaryCtaLabel: normalizeLocalizedText(record.primaryCtaLabel),
-    primaryCtaHref: normalizeString(record.primaryCtaHref),
-    secondaryCtaLabel: normalizeLocalizedText(record.secondaryCtaLabel),
-    secondaryCtaHref: normalizeString(record.secondaryCtaHref),
-  };
+	return {
+		eyebrow: normalizeLocalizedText(record.eyebrow),
+		title: normalizeLocalizedText(record.title),
+		subtitle: normalizeLocalizedText(record.subtitle),
+		primaryCtaLabel: normalizeLocalizedText(record.primaryCtaLabel),
+		primaryCtaHref: normalizeString(record.primaryCtaHref),
+		secondaryCtaLabel: normalizeLocalizedText(record.secondaryCtaLabel),
+		secondaryCtaHref: normalizeString(record.secondaryCtaHref),
+	};
 }
 
 function normalizeFeaturedCard(value: unknown): FeaturedCard {
-  if (!value || typeof value !== "object") {
-    return {
-      id: "",
-      title: { es: "", en: "" },
-      description: { es: "", en: "" },
-      order: 0,
-      enabled: false,
-    };
-  }
+	if (!value || typeof value !== "object") {
+		return {
+			id: "",
+			title: { es: "", en: "" },
+			description: { es: "", en: "" },
+			order: 0,
+			enabled: false,
+		};
+	}
 
-  const record = value as Record<string, unknown>;
+	const record = value as Record<string, unknown>;
 
-  return {
-    id: normalizeString(record.id),
-    title: normalizeLocalizedText(record.title),
-    description: normalizeLocalizedText(record.description),
-    order: normalizeNumber(record.order, 0),
-    enabled: normalizeBoolean(record.enabled, false),
-  };
+	return {
+		id: normalizeString(record.id),
+		title: normalizeLocalizedText(record.title),
+		description: normalizeLocalizedText(record.description),
+		order: normalizeNumber(record.order, 0),
+		enabled: normalizeBoolean(record.enabled, false),
+	};
 }
 
 function normalizeFeaturedCards(value: unknown): FeaturedCard[] {
-  if (!Array.isArray(value)) return [];
+	if (!Array.isArray(value)) return [];
 
-  return value
-    .map(normalizeFeaturedCard)
-    .filter((card) => card.enabled && card.id.trim().length > 0)
-    .sort((a, b) => a.order - b.order);
+	return value
+		.map(normalizeFeaturedCard)
+		.filter((card) => card.enabled && card.id.trim().length > 0)
+		.sort((a, b) => a.order - b.order);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -166,37 +166,37 @@ function normalizeFeaturedCards(value: unknown): FeaturedCard[] {
 /* -------------------------------------------------------------------------- */
 
 export async function GET() {
-  try {
-    await connectToDB();
+	try {
+		await connectToDB();
 
-    const [services, page, homeSettings] = await Promise.all([
-      Service.find({ status: "published" }).sort({ order: 1 }).lean(),
-      ServicesPage.findOne().lean(),
-      HomeSettings.findOne().lean(),
-    ]);
+		const [services, page, homeSettings] = await Promise.all([
+			Service.find({ status: "published" }).sort({ order: 1 }).lean(),
+			ServicesPage.findOne().lean(),
+			HomeSettings.findOne().lean(),
+		]);
 
-    return NextResponse.json(
-      {
-        ok: true,
-        data: {
-          page: {
-            header: normalizePageHeader(page?.header),
-            featuredCards: normalizeFeaturedCards(homeSettings?.featuredCards),
-          },
-          services: services ?? [],
-        },
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Public services error:", error);
+		return NextResponse.json(
+			{
+				ok: true,
+				data: {
+					page: {
+						header: normalizePageHeader(page?.header),
+						featuredCards: normalizeFeaturedCards(homeSettings?.featuredCards),
+					},
+					services: services ?? [],
+				},
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		console.error("Public services error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        message: "Error loading services",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				ok: false,
+				message: "Error loading services",
+			},
+			{ status: 500 },
+		);
+	}
 }

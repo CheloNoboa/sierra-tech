@@ -38,39 +38,39 @@ import type { HomePayload } from "@/types/home";
 /* -------------------------------------------------------------------------- */
 
 function toPublicPayload(
-  doc: {
-    hero?: unknown;
-    highlightPanel?: unknown;
-    featuredCards?: unknown;
-    coverageSection?: unknown;
-    aboutSection?: unknown;
-    partnerSection?: unknown;
-    leadershipSection?: unknown;
-    whyChooseUs?: unknown;
-    mapSection?: unknown;
-    updatedAt?: Date | string;
-    updatedBy?: string;
-    updatedByEmail?: string;
-  } | null
+	doc: {
+		hero?: unknown;
+		highlightPanel?: unknown;
+		featuredCards?: unknown;
+		coverageSection?: unknown;
+		aboutSection?: unknown;
+		partnerSection?: unknown;
+		leadershipSection?: unknown;
+		whyChooseUs?: unknown;
+		mapSection?: unknown;
+		updatedAt?: Date | string;
+		updatedBy?: string;
+		updatedByEmail?: string;
+	} | null,
 ): HomePayload {
-  if (!doc) {
-    return normalizeHomePayload(HOME_DEFAULTS);
-  }
+	if (!doc) {
+		return normalizeHomePayload(HOME_DEFAULTS);
+	}
 
-  return normalizeHomePayload({
-    hero: doc.hero,
-    highlightPanel: doc.highlightPanel,
-    featuredCards: doc.featuredCards,
-    coverageSection: doc.coverageSection,
-    aboutSection: doc.aboutSection,
-    partnerSection: doc.partnerSection,
-    leadershipSection: doc.leadershipSection,
-    whyChooseUs: doc.whyChooseUs,
-    mapSection: doc.mapSection,
-    updatedBy: doc.updatedBy ?? "",
-    updatedByEmail: doc.updatedByEmail ?? "",
-    updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : "",
-  });
+	return normalizeHomePayload({
+		hero: doc.hero,
+		highlightPanel: doc.highlightPanel,
+		featuredCards: doc.featuredCards,
+		coverageSection: doc.coverageSection,
+		aboutSection: doc.aboutSection,
+		partnerSection: doc.partnerSection,
+		leadershipSection: doc.leadershipSection,
+		whyChooseUs: doc.whyChooseUs,
+		mapSection: doc.mapSection,
+		updatedBy: doc.updatedBy ?? "",
+		updatedByEmail: doc.updatedByEmail ?? "",
+		updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : "",
+	});
 }
 
 /* -------------------------------------------------------------------------- */
@@ -78,18 +78,18 @@ function toPublicPayload(
 /* -------------------------------------------------------------------------- */
 
 export async function GET() {
-  try {
-    await connectToDB();
+	try {
+		await connectToDB();
 
-    const doc = await HomeSettings.findOne({}).lean();
-    const payload = toPublicPayload(doc);
+		const doc = await HomeSettings.findOne({}).lean();
+		const payload = toPublicPayload(doc);
 
-    return NextResponse.json(payload, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching public home content:", error);
+		return NextResponse.json(payload, { status: 200 });
+	} catch (error) {
+		console.error("Error fetching public home content:", error);
 
-    return NextResponse.json(normalizeHomePayload(HOME_DEFAULTS), {
-      status: 200,
-    });
-  }
+		return NextResponse.json(normalizeHomePayload(HOME_DEFAULTS), {
+			status: 200,
+		});
+	}
 }

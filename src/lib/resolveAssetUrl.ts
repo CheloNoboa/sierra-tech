@@ -17,13 +17,13 @@
  */
 
 export function resolveAssetUrl(value: unknown): string {
-  const raw = typeof value === "string" ? value.trim() : "";
+	const raw = typeof value === "string" ? value.trim() : "";
 
-  if (!raw) return "";
+	if (!raw) return "";
 
-  if (raw.startsWith("admin/")) {
-    return `/api/admin/uploads/view?key=${encodeURIComponent(raw)}`;
-  }
+	if (raw.startsWith("admin/")) {
+		return `/api/admin/uploads/view?key=${encodeURIComponent(raw)}`;
+	}
 
-  return raw;
+	return raw;
 }

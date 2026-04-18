@@ -28,22 +28,19 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 interface GlobalCardProps {
-  children: ReactNode;
-  className?: string;
+	children: ReactNode;
+	className?: string;
 }
 
-export default function GlobalCard({
-  children,
-  className,
-}: GlobalCardProps) {
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border border-border bg-surface p-5 shadow-sm",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
+export default function GlobalCard({ children, className }: GlobalCardProps) {
+	return (
+		<div
+			className={cn(
+				"rounded-2xl border border-border bg-surface p-5 shadow-sm",
+				className,
+			)}
+		>
+			{children}
+		</div>
+	);
 }

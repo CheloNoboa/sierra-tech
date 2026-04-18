@@ -39,8 +39,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDB } from "@/lib/connectToDB";
 import { HOME_DEFAULTS } from "@/lib/home/home.defaults";
 import {
-  normalizeHomePayload,
-  normalizeString,
+	normalizeHomePayload,
+	normalizeString,
 } from "@/lib/home/home.normalize";
 import HomeSettings from "@/models/HomeSettings";
 import type { AllowedRole, HomePayload } from "@/types/home";
@@ -50,89 +50,89 @@ import type { AllowedRole, HomePayload } from "@/types/home";
 /* -------------------------------------------------------------------------- */
 
 type AdminGuardResult =
-  | { ok: true; userName: string; userEmail: string }
-  | { ok: false; response: NextResponse };
+	| { ok: true; userName: string; userEmail: string }
+	| { ok: false; response: NextResponse };
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
 function isAllowedRole(role: unknown): role is AllowedRole {
-  return role === "admin" || role === "superadmin";
+	return role === "admin" || role === "superadmin";
 }
 
 function toResponsePayload(
-  doc: {
-    hero?: unknown;
-    highlightPanel?: unknown;
-    featuredCards?: unknown;
-    coverageSection?: unknown;
-    aboutSection?: unknown;
-    partnerSection?: unknown;
-    leadershipSection?: unknown;
-    whyChooseUs?: unknown;
-    mapSection?: unknown;
-    updatedAt?: Date | string;
-    updatedBy?: string;
-    updatedByEmail?: string;
-  } | null
+	doc: {
+		hero?: unknown;
+		highlightPanel?: unknown;
+		featuredCards?: unknown;
+		coverageSection?: unknown;
+		aboutSection?: unknown;
+		partnerSection?: unknown;
+		leadershipSection?: unknown;
+		whyChooseUs?: unknown;
+		mapSection?: unknown;
+		updatedAt?: Date | string;
+		updatedBy?: string;
+		updatedByEmail?: string;
+	} | null,
 ): HomePayload {
-  if (!doc) {
-    return normalizeHomePayload(HOME_DEFAULTS);
-  }
+	if (!doc) {
+		return normalizeHomePayload(HOME_DEFAULTS);
+	}
 
-  return normalizeHomePayload({
-    hero: doc.hero,
-    highlightPanel: doc.highlightPanel,
-    featuredCards: doc.featuredCards,
-    coverageSection: doc.coverageSection,
-    aboutSection: doc.aboutSection,
-    partnerSection: doc.partnerSection,
-    leadershipSection: doc.leadershipSection,
-    whyChooseUs: doc.whyChooseUs,
-    mapSection: doc.mapSection,
-    updatedBy: doc.updatedBy ?? "",
-    updatedByEmail: doc.updatedByEmail ?? "",
-    updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : "",
-  });
+	return normalizeHomePayload({
+		hero: doc.hero,
+		highlightPanel: doc.highlightPanel,
+		featuredCards: doc.featuredCards,
+		coverageSection: doc.coverageSection,
+		aboutSection: doc.aboutSection,
+		partnerSection: doc.partnerSection,
+		leadershipSection: doc.leadershipSection,
+		whyChooseUs: doc.whyChooseUs,
+		mapSection: doc.mapSection,
+		updatedBy: doc.updatedBy ?? "",
+		updatedByEmail: doc.updatedByEmail ?? "",
+		updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : "",
+	});
 }
 
 async function requireAdmin(): Promise<AdminGuardResult> {
-  const session = await getServerSession(authOptions);
+	const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error_es: "Sesión no válida o expirada.",
-          error_en: "Invalid or expired session.",
-        },
-        { status: 401 }
-      ),
-    };
-  }
+	if (!session?.user) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{
+					error_es: "Sesión no válida o expirada.",
+					error_en: "Invalid or expired session.",
+				},
+				{ status: 401 },
+			),
+		};
+	}
 
-  const role = session.user.role;
+	const role = session.user.role;
 
-  if (!isAllowedRole(role)) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error_es: "No tienes permisos para acceder a este recurso.",
-          error_en: "You do not have permission to access this resource.",
-        },
-        { status: 403 }
-      ),
-    };
-  }
+	if (!isAllowedRole(role)) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{
+					error_es: "No tienes permisos para acceder a este recurso.",
+					error_en: "You do not have permission to access this resource.",
+				},
+				{ status: 403 },
+			),
+		};
+	}
 
-  return {
-    ok: true,
-    userName: normalizeString(session.user.name),
-    userEmail: normalizeString(session.user.email),
-  };
+	return {
+		ok: true,
+		userName: normalizeString(session.user.name),
+		userEmail: normalizeString(session.user.email),
+	};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -140,44 +140,44 @@ async function requireAdmin(): Promise<AdminGuardResult> {
 /* -------------------------------------------------------------------------- */
 
 export async function GET() {
-  try {
-    const guard = await requireAdmin();
-    if (!guard.ok) return guard.response;
+	try {
+		const guard = await requireAdmin();
+		if (!guard.ok) return guard.response;
 
-    await connectToDB();
+		await connectToDB();
 
-    let doc = await HomeSettings.findOne({});
+		let doc = await HomeSettings.findOne({});
 
-    if (!doc) {
-      doc = await HomeSettings.create({
-        hero: HOME_DEFAULTS.hero,
-        highlightPanel: HOME_DEFAULTS.highlightPanel,
-        featuredCards: HOME_DEFAULTS.featuredCards,
-        coverageSection: HOME_DEFAULTS.coverageSection,
-        aboutSection: HOME_DEFAULTS.aboutSection,
-        partnerSection: HOME_DEFAULTS.partnerSection,
-        leadershipSection: HOME_DEFAULTS.leadershipSection,
-        whyChooseUs: HOME_DEFAULTS.whyChooseUs,
-        mapSection: HOME_DEFAULTS.mapSection,
-        updatedBy: "",
-        updatedByEmail: "",
-      });
-    }
+		if (!doc) {
+			doc = await HomeSettings.create({
+				hero: HOME_DEFAULTS.hero,
+				highlightPanel: HOME_DEFAULTS.highlightPanel,
+				featuredCards: HOME_DEFAULTS.featuredCards,
+				coverageSection: HOME_DEFAULTS.coverageSection,
+				aboutSection: HOME_DEFAULTS.aboutSection,
+				partnerSection: HOME_DEFAULTS.partnerSection,
+				leadershipSection: HOME_DEFAULTS.leadershipSection,
+				whyChooseUs: HOME_DEFAULTS.whyChooseUs,
+				mapSection: HOME_DEFAULTS.mapSection,
+				updatedBy: "",
+				updatedByEmail: "",
+			});
+		}
 
-    const payload = toResponsePayload(doc.toObject());
+		const payload = toResponsePayload(doc.toObject());
 
-    return NextResponse.json(payload, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching admin home config:", error);
+		return NextResponse.json(payload, { status: 200 });
+	} catch (error) {
+		console.error("Error fetching admin home config:", error);
 
-    return NextResponse.json(
-      {
-        error_es: "Error interno al obtener la configuración de Home.",
-        error_en: "Internal error while fetching Home configuration.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				error_es: "Error interno al obtener la configuración de Home.",
+				error_en: "Internal error while fetching Home configuration.",
+			},
+			{ status: 500 },
+		);
+	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -185,62 +185,62 @@ export async function GET() {
 /* -------------------------------------------------------------------------- */
 
 export async function PUT(request: Request) {
-  try {
-    const guard = await requireAdmin();
-    if (!guard.ok) return guard.response;
+	try {
+		const guard = await requireAdmin();
+		if (!guard.ok) return guard.response;
 
-    await connectToDB();
+		await connectToDB();
 
-    const body: unknown = await request.json().catch(() => null);
+		const body: unknown = await request.json().catch(() => null);
 
-    if (!body || typeof body !== "object") {
-      return NextResponse.json(
-        {
-          error_es: "Payload inválido.",
-          error_en: "Invalid payload.",
-        },
-        { status: 400 }
-      );
-    }
+		if (!body || typeof body !== "object") {
+			return NextResponse.json(
+				{
+					error_es: "Payload inválido.",
+					error_en: "Invalid payload.",
+				},
+				{ status: 400 },
+			);
+		}
 
-    const normalized = normalizeHomePayload(body);
+		const normalized = normalizeHomePayload(body);
 
-    const update = {
-      hero: normalized.hero,
-      highlightPanel: normalized.highlightPanel,
-      featuredCards: normalized.featuredCards,
-      coverageSection: normalized.coverageSection,
-      aboutSection: normalized.aboutSection,
-      partnerSection: normalized.partnerSection,
-      leadershipSection: normalized.leadershipSection,
-      whyChooseUs: normalized.whyChooseUs,
-      mapSection: normalized.mapSection,
-      updatedBy: guard.userName,
-      updatedByEmail: guard.userEmail,
-    };
+		const update = {
+			hero: normalized.hero,
+			highlightPanel: normalized.highlightPanel,
+			featuredCards: normalized.featuredCards,
+			coverageSection: normalized.coverageSection,
+			aboutSection: normalized.aboutSection,
+			partnerSection: normalized.partnerSection,
+			leadershipSection: normalized.leadershipSection,
+			whyChooseUs: normalized.whyChooseUs,
+			mapSection: normalized.mapSection,
+			updatedBy: guard.userName,
+			updatedByEmail: guard.userEmail,
+		};
 
-    const doc = await HomeSettings.findOneAndUpdate(
-      {},
-      { $set: update },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      }
-    ).lean();
+		const doc = await HomeSettings.findOneAndUpdate(
+			{},
+			{ $set: update },
+			{
+				new: true,
+				upsert: true,
+				setDefaultsOnInsert: true,
+			},
+		).lean();
 
-    const payload = toResponsePayload(doc);
+		const payload = toResponsePayload(doc);
 
-    return NextResponse.json(payload, { status: 200 });
-  } catch (error) {
-    console.error("Error saving admin home config:", error);
+		return NextResponse.json(payload, { status: 200 });
+	} catch (error) {
+		console.error("Error saving admin home config:", error);
 
-    return NextResponse.json(
-      {
-        error_es: "Error interno al guardar la configuración de Home.",
-        error_en: "Internal error while saving Home configuration.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				error_es: "Error interno al guardar la configuración de Home.",
+				error_en: "Internal error while saving Home configuration.",
+			},
+			{ status: 500 },
+		);
+	}
 }

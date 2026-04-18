@@ -12,46 +12,46 @@ import { NextResponse } from "next/server";
    Tipos seguros para payload
 ------------------------------ */
 interface TranslateRequest {
-  text: string;
-  sourceLang?: "es" | "en";
-  targetLang: "es" | "en";
+	text: string;
+	sourceLang?: "es" | "en";
+	targetLang: "es" | "en";
 }
 
 interface TranslateResponse {
-  translated: string;
-  method: "simulated";
+	translated: string;
+	method: "simulated";
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = (await req.json()) as TranslateRequest;
+	try {
+		const body = (await req.json()) as TranslateRequest;
 
-    const { text, targetLang } = body;
+		const { text, targetLang } = body;
 
-    if (!text || typeof text !== "string") {
-      return NextResponse.json(
-        { message: "Texto vacío o inválido", translated: "" },
-        { status: 400 }
-      );
-    }
+		if (!text || typeof text !== "string") {
+			return NextResponse.json(
+				{ message: "Texto vacío o inválido", translated: "" },
+				{ status: 400 },
+			);
+		}
 
-    // 🎯 Eliminado sourceLang para evitar el warning
-    // Ya no lo extraemos si no lo usamos
+		// 🎯 Eliminado sourceLang para evitar el warning
+		// Ya no lo extraemos si no lo usamos
 
-    // 🌐 Traducción simulada
-    const simulated = `[${targetLang}] ${text}`;
+		// 🌐 Traducción simulada
+		const simulated = `[${targetLang}] ${text}`;
 
-    const response: TranslateResponse = {
-      translated: simulated,
-      method: "simulated",
-    };
+		const response: TranslateResponse = {
+			translated: simulated,
+			method: "simulated",
+		};
 
-    return NextResponse.json(response);
-  } catch (error) {
-    console.error("❌ Error en /api/admin/translate:", error);
-    return NextResponse.json(
-      { message: "Error interno al traducir", translated: "" },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(response);
+	} catch (error) {
+		console.error("❌ Error en /api/admin/translate:", error);
+		return NextResponse.json(
+			{ message: "Error interno al traducir", translated: "" },
+			{ status: 500 },
+		);
+	}
 }

@@ -21,9 +21,9 @@
 import ServiceClassDataGrid from "@/components/ServiceClassDataGrid";
 
 export default function ServiceClassesPage() {
-  return (
-    <div className="p-4">
-      <ServiceClassDataGrid />
-    </div>
-  );
+	return (
+		<div className="p-4">
+			<ServiceClassDataGrid />
+		</div>
+	);
 }

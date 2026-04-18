@@ -56,80 +56,80 @@ type DocumentStatus = "draft" | "published" | "archived";
 type DocumentLanguage = "es" | "en" | "both" | "other";
 
 interface RouteContext {
-  params: Promise<{
-    id: string;
-  }>;
+	params: Promise<{
+		id: string;
+	}>;
 }
 
 interface LocalizedText {
-  es: string;
-  en: string;
+	es: string;
+	en: string;
 }
 
 interface NormalizedDocumentPayload {
-  title: LocalizedText;
-  description: LocalizedText;
-  type: string;
-  fileUrl: string;
-  fileName: string;
-  thumbnailUrl: string;
-  language: DocumentLanguage;
-  category: string;
-  relatedModule: string;
-  relatedEntityId: string | null;
-  visibility: DocumentVisibility;
-  status: DocumentStatus;
-  order: number;
-  featured: boolean;
+	title: LocalizedText;
+	description: LocalizedText;
+	type: string;
+	fileUrl: string;
+	fileName: string;
+	thumbnailUrl: string;
+	language: DocumentLanguage;
+	category: string;
+	relatedModule: string;
+	relatedEntityId: string | null;
+	visibility: DocumentVisibility;
+	status: DocumentStatus;
+	order: number;
+	featured: boolean;
 }
 
 type AdminGuardResult =
-  | {
-      ok: true;
-      role: AllowedRole;
-      userName: string;
-      userEmail: string;
-    }
-  | {
-      ok: false;
-      response: NextResponse;
-    };
+	| {
+			ok: true;
+			role: AllowedRole;
+			userName: string;
+			userEmail: string;
+	  }
+	| {
+			ok: false;
+			response: NextResponse;
+	  };
 
 /* -------------------------------------------------------------------------- */
 /* Defaults                                                                   */
 /* -------------------------------------------------------------------------- */
 
 const EMPTY_LOCALIZED_TEXT: LocalizedText = {
-  es: "",
-  en: "",
+	es: "",
+	en: "",
 };
 
 const ALLOWED_RELATED_MODULES = new Set([
-  "general",
-  "services",
-  "projects",
-  "policies",
-  "client-portal",
+	"general",
+	"services",
+	"projects",
+	"policies",
+	"client-portal",
 ]);
 
 const ALLOWED_DOCUMENT_CATEGORIES = new Set([
-  "general",
-  "tratamiento-agua",
-  "control-olores",
-  "biorremediacion",
-  "energia-solar",
-  "procesos-microbiologicos",
-  "corporativo",
-  "certificaciones",
+	"general",
+	"tratamiento-agua",
+	"control-olores",
+	"biorremediacion",
+	"energia-solar",
+	"procesos-microbiologicos",
+	"corporativo",
+	"certificaciones",
 ]);
 
 const ALLOWED_DOCUMENT_TYPES = new Set([
-  "pdf",
-  "brochure",
-  "datasheet",
-  "manual",
-  "certificate",
-  "image",
+	"pdf",
+	"brochure",
+	"datasheet",
+	"manual",
+	"certificate",
+	"image",
 ]);
 
 /* -------------------------------------------------------------------------- */
@@ -137,221 +137,218 @@ const ALLOWED_DOCUMENT_TYPES = new Set([
 /* -------------------------------------------------------------------------- */
 
 function isAllowedRole(role: unknown): role is AllowedRole {
-  return role === "admin" || role === "superadmin";
+	return role === "admin" || role === "superadmin";
 }
 
 async function requireAdmin(): Promise<AdminGuardResult> {
-  const session = await getServerSession(authOptions);
+	const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          ok: false,
-          message: "Invalid or expired session",
-        },
-        { status: 401 }
-      ),
-    };
-  }
+	if (!session?.user) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{
+					ok: false,
+					message: "Invalid or expired session",
+				},
+				{ status: 401 },
+			),
+		};
+	}
 
-  const role = session.user.role;
+	const role = session.user.role;
 
-  if (!isAllowedRole(role)) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          ok: false,
-          message: "You do not have permission to access this resource",
-        },
-        { status: 403 }
-      ),
-    };
-  }
+	if (!isAllowedRole(role)) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{
+					ok: false,
+					message: "You do not have permission to access this resource",
+				},
+				{ status: 403 },
+			),
+		};
+	}
 
-  return {
-    ok: true,
-    role,
-    userName: typeof session.user.name === "string" ? session.user.name : "",
-    userEmail: typeof session.user.email === "string" ? session.user.email : "",
-  };
+	return {
+		ok: true,
+		role,
+		userName: typeof session.user.name === "string" ? session.user.name : "",
+		userEmail: typeof session.user.email === "string" ? session.user.email : "",
+	};
 }
 
 function normalizeString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value.trim() : fallback;
+	return typeof value === "string" ? value.trim() : fallback;
 }
 
 function normalizeStoredAssetPath(value: unknown): string {
-  const raw = normalizeString(value);
+	const raw = normalizeString(value);
 
-  if (!raw) return "";
+	if (!raw) return "";
 
-  if (raw.startsWith("admin/")) {
-    return raw;
-  }
+	if (raw.startsWith("admin/")) {
+		return raw;
+	}
 
-  return raw;
+	return raw;
 }
 
 function normalizeNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function normalizeBoolean(value: unknown, fallback = false): boolean {
-  return typeof value === "boolean" ? value : fallback;
+	return typeof value === "boolean" ? value : fallback;
 }
 
 function normalizeLocalizedText(
-  value: unknown,
-  fallback: LocalizedText = EMPTY_LOCALIZED_TEXT
+	value: unknown,
+	fallback: LocalizedText = EMPTY_LOCALIZED_TEXT,
 ): LocalizedText {
-  if (!value || typeof value !== "object") {
-    return { ...fallback };
-  }
+	if (!value || typeof value !== "object") {
+		return { ...fallback };
+	}
 
-  const record = value as Record<string, unknown>;
+	const record = value as Record<string, unknown>;
 
-  return {
-    es: normalizeString(record.es, fallback.es),
-    en: normalizeString(record.en, fallback.en),
-  };
+	return {
+		es: normalizeString(record.es, fallback.es),
+		en: normalizeString(record.en, fallback.en),
+	};
 }
 
 function normalizeVisibility(value: unknown): DocumentVisibility {
-  return value === "private" || value === "internal" ? value : "public";
+	return value === "private" || value === "internal" ? value : "public";
 }
 
 function normalizeStatus(value: unknown): DocumentStatus {
-  return value === "draft" || value === "archived" ? value : "published";
+	return value === "draft" || value === "archived" ? value : "published";
 }
 
 function normalizeLanguage(value: unknown): DocumentLanguage {
-  return value === "en" || value === "both" || value === "other" ? value : "es";
+	return value === "en" || value === "both" || value === "other" ? value : "es";
 }
 
 function normalizeOrder(value: unknown): number {
-  const n = normalizeNumber(value, 1);
-  return n >= 1 ? Math.floor(n) : 1;
+	const n = normalizeNumber(value, 1);
+	return n >= 1 ? Math.floor(n) : 1;
 }
 
 function normalizeOptionalId(value: unknown): string | null {
-  const raw = normalizeString(value);
-  return raw.length > 0 ? raw : null;
+	const raw = normalizeString(value);
+	return raw.length > 0 ? raw : null;
 }
 
 function normalizeDocumentType(value: unknown): string {
-  const normalized = normalizeString(value, "pdf").toLowerCase();
-  return ALLOWED_DOCUMENT_TYPES.has(normalized) ? normalized : "pdf";
+	const normalized = normalizeString(value, "pdf").toLowerCase();
+	return ALLOWED_DOCUMENT_TYPES.has(normalized) ? normalized : "pdf";
 }
 
 function normalizeDocumentCategory(value: unknown): string {
-  const normalized = normalizeString(value, "general").toLowerCase();
-  return ALLOWED_DOCUMENT_CATEGORIES.has(normalized) ? normalized : "general";
+	const normalized = normalizeString(value, "general").toLowerCase();
+	return ALLOWED_DOCUMENT_CATEGORIES.has(normalized) ? normalized : "general";
 }
 
 function normalizeRelatedModule(value: unknown): string {
-  const normalized = normalizeString(value, "general").toLowerCase();
-  return ALLOWED_RELATED_MODULES.has(normalized) ? normalized : "general";
+	const normalized = normalizeString(value, "general").toLowerCase();
+	return ALLOWED_RELATED_MODULES.has(normalized) ? normalized : "general";
 }
 
 function normalizePayload(body: unknown): NormalizedDocumentPayload {
-  const record =
-    body && typeof body === "object"
-      ? (body as Record<string, unknown>)
-      : {};
+	const record =
+		body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
-  return {
-    title: normalizeLocalizedText(record.title),
-    description: normalizeLocalizedText(record.description),
-    type: normalizeDocumentType(record.type),
-    fileUrl: normalizeStoredAssetPath(record.fileUrl),
-    fileName: normalizeString(record.fileName),
-    thumbnailUrl: normalizeStoredAssetPath(record.thumbnailUrl),
-    language: normalizeLanguage(record.language),
-    category: normalizeDocumentCategory(record.category),
-    relatedModule: normalizeRelatedModule(record.relatedModule),
-    relatedEntityId: normalizeOptionalId(record.relatedEntityId),
-    visibility: normalizeVisibility(record.visibility),
-    status: normalizeStatus(record.status),
-    order: normalizeOrder(record.order),
-    featured: normalizeBoolean(record.featured, false),
-  };
+	return {
+		title: normalizeLocalizedText(record.title),
+		description: normalizeLocalizedText(record.description),
+		type: normalizeDocumentType(record.type),
+		fileUrl: normalizeStoredAssetPath(record.fileUrl),
+		fileName: normalizeString(record.fileName),
+		thumbnailUrl: normalizeStoredAssetPath(record.thumbnailUrl),
+		language: normalizeLanguage(record.language),
+		category: normalizeDocumentCategory(record.category),
+		relatedModule: normalizeRelatedModule(record.relatedModule),
+		relatedEntityId: normalizeOptionalId(record.relatedEntityId),
+		visibility: normalizeVisibility(record.visibility),
+		status: normalizeStatus(record.status),
+		order: normalizeOrder(record.order),
+		featured: normalizeBoolean(record.featured, false),
+	};
 }
 
 function validatePayload(payload: NormalizedDocumentPayload): string | null {
-  const hasTitle =
-    payload.title.es.length > 0 || payload.title.en.length > 0;
+	const hasTitle = payload.title.es.length > 0 || payload.title.en.length > 0;
 
-  if (!hasTitle) {
-    return "Document title is required";
-  }
+	if (!hasTitle) {
+		return "Document title is required";
+	}
 
-  if (!payload.fileUrl) {
-    return "Document fileUrl is required";
-  }
+	if (!payload.fileUrl) {
+		return "Document fileUrl is required";
+	}
 
-  const fileUrl = payload.fileUrl.trim();
+	const fileUrl = payload.fileUrl.trim();
 
-  const isPublicPath = fileUrl.startsWith("/");
-  const isStoredAdminAsset = fileUrl.startsWith("admin/");
+	const isPublicPath = fileUrl.startsWith("/");
+	const isStoredAdminAsset = fileUrl.startsWith("admin/");
 
-  let isHttpUrl = false;
+	let isHttpUrl = false;
 
-  try {
-    const url = new URL(fileUrl);
-    isHttpUrl = url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    isHttpUrl = false;
-  }
+	try {
+		const url = new URL(fileUrl);
+		isHttpUrl = url.protocol === "http:" || url.protocol === "https:";
+	} catch {
+		isHttpUrl = false;
+	}
 
-  if (!isPublicPath && !isStoredAdminAsset && !isHttpUrl) {
-    return "Document fileUrl must be a valid URL, public path, or admin asset path";
-  }
+	if (!isPublicPath && !isStoredAdminAsset && !isHttpUrl) {
+		return "Document fileUrl must be a valid URL, public path, or admin asset path";
+	}
 
-  return null;
+	return null;
 }
 
 function isValidObjectId(value: string): boolean {
-  return mongoose.Types.ObjectId.isValid(value);
+	return mongoose.Types.ObjectId.isValid(value);
 }
 
 function inferMimeType(type: string, fileUrl: string): string {
-  const lowerUrl = fileUrl.toLowerCase();
+	const lowerUrl = fileUrl.toLowerCase();
 
-  if (
-    lowerUrl.endsWith(".pdf") ||
-    type === "pdf" ||
-    type === "datasheet" ||
-    type === "manual" ||
-    type === "brochure" ||
-    type === "certificate"
-  ) {
-    return "application/pdf";
-  }
+	if (
+		lowerUrl.endsWith(".pdf") ||
+		type === "pdf" ||
+		type === "datasheet" ||
+		type === "manual" ||
+		type === "brochure" ||
+		type === "certificate"
+	) {
+		return "application/pdf";
+	}
 
-  if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg")) {
-    return "image/jpeg";
-  }
+	if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg")) {
+		return "image/jpeg";
+	}
 
-  if (lowerUrl.endsWith(".png")) {
-    return "image/png";
-  }
+	if (lowerUrl.endsWith(".png")) {
+		return "image/png";
+	}
 
-  if (lowerUrl.endsWith(".webp")) {
-    return "image/webp";
-  }
+	if (lowerUrl.endsWith(".webp")) {
+		return "image/webp";
+	}
 
-  if (lowerUrl.endsWith(".svg")) {
-    return "image/svg+xml";
-  }
+	if (lowerUrl.endsWith(".svg")) {
+		return "image/svg+xml";
+	}
 
-  if (type === "image") {
-    return "image/*";
-  }
+	if (type === "image") {
+		return "image/*";
+	}
 
-  return "";
+	return "";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -359,54 +356,54 @@ function inferMimeType(type: string, fileUrl: string): string {
 /* -------------------------------------------------------------------------- */
 
 export async function GET(_: NextRequest, context: RouteContext) {
-  try {
-    const guard = await requireAdmin();
-    if (!guard.ok) return guard.response;
+	try {
+		const guard = await requireAdmin();
+		if (!guard.ok) return guard.response;
 
-    await connectToDB();
+		await connectToDB();
 
-    const { id } = await context.params;
+		const { id } = await context.params;
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Invalid document id",
-        },
-        { status: 400 }
-      );
-    }
+		if (!isValidObjectId(id)) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Invalid document id",
+				},
+				{ status: 400 },
+			);
+		}
 
-    const document = await Document.findById(id).lean();
+		const document = await Document.findById(id).lean();
 
-    if (!document) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Document not found",
-        },
-        { status: 404 }
-      );
-    }
+		if (!document) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Document not found",
+				},
+				{ status: 404 },
+			);
+		}
 
-    return NextResponse.json(
-      {
-        ok: true,
-        data: document,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("[Admin Document By ID][GET] error:", error);
+		return NextResponse.json(
+			{
+				ok: true,
+				data: document,
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		console.error("[Admin Document By ID][GET] error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        message: "Error loading document",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				ok: false,
+				message: "Error loading document",
+			},
+			{ status: 500 },
+		);
+	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -414,113 +411,113 @@ export async function GET(_: NextRequest, context: RouteContext) {
 /* -------------------------------------------------------------------------- */
 
 export async function PUT(req: NextRequest, context: RouteContext) {
-  try {
-    const guard = await requireAdmin();
-    if (!guard.ok) return guard.response;
+	try {
+		const guard = await requireAdmin();
+		if (!guard.ok) return guard.response;
 
-    await connectToDB();
+		await connectToDB();
 
-    const { id } = await context.params;
+		const { id } = await context.params;
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Invalid document id",
-        },
-        { status: 400 }
-      );
-    }
+		if (!isValidObjectId(id)) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Invalid document id",
+				},
+				{ status: 400 },
+			);
+		}
 
-    const existing = await Document.findById(id).lean();
+		const existing = await Document.findById(id).lean();
 
-    if (!existing) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Document not found",
-        },
-        { status: 404 }
-      );
-    }
+		if (!existing) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Document not found",
+				},
+				{ status: 404 },
+			);
+		}
 
-    const body: unknown = await req.json().catch(() => null);
-    const payload = normalizePayload(body);
+		const body: unknown = await req.json().catch(() => null);
+		const payload = normalizePayload(body);
 
-    const validationError = validatePayload(payload);
+		const validationError = validatePayload(payload);
 
-    if (validationError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: validationError,
-        },
-        { status: 400 }
-      );
-    }
+		if (validationError) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: validationError,
+				},
+				{ status: 400 },
+			);
+		}
 
-    const updated = await Document.findByIdAndUpdate(
-      id,
-      {
-        $set: {
-          title: payload.title,
-          description: payload.description,
-          type: payload.type,
-          fileUrl: payload.fileUrl,
-          fileName:
-            payload.fileName ||
-            payload.fileUrl.split("/").pop() ||
-            payload.fileUrl.split("\\").pop() ||
-            "",
-          mimeType: inferMimeType(payload.type, payload.fileUrl),
-          thumbnailUrl: payload.thumbnailUrl,
-          language: payload.language,
-          category: payload.category,
-          relatedModule: payload.relatedModule,
-          relatedEntityId: payload.relatedEntityId,
-          visibility: payload.visibility,
-          status: payload.status,
-          order: payload.order,
-          featured: payload.featured,
-          uploadedAt: existing.uploadedAt ?? new Date(),
-          updatedBy: guard.userName,
-          updatedByEmail: guard.userEmail,
-        },
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    ).lean();
+		const updated = await Document.findByIdAndUpdate(
+			id,
+			{
+				$set: {
+					title: payload.title,
+					description: payload.description,
+					type: payload.type,
+					fileUrl: payload.fileUrl,
+					fileName:
+						payload.fileName ||
+						payload.fileUrl.split("/").pop() ||
+						payload.fileUrl.split("\\").pop() ||
+						"",
+					mimeType: inferMimeType(payload.type, payload.fileUrl),
+					thumbnailUrl: payload.thumbnailUrl,
+					language: payload.language,
+					category: payload.category,
+					relatedModule: payload.relatedModule,
+					relatedEntityId: payload.relatedEntityId,
+					visibility: payload.visibility,
+					status: payload.status,
+					order: payload.order,
+					featured: payload.featured,
+					uploadedAt: existing.uploadedAt ?? new Date(),
+					updatedBy: guard.userName,
+					updatedByEmail: guard.userEmail,
+				},
+			},
+			{
+				new: true,
+				runValidators: true,
+			},
+		).lean();
 
-    if (!updated) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Document not found",
-        },
-        { status: 404 }
-      );
-    }
+		if (!updated) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Document not found",
+				},
+				{ status: 404 },
+			);
+		}
 
-    return NextResponse.json(
-      {
-        ok: true,
-        data: updated,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("[Admin Document By ID][PUT] error:", error);
+		return NextResponse.json(
+			{
+				ok: true,
+				data: updated,
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		console.error("[Admin Document By ID][PUT] error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        message: "Error updating document",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				ok: false,
+				message: "Error updating document",
+			},
+			{ status: 500 },
+		);
+	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -528,52 +525,52 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 /* -------------------------------------------------------------------------- */
 
 export async function DELETE(_: NextRequest, context: RouteContext) {
-  try {
-    const guard = await requireAdmin();
-    if (!guard.ok) return guard.response;
+	try {
+		const guard = await requireAdmin();
+		if (!guard.ok) return guard.response;
 
-    await connectToDB();
+		await connectToDB();
 
-    const { id } = await context.params;
+		const { id } = await context.params;
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Invalid document id",
-        },
-        { status: 400 }
-      );
-    }
+		if (!isValidObjectId(id)) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Invalid document id",
+				},
+				{ status: 400 },
+			);
+		}
 
-    const deleted = await Document.findByIdAndDelete(id).lean();
+		const deleted = await Document.findByIdAndDelete(id).lean();
 
-    if (!deleted) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Document not found",
-        },
-        { status: 404 }
-      );
-    }
+		if (!deleted) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Document not found",
+				},
+				{ status: 404 },
+			);
+		}
 
-    return NextResponse.json(
-      {
-        ok: true,
-        data: deleted,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("[Admin Document By ID][DELETE] error:", error);
+		return NextResponse.json(
+			{
+				ok: true,
+				data: deleted,
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		console.error("[Admin Document By ID][DELETE] error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        message: "Error deleting document",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				ok: false,
+				message: "Error deleting document",
+			},
+			{ status: 500 },
+		);
+	}
 }

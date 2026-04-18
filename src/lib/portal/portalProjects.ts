@@ -38,10 +38,10 @@ import { connectToDB } from "@/lib/connectToDB";
 import Project from "@/models/Project";
 import { normalizeProjectEntity } from "@/lib/projects/projectPayload";
 import {
-  isPortalVisibleProject,
-  mapProjectEntityToPortalProjectCard,
-  mapProjectEntityToPortalProjectDetail,
-  sortPortalProjects,
+	isPortalVisibleProject,
+	mapProjectEntityToPortalProjectCard,
+	mapProjectEntityToPortalProjectDetail,
+	sortPortalProjects,
 } from "@/lib/portal/portalProjectMappers";
 import type { PortalProjectCard, PortalProjectDetail } from "@/types/portal";
 
@@ -57,31 +57,31 @@ import type { PortalProjectCard, PortalProjectDetail } from "@/types/portal";
  * - luego se proyecta solo lo visible para portal
  */
 export async function getPortalProjectsByOrganization(
-  organizationId: string
+	organizationId: string,
 ): Promise<PortalProjectCard[]> {
-  const normalizedOrganizationId = organizationId.trim();
+	const normalizedOrganizationId = organizationId.trim();
 
-  if (!normalizedOrganizationId) {
-    return [];
-  }
+	if (!normalizedOrganizationId) {
+		return [];
+	}
 
-  await connectToDB();
+	await connectToDB();
 
-  const items = await Project.find({
-    primaryClientId: normalizedOrganizationId,
-  })
-    .sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
-    .lean();
+	const items = await Project.find({
+		primaryClientId: normalizedOrganizationId,
+	})
+		.sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
+		.lean();
 
-  const normalizedProjects = items.map((item) => normalizeProjectEntity(item));
+	const normalizedProjects = items.map((item) => normalizeProjectEntity(item));
 
-  const visibleProjects = sortPortalProjects(
-    normalizedProjects.filter(isPortalVisibleProject)
-  );
+	const visibleProjects = sortPortalProjects(
+		normalizedProjects.filter(isPortalVisibleProject),
+	);
 
-  return visibleProjects.map((project) =>
-    mapProjectEntityToPortalProjectCard(project)
-  );
+	return visibleProjects.map((project) =>
+		mapProjectEntityToPortalProjectCard(project),
+	);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -98,42 +98,42 @@ export async function getPortalProjectsByOrganization(
  * - si el proyecto no es visible en portal, devuelve null
  */
 export async function getPortalProjectDetailByOrganization(params: {
-  organizationId: string;
-  projectId: string;
-  organizationName?: string | null;
+	organizationId: string;
+	projectId: string;
+	organizationName?: string | null;
 }): Promise<PortalProjectDetail | null> {
-  const { organizationId, projectId, organizationName } = params;
+	const { organizationId, projectId, organizationName } = params;
 
-  const normalizedOrganizationId = organizationId.trim();
-  const normalizedProjectId = projectId.trim();
+	const normalizedOrganizationId = organizationId.trim();
+	const normalizedProjectId = projectId.trim();
 
-  if (!normalizedOrganizationId) {
-    return null;
-  }
+	if (!normalizedOrganizationId) {
+		return null;
+	}
 
-  if (!mongoose.Types.ObjectId.isValid(normalizedProjectId)) {
-    return null;
-  }
+	if (!mongoose.Types.ObjectId.isValid(normalizedProjectId)) {
+		return null;
+	}
 
-  await connectToDB();
+	await connectToDB();
 
-  const item = await Project.findOne({
-    _id: normalizedProjectId,
-    primaryClientId: normalizedOrganizationId,
-  }).lean();
+	const item = await Project.findOne({
+		_id: normalizedProjectId,
+		primaryClientId: normalizedOrganizationId,
+	}).lean();
 
-  if (!item) {
-    return null;
-  }
+	if (!item) {
+		return null;
+	}
 
-  const project = normalizeProjectEntity(item);
+	const project = normalizeProjectEntity(item);
 
-  if (!isPortalVisibleProject(project)) {
-    return null;
-  }
+	if (!isPortalVisibleProject(project)) {
+		return null;
+	}
 
-  return mapProjectEntityToPortalProjectDetail(
-    project,
-    organizationName ?? null
-  );
+	return mapProjectEntityToPortalProjectDetail(
+		project,
+		organizationName ?? null,
+	);
 }

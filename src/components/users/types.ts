@@ -34,31 +34,31 @@ export type UserRoleCode = string;
  * ========================================================================== */
 
 export interface UserDTO {
-  _id: string;
+	_id: string;
 
-  /** Full display name */
-  name: string;
+	/** Full display name */
+	name: string;
 
-  /** Normalized email */
-  email: string;
+	/** Normalized email */
+	email: string;
 
-  /** Dynamic role code */
-  role: UserRoleCode;
+	/** Dynamic role code */
+	role: UserRoleCode;
 
-  /** Phone in E.164 format (+1xxxxxxxxxx) */
-  phone?: string | null;
+	/** Phone in E.164 format (+1xxxxxxxxxx) */
+	phone?: string | null;
 
-  /** Active / inactive */
-  active: boolean;
+	/** Active / inactive */
+	active: boolean;
 
-  /** Authentication provider */
-  provider: "credentials" | "google";
+	/** Authentication provider */
+	provider: "credentials" | "google";
 
-  /** Whether the user completed registration */
-  isRegistered: boolean;
+	/** Whether the user completed registration */
+	isRegistered: boolean;
 
-  /** Last login as ISO string */
-  lastLogin?: string | null;
+	/** Last login as ISO string */
+	lastLogin?: string | null;
 }
 
 /* ============================================================================
@@ -66,13 +66,13 @@ export interface UserDTO {
  * ========================================================================== */
 
 export interface RoleDTO {
-  id: string;
-  code: string;
-  name_es: string;
-  name_en: string;
-  permissions: string[];
-  createdAt: string;
-  updatedAt: string;
+	id: string;
+	code: string;
+	name_es: string;
+	name_en: string;
+	permissions: string[];
+	createdAt: string;
+	updatedAt: string;
 }
 
 /* ============================================================================
@@ -80,17 +80,17 @@ export interface RoleDTO {
  * ========================================================================== */
 
 export interface UserFormValues {
-  name: string;
-  email: string;
-  role: UserRoleCode;
+	name: string;
+	email: string;
+	role: UserRoleCode;
 
-  /** PhoneField object */
-  phone: PhoneValue;
+	/** PhoneField object */
+	phone: PhoneValue;
 
-  /** Active / inactive */
-  active: boolean;
+	/** Active / inactive */
+	active: boolean;
 
-  /** Password only required on create */
-  password: string;
-  confirmPassword: string;
+	/** Password only required on create */
+	password: string;
+	confirmPassword: string;
 }

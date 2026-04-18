@@ -20,58 +20,54 @@
  * =============================================================================
  */
 
-import mongoose, {
-  Schema,
-  type InferSchemaType,
-  type Model,
-} from "mongoose";
+import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
 /* -------------------------------------------------------------------------- */
 /* Subschemas                                                                 */
 /* -------------------------------------------------------------------------- */
 
 const LocalizedTextSchema = new Schema(
-  {
-    es: { type: String, default: "", trim: true },
-    en: { type: String, default: "", trim: true },
-  },
-  { _id: false }
+	{
+		es: { type: String, default: "", trim: true },
+		en: { type: String, default: "", trim: true },
+	},
+	{ _id: false },
 );
 
 const ServicesPageHeaderSchema = new Schema(
-  {
-    eyebrow: {
-      type: LocalizedTextSchema,
-      default: () => ({ es: "", en: "" }),
-    },
-    title: {
-      type: LocalizedTextSchema,
-      default: () => ({ es: "", en: "" }),
-    },
-    subtitle: {
-      type: LocalizedTextSchema,
-      default: () => ({ es: "", en: "" }),
-    },
-    primaryCtaLabel: {
-      type: LocalizedTextSchema,
-      default: () => ({ es: "", en: "" }),
-    },
-    primaryCtaHref: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    secondaryCtaLabel: {
-      type: LocalizedTextSchema,
-      default: () => ({ es: "", en: "" }),
-    },
-    secondaryCtaHref: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-  },
-  { _id: false }
+	{
+		eyebrow: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+		title: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+		subtitle: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+		primaryCtaLabel: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+		primaryCtaHref: {
+			type: String,
+			default: "",
+			trim: true,
+		},
+		secondaryCtaLabel: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+		secondaryCtaHref: {
+			type: String,
+			default: "",
+			trim: true,
+		},
+	},
+	{ _id: false },
 );
 
 /* -------------------------------------------------------------------------- */
@@ -79,26 +75,26 @@ const ServicesPageHeaderSchema = new Schema(
 /* -------------------------------------------------------------------------- */
 
 const ServicesPageSchema = new Schema(
-  {
-    header: {
-      type: ServicesPageHeaderSchema,
-      default: () => ({
-        eyebrow: { es: "", en: "" },
-        title: { es: "", en: "" },
-        subtitle: { es: "", en: "" },
-        primaryCtaLabel: { es: "", en: "" },
-        primaryCtaHref: "",
-        secondaryCtaLabel: { es: "", en: "" },
-        secondaryCtaHref: "",
-      }),
-    },
-  },
-  {
-    timestamps: true,
-    collection: "ServicesPage",
-    minimize: false,
-    versionKey: false,
-  }
+	{
+		header: {
+			type: ServicesPageHeaderSchema,
+			default: () => ({
+				eyebrow: { es: "", en: "" },
+				title: { es: "", en: "" },
+				subtitle: { es: "", en: "" },
+				primaryCtaLabel: { es: "", en: "" },
+				primaryCtaHref: "",
+				secondaryCtaLabel: { es: "", en: "" },
+				secondaryCtaHref: "",
+			}),
+		},
+	},
+	{
+		timestamps: true,
+		collection: "ServicesPage",
+		minimize: false,
+		versionKey: false,
+	},
 );
 
 /* -------------------------------------------------------------------------- */
@@ -114,10 +110,10 @@ type ServicesPageModel = Model<ServicesPageDocument>;
 /* -------------------------------------------------------------------------- */
 
 const ServicesPage =
-  (mongoose.models.ServicesPage as ServicesPageModel | undefined) ||
-  mongoose.model<ServicesPageDocument, ServicesPageModel>(
-    "ServicesPage",
-    ServicesPageSchema
-  );
+	(mongoose.models.ServicesPage as ServicesPageModel | undefined) ||
+	mongoose.model<ServicesPageDocument, ServicesPageModel>(
+		"ServicesPage",
+		ServicesPageSchema,
+	);
 
 export default ServicesPage;

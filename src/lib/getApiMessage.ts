@@ -9,7 +9,12 @@
  * -------------------------------------------------------------------
  */
 
-import { apiMessages, ApiLocale, ApiSection, ApiKey } from "@/constants/apiMessages";
+import {
+	apiMessages,
+	ApiLocale,
+	ApiSection,
+	ApiKey,
+} from "@/constants/apiMessages";
 
 /**
  * Obtiene un mensaje traducido del diccionario centralizado.
@@ -20,15 +25,18 @@ import { apiMessages, ApiLocale, ApiSection, ApiKey } from "@/constants/apiMessa
  * @returns string — mensaje traducido
  */
 export function getApiMessage<
-  L extends ApiLocale,
-  S extends ApiSection<L>,
-  K extends ApiKey<L, S>
+	L extends ApiLocale,
+	S extends ApiSection<L>,
+	K extends ApiKey<L, S>,
 >(locale: L = "es" as L, section: S, key: K): string {
-  try {
-    const sectionMessages = apiMessages[locale][section] as Record<string, string>;
-    const message = sectionMessages[key as string];
-    return message ?? apiMessages["es"].global.unknown;
-  } catch {
-    return apiMessages["es"].global.unknown;
-  }
+	try {
+		const sectionMessages = apiMessages[locale][section] as Record<
+			string,
+			string
+		>;
+		const message = sectionMessages[key as string];
+		return message ?? apiMessages["es"].global.unknown;
+	} catch {
+		return apiMessages["es"].global.unknown;
+	}
 }

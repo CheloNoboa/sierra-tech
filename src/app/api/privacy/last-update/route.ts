@@ -31,70 +31,67 @@ type Lang = "es" | "en";
  * Cualquier valor distinto de "es" cae por defecto en "en".
  */
 function parseLang(raw: string | null): Lang {
-  return raw?.toLowerCase() === "es" ? "es" : "en";
+	return raw?.toLowerCase() === "es" ? "es" : "en";
 }
 
 export async function GET(req: Request) {
-  try {
-    await connectToDB();
+	try {
+		await connectToDB();
 
-    const { searchParams } = new URL(req.url);
-    const lang = parseLang(searchParams.get("lang"));
+		const { searchParams } = new URL(req.url);
+		const lang = parseLang(searchParams.get("lang"));
 
-    /**
-     * Busca la política más recientemente actualizada
-     * SOLO del idioma solicitado.
-     */
-    const last = await PrivacyPolicy.findOne(
-      { lang },
-      { updatedAt: 1, _id: 0 }
-    )
-      .sort({ updatedAt: -1 })
-      .lean<{ updatedAt?: Date } | null>();
+		/**
+		 * Busca la política más recientemente actualizada
+		 * SOLO del idioma solicitado.
+		 */
+		const last = await PrivacyPolicy.findOne({ lang }, { updatedAt: 1, _id: 0 })
+			.sort({ updatedAt: -1 })
+			.lean<{ updatedAt?: Date } | null>();
 
-    /**
-     * Estado vacío controlado:
-     * - no hay colección aún
-     * - no hay documentos todavía
-     * - no existe política en ese idioma
-     *
-     * Esto NO es un error del sistema.
-     */
-    if (!last?.updatedAt) {
-      return NextResponse.json(
-        {
-          date: null,
-          isEmpty: true,
-          message:
-            lang === "es"
-              ? "Aún no existe una Política de Privacidad registrada para este idioma."
-              : "There is no Privacy Policy registered for this language yet.",
-        },
-        { status: 200 }
-      );
-    }
+		/**
+		 * Estado vacío controlado:
+		 * - no hay colección aún
+		 * - no hay documentos todavía
+		 * - no existe política en ese idioma
+		 *
+		 * Esto NO es un error del sistema.
+		 */
+		if (!last?.updatedAt) {
+			return NextResponse.json(
+				{
+					date: null,
+					isEmpty: true,
+					message:
+						lang === "es"
+							? "Aún no existe una Política de Privacidad registrada para este idioma."
+							: "There is no Privacy Policy registered for this language yet.",
+				},
+				{ status: 200 },
+			);
+		}
 
-    /**
-     * Respuesta exitosa con fecha real de actualización.
-     */
-    return NextResponse.json(
-      {
-        date: last.updatedAt,
-        isEmpty: false,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("❌ Error al obtener la fecha de Privacy:", error);
+		/**
+		 * Respuesta exitosa con fecha real de actualización.
+		 */
+		return NextResponse.json(
+			{
+				date: last.updatedAt,
+				isEmpty: false,
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		console.error("❌ Error al obtener la fecha de Privacy:", error);
 
-    return NextResponse.json(
-      {
-        date: null,
-        isEmpty: true,
-        error:
-          "Internal server error / Error interno al obtener la fecha de la Política de Privacidad.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				date: null,
+				isEmpty: true,
+				error:
+					"Internal server error / Error interno al obtener la fecha de la Política de Privacidad.",
+			},
+			{ status: 500 },
+		);
+	}
 }

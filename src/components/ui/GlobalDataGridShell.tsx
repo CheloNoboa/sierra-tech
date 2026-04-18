@@ -39,85 +39,85 @@ import type { ReactNode } from "react";
 import clsx from "clsx";
 
 interface GlobalDataGridShellProps {
-  title: string;
-  subtitle?: string;
-  icon?: ReactNode;
-  actions?: ReactNode;
-  filters?: ReactNode;
-  footer?: ReactNode;
-  children: ReactNode;
-  className?: string;
-  loading?: boolean;
+	title: string;
+	subtitle?: string;
+	icon?: ReactNode;
+	actions?: ReactNode;
+	filters?: ReactNode;
+	footer?: ReactNode;
+	children: ReactNode;
+	className?: string;
+	loading?: boolean;
 }
 
 export default function GlobalDataGridShell({
-  title,
-  subtitle,
-  icon,
-  actions,
-  filters,
-  footer,
-  children,
-  className,
-  loading = false,
+	title,
+	subtitle,
+	icon,
+	actions,
+	filters,
+	footer,
+	children,
+	className,
+	loading = false,
 }: GlobalDataGridShellProps) {
-  return (
-    <section className={clsx("w-full space-y-5", className)}>
-      {/* Header */}
-      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="flex items-start gap-3">
-          {icon ? (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-soft shadow-sm">
-              {icon}
-            </div>
-          ) : null}
+	return (
+		<section className={clsx("w-full space-y-5", className)}>
+			{/* Header */}
+			<header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+				<div className="flex items-start gap-3">
+					{icon ? (
+						<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-soft shadow-sm">
+							{icon}
+						</div>
+					) : null}
 
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-text-primary md:text-2xl">
-              {title}
-            </h1>
+					<div className="min-w-0">
+						<h1 className="text-xl font-semibold text-text-primary md:text-2xl">
+							{title}
+						</h1>
 
-            {subtitle ? (
-              <p className="mt-1 max-w-3xl text-xs leading-relaxed text-text-secondary md:text-sm">
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
-        </div>
+						{subtitle ? (
+							<p className="mt-1 max-w-3xl text-xs leading-relaxed text-text-secondary md:text-sm">
+								{subtitle}
+							</p>
+						) : null}
+					</div>
+				</div>
 
-        {actions ? (
-          <div className="flex flex-wrap justify-start gap-2 md:justify-end">
-            {actions}
-          </div>
-        ) : null}
-      </header>
+				{actions ? (
+					<div className="flex flex-wrap justify-start gap-2 md:justify-end">
+						{actions}
+					</div>
+				) : null}
+			</header>
 
-      {/* Filters */}
-      {filters ? (
-        <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
-          {filters}
-        </div>
-      ) : null}
+			{/* Filters */}
+			{filters ? (
+				<div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+					{filters}
+				</div>
+			) : null}
 
-      {/* Main table/content area */}
-      <div className="relative min-h-[300px] overflow-x-auto rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        <div className={clsx(loading && "pointer-events-none opacity-30")}>
-          {children}
-        </div>
+			{/* Main table/content area */}
+			<div className="relative min-h-[300px] overflow-x-auto rounded-2xl border border-border bg-surface p-4 shadow-sm">
+				<div className={clsx(loading && "pointer-events-none opacity-30")}>
+					{children}
+				</div>
 
-        {loading ? (
-          <div className="absolute inset-0 flex flex-col gap-3 rounded-2xl bg-surface/80 p-4 backdrop-blur-sm">
-            <div className="h-5 w-3/4 animate-pulse rounded-md bg-surface-soft" />
-            <div className="h-5 w-1/2 animate-pulse rounded-md bg-surface-soft" />
-            <div className="h-5 w-full animate-pulse rounded-md bg-surface-soft" />
-            <div className="h-5 w-5/6 animate-pulse rounded-md bg-surface-soft" />
-            <div className="h-5 w-2/3 animate-pulse rounded-md bg-surface-soft" />
-          </div>
-        ) : null}
-      </div>
+				{loading ? (
+					<div className="absolute inset-0 flex flex-col gap-3 rounded-2xl bg-surface/80 p-4 backdrop-blur-sm">
+						<div className="h-5 w-3/4 animate-pulse rounded-md bg-surface-soft" />
+						<div className="h-5 w-1/2 animate-pulse rounded-md bg-surface-soft" />
+						<div className="h-5 w-full animate-pulse rounded-md bg-surface-soft" />
+						<div className="h-5 w-5/6 animate-pulse rounded-md bg-surface-soft" />
+						<div className="h-5 w-2/3 animate-pulse rounded-md bg-surface-soft" />
+					</div>
+				) : null}
+			</div>
 
-      {/* Footer */}
-      {footer ? <div className="pt-1">{footer}</div> : null}
-    </section>
-  );
+			{/* Footer */}
+			{footer ? <div className="pt-1">{footer}</div> : null}
+		</section>
+	);
 }

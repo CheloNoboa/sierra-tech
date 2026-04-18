@@ -21,27 +21,27 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+	reactStrictMode: true,
 
-  // 📸 Configuración de imágenes locales
-  images: {
-    domains: [],
-  },
+	// 📸 Configuración de imágenes locales
+	images: {
+		domains: [],
+	},
 
-  // 🧭 Root real del proyecto (corrige warning de workspace)
-  outputFileTracingRoot: path.join(__dirname),
+	// 🧭 Root real del proyecto (corrige warning de workspace)
+	outputFileTracingRoot: path.join(__dirname),
 
-  /**
-   * ✅ FIX DEFINITIVO (PDFKit en Route Handlers)
-   *
-   * Evita que Next bundlee pdfkit dentro de vendor-chunks,
-   * lo que provoca error:
-   *
-   *   ENOENT Helvetica.afm
-   *
-   * Forzamos carga directa desde node_modules.
-   */
-  serverExternalPackages: ["pdfkit", "fontkit"],
+	/**
+	 * ✅ FIX DEFINITIVO (PDFKit en Route Handlers)
+	 *
+	 * Evita que Next bundlee pdfkit dentro de vendor-chunks,
+	 * lo que provoca error:
+	 *
+	 *   ENOENT Helvetica.afm
+	 *
+	 * Forzamos carga directa desde node_modules.
+	 */
+	serverExternalPackages: ["pdfkit", "fontkit"],
 };
 
 export default nextConfig;

@@ -41,33 +41,33 @@ export type OrganizationUserRole = "org_admin" | "org_user";
 export type OrganizationUserStatus = "active" | "inactive";
 
 export interface OrganizationUserDocument {
-  _id: mongoose.Types.ObjectId;
+	_id: mongoose.Types.ObjectId;
 
-  organizationId: mongoose.Types.ObjectId;
+	organizationId: mongoose.Types.ObjectId;
 
-  firstName: string;
-  lastName: string;
-  fullName: string;
+	firstName: string;
+	lastName: string;
+	fullName: string;
 
-  email: string;
-  passwordHash: string;
+	email: string;
+	passwordHash: string;
 
-  role: OrganizationUserRole;
-  status: OrganizationUserStatus;
+	role: OrganizationUserRole;
+	status: OrganizationUserStatus;
 
-  isRegistered: boolean;
+	isRegistered: boolean;
 
-  activationTokenHash?: string | null;
-  activationTokenExpiresAt?: Date | null;
-  temporaryPasswordExpiresAt?: Date | null;
+	activationTokenHash?: string | null;
+	activationTokenExpiresAt?: Date | null;
+	temporaryPasswordExpiresAt?: Date | null;
 
-  resetToken?: string | null;
-  resetTokenExpiry?: Date | null;
+	resetToken?: string | null;
+	resetTokenExpiry?: Date | null;
 
-  lastLoginAt?: Date;
+	lastLoginAt?: Date;
 
-  createdAt: Date;
-  updatedAt: Date;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -75,103 +75,103 @@ export interface OrganizationUserDocument {
 /* -------------------------------------------------------------------------- */
 
 const OrganizationUserSchema = new Schema<OrganizationUserDocument>(
-  {
-    organizationId: {
-      type: Schema.Types.ObjectId,
-      ref: "Organization",
-      required: true,
-      index: true,
-    },
+	{
+		organizationId: {
+			type: Schema.Types.ObjectId,
+			ref: "Organization",
+			required: true,
+			index: true,
+		},
 
-    firstName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+		firstName: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    lastName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+		lastName: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    fullName: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
+		fullName: {
+			type: String,
+			required: true,
+			trim: true,
+			index: true,
+		},
 
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-      index: true,
-    },
+		email: {
+			type: String,
+			required: true,
+			unique: true,
+			lowercase: true,
+			trim: true,
+			index: true,
+		},
 
-    passwordHash: {
-      type: String,
-      required: true,
-    },
+		passwordHash: {
+			type: String,
+			required: true,
+		},
 
-    role: {
-      type: String,
-      enum: ["org_admin", "org_user"],
-      default: "org_user",
-      index: true,
-    },
+		role: {
+			type: String,
+			enum: ["org_admin", "org_user"],
+			default: "org_user",
+			index: true,
+		},
 
-    status: {
-      type: String,
-      enum: ["active", "inactive"],
-      default: "active",
-      index: true,
-    },
+		status: {
+			type: String,
+			enum: ["active", "inactive"],
+			default: "active",
+			index: true,
+		},
 
-    isRegistered: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
+		isRegistered: {
+			type: Boolean,
+			default: false,
+			index: true,
+		},
 
-    activationTokenHash: {
-      type: String,
-      default: null,
-      index: true,
-    },
+		activationTokenHash: {
+			type: String,
+			default: null,
+			index: true,
+		},
 
-    activationTokenExpiresAt: {
-      type: Date,
-      default: null,
-    },
+		activationTokenExpiresAt: {
+			type: Date,
+			default: null,
+		},
 
-    temporaryPasswordExpiresAt: {
-      type: Date,
-      default: null,
-    },
+		temporaryPasswordExpiresAt: {
+			type: Date,
+			default: null,
+		},
 
-    resetToken: {
-      type: String,
-      default: null,
-    },
+		resetToken: {
+			type: String,
+			default: null,
+		},
 
-    resetTokenExpiry: {
-      type: Date,
-      default: null,
-    },
+		resetTokenExpiry: {
+			type: Date,
+			default: null,
+		},
 
-    lastLoginAt: {
-      type: Date,
-      default: null,
-    },
-  },
-  {
-    timestamps: true,
-    versionKey: false,
-    collection: "OrganizationUsers",
-  }
+		lastLoginAt: {
+			type: Date,
+			default: null,
+		},
+	},
+	{
+		timestamps: true,
+		versionKey: false,
+		collection: "OrganizationUsers",
+	},
 );
 
 /* -------------------------------------------------------------------------- */
@@ -179,11 +179,11 @@ const OrganizationUserSchema = new Schema<OrganizationUserDocument>(
 /* -------------------------------------------------------------------------- */
 
 const OrganizationUserModel: Model<OrganizationUserDocument> =
-  models.OrganizationUser ||
-  mongoose.model<OrganizationUserDocument>(
-    "OrganizationUser",
-    OrganizationUserSchema,
-    "OrganizationUsers"
-  );
+	models.OrganizationUser ||
+	mongoose.model<OrganizationUserDocument>(
+		"OrganizationUser",
+		OrganizationUserSchema,
+		"OrganizationUsers",
+	);
 
 export default OrganizationUserModel;

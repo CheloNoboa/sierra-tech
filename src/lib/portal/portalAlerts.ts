@@ -38,8 +38,8 @@ import { connectToDB } from "@/lib/connectToDB";
 import Project from "@/models/Project";
 import { normalizeProjectEntity } from "@/lib/projects/projectPayload";
 import {
-  extractPortalAlertsFromProject,
-  isPortalVisibleProject,
+	extractPortalAlertsFromProject,
+	isPortalVisibleProject,
 } from "@/lib/portal/portalProjectMappers";
 import type { PortalAlertItem } from "@/types/portal";
 
@@ -48,17 +48,17 @@ import type { PortalAlertItem } from "@/types/portal";
 /* -------------------------------------------------------------------------- */
 
 export interface PortalAlertsSummary {
-  totalAlerts: number;
-  upcomingMaintenances: number;
-  expiringDocuments: number;
-  overdueAlerts: number;
-  highPriorityAlerts: number;
+	totalAlerts: number;
+	upcomingMaintenances: number;
+	expiringDocuments: number;
+	overdueAlerts: number;
+	highPriorityAlerts: number;
 }
 
 export interface PortalAlertsData {
-  items: PortalAlertItem[];
-  summary: PortalAlertsSummary;
-  relatedProjectsCount: number;
+	items: PortalAlertItem[];
+	summary: PortalAlertsSummary;
+	relatedProjectsCount: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -66,39 +66,40 @@ export interface PortalAlertsData {
 /* -------------------------------------------------------------------------- */
 
 function compareIsoAsc(a: string, b: string): number {
-  return new Date(a).getTime() - new Date(b).getTime();
+	return new Date(a).getTime() - new Date(b).getTime();
 }
 
 function getPriorityWeight(priority: PortalAlertItem["priority"]): number {
-  switch (priority) {
-    case "high":
-      return 0;
-    case "medium":
-      return 1;
-    case "low":
-      return 2;
-    default:
-      return 3;
-  }
+	switch (priority) {
+		case "high":
+			return 0;
+		case "medium":
+			return 1;
+		case "low":
+			return 2;
+		default:
+			return 3;
+	}
 }
 
 function sortPortalAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
-  return [...items].sort((a, b) => {
-    const byPriority = getPriorityWeight(a.priority) - getPriorityWeight(b.priority);
-    if (byPriority !== 0) return byPriority;
+	return [...items].sort((a, b) => {
+		const byPriority =
+			getPriorityWeight(a.priority) - getPriorityWeight(b.priority);
+		if (byPriority !== 0) return byPriority;
 
-    const aDate = a.dueDate ?? a.createdAt ?? "";
-    const bDate = b.dueDate ?? b.createdAt ?? "";
+		const aDate = a.dueDate ?? a.createdAt ?? "";
+		const bDate = b.dueDate ?? b.createdAt ?? "";
 
-    if (aDate && bDate) {
-      return compareIsoAsc(aDate, bDate);
-    }
+		if (aDate && bDate) {
+			return compareIsoAsc(aDate, bDate);
+		}
 
-    if (aDate) return -1;
-    if (bDate) return 1;
+		if (aDate) return -1;
+		if (bDate) return 1;
 
-    return a.title.localeCompare(b.title, "es", { sensitivity: "base" });
-  });
+		return a.title.localeCompare(b.title, "es", { sensitivity: "base" });
+	});
 }
 
 /* -------------------------------------------------------------------------- */
@@ -106,66 +107,67 @@ function sortPortalAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
 /* -------------------------------------------------------------------------- */
 
 export async function getPortalAlertsByOrganization(
-  organizationId: string
+	organizationId: string,
 ): Promise<PortalAlertsData> {
-  const normalizedOrganizationId = organizationId.trim();
+	const normalizedOrganizationId = organizationId.trim();
 
-  if (!normalizedOrganizationId) {
-    return {
-    items: [],
-    summary: {
-        totalAlerts: 0,
-        upcomingMaintenances: 0,
-        expiringDocuments: 0,
-        overdueAlerts: 0,
-        highPriorityAlerts: 0,
-    },
-    relatedProjectsCount: 0,
-    };
-  }
+	if (!normalizedOrganizationId) {
+		return {
+			items: [],
+			summary: {
+				totalAlerts: 0,
+				upcomingMaintenances: 0,
+				expiringDocuments: 0,
+				overdueAlerts: 0,
+				highPriorityAlerts: 0,
+			},
+			relatedProjectsCount: 0,
+		};
+	}
 
-  await connectToDB();
+	await connectToDB();
 
-  const projects = await Project.find({
-    primaryClientId: normalizedOrganizationId,
-  })
-    .sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
-    .lean();
+	const projects = await Project.find({
+		primaryClientId: normalizedOrganizationId,
+	})
+		.sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
+		.lean();
 
-  const normalizedProjects = projects
-    .map((item) => normalizeProjectEntity(item))
-    .filter(isPortalVisibleProject);
+	const normalizedProjects = projects
+		.map((item) => normalizeProjectEntity(item))
+		.filter(isPortalVisibleProject);
 
-  const alerts = sortPortalAlerts(
-    normalizedProjects.flatMap((project) => extractPortalAlertsFromProject(project))
-  );
+	const alerts = sortPortalAlerts(
+		normalizedProjects.flatMap((project) =>
+			extractPortalAlertsFromProject(project),
+		),
+	);
 
-  const uniqueProjects = new Set(
-    alerts
-      .map((item) => item.projectId?.trim() ?? "")
-      .filter((value) => value.length > 0)
-  );
+	const uniqueProjects = new Set(
+		alerts
+			.map((item) => item.projectId?.trim() ?? "")
+			.filter((value) => value.length > 0),
+	);
 
-  return {
-    items: alerts,
-    summary: {
-    totalAlerts: alerts.length,
-    upcomingMaintenances: alerts.filter(
-        (item) => item.type === "maintenance_upcoming"
-    ).length,
-    expiringDocuments: alerts.filter(
-        (item) =>
-        item.type === "document_expiring" ||
-        item.type === "warranty_expiring" ||
-        item.type === "scheduled_review"
-    ).length,
-    overdueAlerts: alerts.filter(
-        (item) => item.type === "maintenance_overdue"
-    ).length,
-    highPriorityAlerts: alerts.filter(
-        (item) => item.priority === "high"
-    ).length,
-    },
-    relatedProjectsCount: uniqueProjects.size,
-  };
+	return {
+		items: alerts,
+		summary: {
+			totalAlerts: alerts.length,
+			upcomingMaintenances: alerts.filter(
+				(item) => item.type === "maintenance_upcoming",
+			).length,
+			expiringDocuments: alerts.filter(
+				(item) =>
+					item.type === "document_expiring" ||
+					item.type === "warranty_expiring" ||
+					item.type === "scheduled_review",
+			).length,
+			overdueAlerts: alerts.filter(
+				(item) => item.type === "maintenance_overdue",
+			).length,
+			highPriorityAlerts: alerts.filter((item) => item.priority === "high")
+				.length,
+		},
+		relatedProjectsCount: uniqueProjects.size,
+	};
 }

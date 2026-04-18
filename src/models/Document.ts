@@ -33,10 +33,10 @@
  */
 
 import mongoose, {
-  Schema,
-  type InferSchemaType,
-  type Model,
-  Types,
+	Schema,
+	type InferSchemaType,
+	type Model,
+	Types,
 } from "mongoose";
 
 /* -------------------------------------------------------------------------- */
@@ -44,11 +44,11 @@ import mongoose, {
 /* -------------------------------------------------------------------------- */
 
 const LocalizedTextSchema = new Schema(
-  {
-    es: { type: String, default: "", trim: true },
-    en: { type: String, default: "", trim: true },
-  },
-  { _id: false }
+	{
+		es: { type: String, default: "", trim: true },
+		en: { type: String, default: "", trim: true },
+	},
+	{ _id: false },
 );
 
 /* -------------------------------------------------------------------------- */
@@ -56,262 +56,262 @@ const LocalizedTextSchema = new Schema(
 /* -------------------------------------------------------------------------- */
 
 const DocumentSchema = new Schema(
-  {
-    title: {
-      type: LocalizedTextSchema,
-      required: true,
-      default: () => ({ es: "", en: "" }),
-    },
+	{
+		title: {
+			type: LocalizedTextSchema,
+			required: true,
+			default: () => ({ es: "", en: "" }),
+		},
 
-    description: {
-      type: LocalizedTextSchema,
-      default: () => ({ es: "", en: "" }),
-    },
+		description: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
 
-    /**
-     * ES:
-     * - Tipo lógico/editorial del documento.
-     * - Útil para agrupar por intención de uso.
-     *
-     * Ejemplos:
-     * - pdf
-     * - brochure
-     * - datasheet
-     * - manual
-     * - certificate
-     * - image
-     *
-     * EN:
-     * - Logical/editorial document type.
-     */
-    type: {
-      type: String,
-      required: true,
-      default: "pdf",
-      trim: true,
-      lowercase: true,
-    },
+		/**
+		 * ES:
+		 * - Tipo lógico/editorial del documento.
+		 * - Útil para agrupar por intención de uso.
+		 *
+		 * Ejemplos:
+		 * - pdf
+		 * - brochure
+		 * - datasheet
+		 * - manual
+		 * - certificate
+		 * - image
+		 *
+		 * EN:
+		 * - Logical/editorial document type.
+		 */
+		type: {
+			type: String,
+			required: true,
+			default: "pdf",
+			trim: true,
+			lowercase: true,
+		},
 
-    /**
-     * ES:
-     * - URL o path resoluble del archivo principal.
-     * - Puede apuntar a storage externo o ruta servida por el proyecto.
-     *
-     * EN:
-     * - Resolvable URL or path for the main file.
-     */
-    fileUrl: {
-      type: String,
-      required: true,
-      default: "",
-      trim: true,
-    },
+		/**
+		 * ES:
+		 * - URL o path resoluble del archivo principal.
+		 * - Puede apuntar a storage externo o ruta servida por el proyecto.
+		 *
+		 * EN:
+		 * - Resolvable URL or path for the main file.
+		 */
+		fileUrl: {
+			type: String,
+			required: true,
+			default: "",
+			trim: true,
+		},
 
-    /**
-     * ES:
-     * - Nombre original del archivo subido.
-     *
-     * EN:
-     * - Original uploaded file name.
-     */
-    fileName: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		/**
+		 * ES:
+		 * - Nombre original del archivo subido.
+		 *
+		 * EN:
+		 * - Original uploaded file name.
+		 */
+		fileName: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    /**
-     * ES:
-     * - MIME type del archivo.
-     * - Ejemplo: application/pdf
-     *
-     * EN:
-     * - File MIME type.
-     */
-    mimeType: {
-      type: String,
-      default: "",
-      trim: true,
-      lowercase: true,
-    },
+		/**
+		 * ES:
+		 * - MIME type del archivo.
+		 * - Ejemplo: application/pdf
+		 *
+		 * EN:
+		 * - File MIME type.
+		 */
+		mimeType: {
+			type: String,
+			default: "",
+			trim: true,
+			lowercase: true,
+		},
 
-    /**
-     * ES:
-     * - Tamaño en bytes, si se conoce.
-     *
-     * EN:
-     * - File size in bytes, when known.
-     */
-    fileSizeBytes: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
+		/**
+		 * ES:
+		 * - Tamaño en bytes, si se conoce.
+		 *
+		 * EN:
+		 * - File size in bytes, when known.
+		 */
+		fileSizeBytes: {
+			type: Number,
+			min: 0,
+			default: 0,
+		},
 
-    /**
-     * ES:
-     * - Miniatura opcional para listados.
-     *
-     * EN:
-     * - Optional thumbnail for listings.
-     */
-    thumbnailUrl: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		/**
+		 * ES:
+		 * - Miniatura opcional para listados.
+		 *
+		 * EN:
+		 * - Optional thumbnail for listings.
+		 */
+		thumbnailUrl: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    /**
-     * ES:
-     * - Idioma principal del documento.
-     *
-     * EN:
-     * - Primary document language.
-     */
-    language: {
-      type: String,
-      enum: ["es", "en", "both", "other"],
-      required: true,
-      default: "es",
-    },
+		/**
+		 * ES:
+		 * - Idioma principal del documento.
+		 *
+		 * EN:
+		 * - Primary document language.
+		 */
+		language: {
+			type: String,
+			enum: ["es", "en", "both", "other"],
+			required: true,
+			default: "es",
+		},
 
-    /**
-     * ES:
-     * - Categoría editorial/operativa del documento.
-     *
-     * EN:
-     * - Editorial/operational category.
-     */
-    category: {
-      type: String,
-      default: "general",
-      trim: true,
-      lowercase: true,
-    },
+		/**
+		 * ES:
+		 * - Categoría editorial/operativa del documento.
+		 *
+		 * EN:
+		 * - Editorial/operational category.
+		 */
+		category: {
+			type: String,
+			default: "general",
+			trim: true,
+			lowercase: true,
+		},
 
-    /**
-     * ES:
-     * - Módulo principal al que pertenece o desde el que se administra.
-     *
-     * Ejemplos:
-     * - services
-     * - projects
-     * - policies
-     * - client-portal
-     * - general
-     *
-     * EN:
-     * - Primary module this document belongs to.
-     */
-    relatedModule: {
-      type: String,
-      default: "general",
-      trim: true,
-      lowercase: true,
-    },
+		/**
+		 * ES:
+		 * - Módulo principal al que pertenece o desde el que se administra.
+		 *
+		 * Ejemplos:
+		 * - services
+		 * - projects
+		 * - policies
+		 * - client-portal
+		 * - general
+		 *
+		 * EN:
+		 * - Primary module this document belongs to.
+		 */
+		relatedModule: {
+			type: String,
+			default: "general",
+			trim: true,
+			lowercase: true,
+		},
 
-    /**
-     * ES:
-     * - Referencia flexible a la entidad relacionada.
-     * - Se mantiene como ObjectId opcional sin forzar un ref único,
-     *   porque puede apuntar a distintas colecciones según relatedModule.
-     *
-     * EN:
-     * - Flexible related entity reference.
-     */
-    relatedEntityId: {
-      type: Schema.Types.ObjectId,
-      default: null,
-    },
+		/**
+		 * ES:
+		 * - Referencia flexible a la entidad relacionada.
+		 * - Se mantiene como ObjectId opcional sin forzar un ref único,
+		 *   porque puede apuntar a distintas colecciones según relatedModule.
+		 *
+		 * EN:
+		 * - Flexible related entity reference.
+		 */
+		relatedEntityId: {
+			type: Schema.Types.ObjectId,
+			default: null,
+		},
 
-    /**
-     * ES:
-     * - Visibilidad esperada del documento.
-     * - public   → visible públicamente
-     * - private  → visible a clientes autenticados/autorizados
-     * - internal → solo uso administrativo
-     *
-     * EN:
-     * - Expected document visibility.
-     */
-    visibility: {
-      type: String,
-      enum: ["public", "private", "internal"],
-      required: true,
-      default: "public",
-    },
+		/**
+		 * ES:
+		 * - Visibilidad esperada del documento.
+		 * - public   → visible públicamente
+		 * - private  → visible a clientes autenticados/autorizados
+		 * - internal → solo uso administrativo
+		 *
+		 * EN:
+		 * - Expected document visibility.
+		 */
+		visibility: {
+			type: String,
+			enum: ["public", "private", "internal"],
+			required: true,
+			default: "public",
+		},
 
-    /**
-     * ES:
-     * - Estado editorial/publicación del documento.
-     *
-     * EN:
-     * - Editorial/publication status.
-     */
-    status: {
-      type: String,
-      enum: ["draft", "published", "archived"],
-      required: true,
-      default: "published",
-    },
+		/**
+		 * ES:
+		 * - Estado editorial/publicación del documento.
+		 *
+		 * EN:
+		 * - Editorial/publication status.
+		 */
+		status: {
+			type: String,
+			enum: ["draft", "published", "archived"],
+			required: true,
+			default: "published",
+		},
 
-    /**
-     * ES:
-     * - Orden manual para listados.
-     *
-     * EN:
-     * - Manual order for listings.
-     */
-    order: {
-      type: Number,
-      required: true,
-      min: 1,
-      default: 1,
-    },
+		/**
+		 * ES:
+		 * - Orden manual para listados.
+		 *
+		 * EN:
+		 * - Manual order for listings.
+		 */
+		order: {
+			type: Number,
+			required: true,
+			min: 1,
+			default: 1,
+		},
 
-    /**
-     * ES:
-     * - Marca opcional para destacar documentos.
-     *
-     * EN:
-     * - Optional flag for highlighted documents.
-     */
-    featured: {
-      type: Boolean,
-      default: false,
-    },
+		/**
+		 * ES:
+		 * - Marca opcional para destacar documentos.
+		 *
+		 * EN:
+		 * - Optional flag for highlighted documents.
+		 */
+		featured: {
+			type: Boolean,
+			default: false,
+		},
 
-    /**
-     * ES:
-     * - Fecha visible de carga/publicación documental.
-     *
-     * EN:
-     * - Visible document upload/publication date.
-     */
-    uploadedAt: {
-      type: Date,
-      default: Date.now,
-    },
+		/**
+		 * ES:
+		 * - Fecha visible de carga/publicación documental.
+		 *
+		 * EN:
+		 * - Visible document upload/publication date.
+		 */
+		uploadedAt: {
+			type: Date,
+			default: Date.now,
+		},
 
-    updatedBy: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+		updatedBy: {
+			type: String,
+			default: "",
+			trim: true,
+		},
 
-    updatedByEmail: {
-      type: String,
-      default: "",
-      trim: true,
-      lowercase: true,
-    },
-  },
-  {
-    timestamps: true,
-    collection: "Document",
-    minimize: false,
-    versionKey: false,
-  }
+		updatedByEmail: {
+			type: String,
+			default: "",
+			trim: true,
+			lowercase: true,
+		},
+	},
+	{
+		timestamps: true,
+		collection: "Document",
+		minimize: false,
+		versionKey: false,
+	},
 );
 
 /* -------------------------------------------------------------------------- */
@@ -330,7 +330,7 @@ DocumentSchema.index({ uploadedAt: -1 });
 /* -------------------------------------------------------------------------- */
 
 export type DocumentDocument = InferSchemaType<typeof DocumentSchema> & {
-  _id: Types.ObjectId;
+	_id: Types.ObjectId;
 };
 
 type DocumentModel = Model<DocumentDocument>;
@@ -340,7 +340,7 @@ type DocumentModel = Model<DocumentDocument>;
 /* -------------------------------------------------------------------------- */
 
 const DocumentModelInstance =
-  (mongoose.models.Document as DocumentModel | undefined) ||
-  mongoose.model<DocumentDocument, DocumentModel>("Document", DocumentSchema);
+	(mongoose.models.Document as DocumentModel | undefined) ||
+	mongoose.model<DocumentDocument, DocumentModel>("Document", DocumentSchema);
 
 export default DocumentModelInstance;

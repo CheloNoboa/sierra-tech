@@ -41,44 +41,44 @@ import { getPortalProjectsByOrganization } from "@/lib/portal/portalProjects";
 /* -------------------------------------------------------------------------- */
 
 export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
-    const user = session?.user;
+	try {
+		const session = await getServerSession(authOptions);
+		const user = session?.user;
 
-    /**
-     * Solo usuarios cliente activos con organizationId válido.
-     */
-    if (
-      !user ||
-      user.userType !== "client" ||
-      user.status !== "active" ||
-      !user.organizationId
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Unauthorized.",
-        },
-        { status: 401 }
-      );
-    }
+		/**
+		 * Solo usuarios cliente activos con organizationId válido.
+		 */
+		if (
+			!user ||
+			user.userType !== "client" ||
+			user.status !== "active" ||
+			!user.organizationId
+		) {
+			return NextResponse.json(
+				{
+					ok: false,
+					error: "Unauthorized.",
+				},
+				{ status: 401 },
+			);
+		}
 
-    const items = await getPortalProjectsByOrganization(user.organizationId);
+		const items = await getPortalProjectsByOrganization(user.organizationId);
 
-    return NextResponse.json({
-      ok: true,
-      items,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Error loading portal projects.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json({
+			ok: true,
+			items,
+		});
+	} catch (error) {
+		return NextResponse.json(
+			{
+				ok: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Error loading portal projects.",
+			},
+			{ status: 500 },
+		);
+	}
 }

@@ -24,102 +24,106 @@ import { connectToDB } from "@/lib/connectToDB";
 import User from "@/models/User";
 
 function detectLanguage(req: Request): "es" | "en" {
-  const raw = req.headers.get("Accept-Language")?.toLowerCase() ?? "";
-  return raw.startsWith("es") ? "es" : "en";
+	const raw = req.headers.get("Accept-Language")?.toLowerCase() ?? "";
+	return raw.startsWith("es") ? "es" : "en";
 }
 
 function messages(lang: "es" | "en") {
-  return {
-    missingKey:
-      lang === "es"
-        ? "Falta x-setup-key o es inválida."
-        : "Missing or invalid x-setup-key.",
-    missingEnv:
-      lang === "es"
-        ? "SETUP_KEY no está configurada en el servidor."
-        : "SETUP_KEY is not configured on the server.",
-    alreadyInitialized:
-      lang === "es"
-        ? "El sistema ya fue inicializado. Endpoint bloqueado."
-        : "System is already initialized. Endpoint locked.",
-    missingFields:
-      lang === "es"
-        ? "Faltan campos obligatorios (name/email/password)."
-        : "Missing required fields (name/email/password).",
-    created:
-      lang === "es"
-        ? "SuperAdmin creado correctamente."
-        : "SuperAdmin created successfully.",
-    internalError:
-      lang === "es"
-        ? "Error interno del servidor."
-        : "Internal server error.",
-    emailTaken:
-      lang === "es"
-        ? "Ya existe un usuario con ese email."
-        : "A user with that email already exists.",
-  };
+	return {
+		missingKey:
+			lang === "es"
+				? "Falta x-setup-key o es inválida."
+				: "Missing or invalid x-setup-key.",
+		missingEnv:
+			lang === "es"
+				? "SETUP_KEY no está configurada en el servidor."
+				: "SETUP_KEY is not configured on the server.",
+		alreadyInitialized:
+			lang === "es"
+				? "El sistema ya fue inicializado. Endpoint bloqueado."
+				: "System is already initialized. Endpoint locked.",
+		missingFields:
+			lang === "es"
+				? "Faltan campos obligatorios (name/email/password)."
+				: "Missing required fields (name/email/password).",
+		created:
+			lang === "es"
+				? "SuperAdmin creado correctamente."
+				: "SuperAdmin created successfully.",
+		internalError:
+			lang === "es" ? "Error interno del servidor." : "Internal server error.",
+		emailTaken:
+			lang === "es"
+				? "Ya existe un usuario con ese email."
+				: "A user with that email already exists.",
+	};
 }
 
 export async function POST(req: Request) {
-  const lang = detectLanguage(req);
-  const msg = messages(lang);
+	const lang = detectLanguage(req);
+	const msg = messages(lang);
 
-  try {
-    const setupKey = req.headers.get("x-setup-key") ?? "";
+	try {
+		const setupKey = req.headers.get("x-setup-key") ?? "";
 
-    const serverKey = process.env.SETUP_KEY;
-    if (!serverKey || !serverKey.trim()) {
-      return NextResponse.json({ message: msg.missingEnv }, { status: 500 });
-    }
+		const serverKey = process.env.SETUP_KEY;
+		if (!serverKey || !serverKey.trim()) {
+			return NextResponse.json({ message: msg.missingEnv }, { status: 500 });
+		}
 
-    if (!setupKey || setupKey !== serverKey) {
-      return NextResponse.json({ message: msg.missingKey }, { status: 401 });
-    }
+		if (!setupKey || setupKey !== serverKey) {
+			return NextResponse.json({ message: msg.missingKey }, { status: 401 });
+		}
 
-    await connectToDB();
+		await connectToDB();
 
-    const totalUsers = await User.countDocuments();
-    if (totalUsers > 0) {
-      return NextResponse.json({ message: msg.alreadyInitialized }, { status: 403 });
-    }
+		const totalUsers = await User.countDocuments();
+		if (totalUsers > 0) {
+			return NextResponse.json(
+				{ message: msg.alreadyInitialized },
+				{ status: 403 },
+			);
+		}
 
-    const body = (await req.json().catch(() => null)) as
-      | { name?: unknown; email?: unknown; password?: unknown }
-      | null;
+		const body = (await req.json().catch(() => null)) as {
+			name?: unknown;
+			email?: unknown;
+			password?: unknown;
+		} | null;
 
-    const name = typeof body?.name === "string" ? body?.name.trim() : "";
-    const email = typeof body?.email === "string" ? body?.email.trim().toLowerCase() : "";
-    const password = typeof body?.password === "string" ? body?.password : "";
+		const name = typeof body?.name === "string" ? body?.name.trim() : "";
+		const email =
+			typeof body?.email === "string" ? body?.email.trim().toLowerCase() : "";
+		const password = typeof body?.password === "string" ? body?.password : "";
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ message: msg.missingFields }, { status: 400 });
-    }
+		if (!name || !email || !password) {
+			return NextResponse.json({ message: msg.missingFields }, { status: 400 });
+		}
 
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return NextResponse.json({ message: msg.emailTaken }, { status: 409 });
-    }
+		const existing = await User.findOne({ email });
+		if (existing) {
+			return NextResponse.json({ message: msg.emailTaken }, { status: 409 });
+		}
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+		const hashedPassword = await bcrypt.hash(password, 10);
 
-    const superAdmin = new User({
-      name,
-      email,
-      password: hashedPassword,
-      phone: null,
-      role: "superadmin",
-      provider: "credentials",
-      isRegistered: true,
-      branchId: null,
-      lastLogin: null,
-    });
+		const superAdmin = new User({
+			name,
+			email,
+			password: hashedPassword,
+			phone: null,
+			role: "superadmin",
+			provider: "credentials",
+			isRegistered: true,
+			branchId: null,
+			lastLogin: null,
+		});
 
-    await superAdmin.save();
+		await superAdmin.save();
 
-    return NextResponse.json({ message: msg.created }, { status: 201 });
-  } catch (err) {
-    console.error("❌ [SETUP SUPERADMIN ERROR]:", err);
-    return NextResponse.json({ message: msg.internalError }, { status: 500 });
-  }
+		return NextResponse.json({ message: msg.created }, { status: 201 });
+	} catch (err) {
+		console.error("❌ [SETUP SUPERADMIN ERROR]:", err);
+		return NextResponse.json({ message: msg.internalError }, { status: 500 });
+	}
 }

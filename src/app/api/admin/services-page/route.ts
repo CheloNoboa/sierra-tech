@@ -17,23 +17,23 @@ import ServicesPage from "@/models/ServicesPage";
 type AllowedRole = "admin" | "superadmin";
 
 function isAllowedRole(role: unknown): role is AllowedRole {
-  return role === "admin" || role === "superadmin";
+	return role === "admin" || role === "superadmin";
 }
 
 /* -------------------------------------------------------------------------- */
 
 async function requireAdmin() {
-  const session = await getServerSession(authOptions);
+	const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+	if (!session?.user) {
+		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	}
 
-  if (!isAllowedRole(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+	if (!isAllowedRole(session.user.role)) {
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
 
-  return null;
+	return null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -41,18 +41,18 @@ async function requireAdmin() {
 /* -------------------------------------------------------------------------- */
 
 export async function GET() {
-  const guard = await requireAdmin();
-  if (guard) return guard;
+	const guard = await requireAdmin();
+	if (guard) return guard;
 
-  await connectToDB();
+	await connectToDB();
 
-  let doc = await ServicesPage.findOne().lean();
+	let doc = await ServicesPage.findOne().lean();
 
-  if (!doc) {
-    doc = await ServicesPage.create({}).then((d) => d.toObject());
-  }
+	if (!doc) {
+		doc = await ServicesPage.create({}).then((d) => d.toObject());
+	}
 
-  return NextResponse.json(doc, { status: 200 });
+	return NextResponse.json(doc, { status: 200 });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -60,22 +60,22 @@ export async function GET() {
 /* -------------------------------------------------------------------------- */
 
 export async function PUT(request: Request) {
-  const guard = await requireAdmin();
-  if (guard) return guard;
+	const guard = await requireAdmin();
+	if (guard) return guard;
 
-  await connectToDB();
+	await connectToDB();
 
-  const body = await request.json().catch(() => null);
+	const body = await request.json().catch(() => null);
 
-  let doc = await ServicesPage.findOne();
+	let doc = await ServicesPage.findOne();
 
-  if (!doc) {
-    doc = new ServicesPage({});
-  }
+	if (!doc) {
+		doc = new ServicesPage({});
+	}
 
-  doc.header = body?.header ?? doc.header;
+	doc.header = body?.header ?? doc.header;
 
-  await doc.save();
+	await doc.save();
 
-  return NextResponse.json(doc.toObject(), { status: 200 });
+	return NextResponse.json(doc.toObject(), { status: 200 });
 }

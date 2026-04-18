@@ -38,26 +38,26 @@ const BUCKET_NAME = "sierratech-admin-assets";
 /* -------------------------------------------------------------------------- */
 
 function isValidAdminFileKey(value: string): boolean {
-  return value.startsWith("admin/");
+	return value.startsWith("admin/");
 }
 
 function getR2Client(): S3Client {
-  const endpoint = process.env.R2_ENDPOINT;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+	const endpoint = process.env.R2_ENDPOINT;
+	const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+	const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 
-  if (!endpoint || !accessKeyId || !secretAccessKey) {
-    throw new Error("Missing R2 environment variables.");
-  }
+	if (!endpoint || !accessKeyId || !secretAccessKey) {
+		throw new Error("Missing R2 environment variables.");
+	}
 
-  return new S3Client({
-    region: "auto",
-    endpoint,
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
-  });
+	return new S3Client({
+		region: "auto",
+		endpoint,
+		credentials: {
+			accessKeyId,
+			secretAccessKey,
+		},
+	});
 }
 
 /* -------------------------------------------------------------------------- */
@@ -65,69 +65,69 @@ function getR2Client(): S3Client {
 /* -------------------------------------------------------------------------- */
 
 export async function GET(req: NextRequest) {
-  try {
-    const key = req.nextUrl.searchParams.get("key")?.trim() ?? "";
+	try {
+		const key = req.nextUrl.searchParams.get("key")?.trim() ?? "";
 
-    if (!key) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Missing file key.",
-        },
-        { status: 400 }
-      );
-    }
+		if (!key) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Missing file key.",
+				},
+				{ status: 400 },
+			);
+		}
 
-    if (!isValidAdminFileKey(key)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Invalid file key.",
-        },
-        { status: 400 }
-      );
-    }
+		if (!isValidAdminFileKey(key)) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "Invalid file key.",
+				},
+				{ status: 400 },
+			);
+		}
 
-    const client = getR2Client();
+		const client = getR2Client();
 
-    const result = await client.send(
-      new GetObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-      })
-    );
+		const result = await client.send(
+			new GetObjectCommand({
+				Bucket: BUCKET_NAME,
+				Key: key,
+			}),
+		);
 
-    if (!result.Body) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "File not found.",
-        },
-        { status: 404 }
-      );
-    }
+		if (!result.Body) {
+			return NextResponse.json(
+				{
+					ok: false,
+					message: "File not found.",
+				},
+				{ status: 404 },
+			);
+		}
 
-    const contentType =
-      typeof result.ContentType === "string" && result.ContentType.trim()
-        ? result.ContentType
-        : "application/octet-stream";
+		const contentType =
+			typeof result.ContentType === "string" && result.ContentType.trim()
+				? result.ContentType
+				: "application/octet-stream";
 
-    return new NextResponse(result.Body as ReadableStream, {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "private, no-store, max-age=0",
-      },
-    });
-  } catch (error) {
-    console.error("[API /admin/uploads/view] GET error:", error);
+		return new NextResponse(result.Body as ReadableStream, {
+			status: 200,
+			headers: {
+				"Content-Type": contentType,
+				"Cache-Control": "private, no-store, max-age=0",
+			},
+		});
+	} catch (error) {
+		console.error("[API /admin/uploads/view] GET error:", error);
 
-    return NextResponse.json(
-      {
-        ok: false,
-        message: "Internal server error.",
-      },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(
+			{
+				ok: false,
+				message: "Internal server error.",
+			},
+			{ status: 500 },
+		);
+	}
 }

@@ -15,30 +15,30 @@ import { connectToDB } from "@/lib/connectToDB";
 import PrivacyAuditLog from "@/models/PrivacyAuditLog";
 
 export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
+	try {
+		const session = await getServerSession(authOptions);
 
-    // 🔐 Validación segura sin errores de tipo
-    if (!session || session.user?.role !== "admin") {
-      return NextResponse.json(
-        { error: "Acceso denegado. Solo administradores." },
-        { status: 403 }
-      );
-    }
+		// 🔐 Validación segura sin errores de tipo
+		if (!session || session.user?.role !== "admin") {
+			return NextResponse.json(
+				{ error: "Acceso denegado. Solo administradores." },
+				{ status: 403 },
+			);
+		}
 
-    await connectToDB();
+		await connectToDB();
 
-    const logs = await PrivacyAuditLog.find()
-      .sort({ modifiedAt: -1 })
-      .limit(100)
-      .lean();
+		const logs = await PrivacyAuditLog.find()
+			.sort({ modifiedAt: -1 })
+			.limit(100)
+			.lean();
 
-    return NextResponse.json(logs, { status: 200 });
-  } catch (err) {
-    console.error("❌ Error al obtener el historial de auditoría:", err);
-    return NextResponse.json(
-      { error: "Error interno al cargar el historial de auditoría." },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json(logs, { status: 200 });
+	} catch (err) {
+		console.error("❌ Error al obtener el historial de auditoría:", err);
+		return NextResponse.json(
+			{ error: "Error interno al cargar el historial de auditoría." },
+			{ status: 500 },
+		);
+	}
 }

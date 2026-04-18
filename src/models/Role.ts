@@ -25,37 +25,30 @@
  * ============================================================================
  */
 
-import {
-  Schema,
-  model,
-  models,
-  Model,
-  Document,
-  Types,
-} from "mongoose";
+import { Schema, model, models, Model, Document, Types } from "mongoose";
 
 /* ============================================================================
  * 🎯 Interfaz de Rol (TypeScript)
  * ========================================================================== */
 
 export interface IRole extends Document<Types.ObjectId> {
-  _id: Types.ObjectId;
+	_id: Types.ObjectId;
 
-  /** Código interno del rol (ej: "superadmin", "admin", "user") */
-  code: string;
+	/** Código interno del rol (ej: "superadmin", "admin", "user") */
+	code: string;
 
-  /** Nombre visible en ES */
-  name_es: string;
+	/** Nombre visible en ES */
+	name_es: string;
 
-  /** Nombre visible en EN */
-  name_en: string;
+	/** Nombre visible en EN */
+	name_en: string;
 
-  /** Lista de códigos de permisos (ej: "products.view") */
-  permissions: string[];
+	/** Lista de códigos de permisos (ej: "products.view") */
+	permissions: string[];
 
-  /** Auditoría */
-  createdAt: Date;
-  updatedAt: Date;
+	/** Auditoría */
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 /* ============================================================================
@@ -63,38 +56,38 @@ export interface IRole extends Document<Types.ObjectId> {
  * ========================================================================== */
 
 const RoleSchema = new Schema<IRole>(
-  {
-    code: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      lowercase: true,
-      index: true,
-    },
+	{
+		code: {
+			type: String,
+			required: true,
+			unique: true,
+			trim: true,
+			lowercase: true,
+			index: true,
+		},
 
-    name_es: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+		name_es: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    name_en: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+		name_en: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    permissions: {
-      type: [String],
-      required: true,
-      default: [],
-    },
-  },
-  {
-    collection: "Roles",
-    timestamps: true,
-  }
+		permissions: {
+			type: [String],
+			required: true,
+			default: [],
+		},
+	},
+	{
+		collection: "Roles",
+		timestamps: true,
+	},
 );
 
 /* ============================================================================
@@ -102,6 +95,6 @@ const RoleSchema = new Schema<IRole>(
  * ========================================================================== */
 
 const Role: Model<IRole> =
-  (models.Role as Model<IRole>) || model<IRole>("Role", RoleSchema);
+	(models.Role as Model<IRole>) || model<IRole>("Role", RoleSchema);
 
 export default Role;

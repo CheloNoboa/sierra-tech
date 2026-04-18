@@ -32,32 +32,32 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 type Locale = "es" | "en";
 
 function getLocale(req: Request): Locale {
-  const lang = req.headers.get("accept-language") ?? "";
-  return lang.toLowerCase().startsWith("es") ? "es" : "en";
+	const lang = req.headers.get("accept-language") ?? "";
+	return lang.toLowerCase().startsWith("es") ? "es" : "en";
 }
 
 const MSG = {
-  es: {
-    unauthorized: "No autorizado. Debe iniciar sesión.",
-    forbidden: "Acceso denegado. No tiene permisos suficientes.",
-  },
-  en: {
-    unauthorized: "Unauthorized. Please sign in.",
-    forbidden: "Access denied. You do not have enough permissions.",
-  },
+	es: {
+		unauthorized: "No autorizado. Debe iniciar sesión.",
+		forbidden: "Acceso denegado. No tiene permisos suficientes.",
+	},
+	en: {
+		unauthorized: "Unauthorized. Please sign in.",
+		forbidden: "Access denied. You do not have enough permissions.",
+	},
 };
 
 export type PermissionCode = string;
 
 export interface PermissionGuardOk {
-  ok: true;
-  // session viene de NextAuth; no tipamos en detalle para evitar ANY
-  session: NonNullable<Awaited<ReturnType<typeof getServerSession>>>;
+	ok: true;
+	// session viene de NextAuth; no tipamos en detalle para evitar ANY
+	session: NonNullable<Awaited<ReturnType<typeof getServerSession>>>;
 }
 
 export interface PermissionGuardFail {
-  ok: false;
-  response: ReturnType<typeof NextResponse.json>;
+	ok: false;
+	response: ReturnType<typeof NextResponse.json>;
 }
 
 export type PermissionGuardResult = PermissionGuardOk | PermissionGuardFail;
@@ -73,42 +73,43 @@ export type PermissionGuardResult = PermissionGuardOk | PermissionGuardFail;
  *   Checks that the current user has at least ONE of the required permissions.
  */
 export async function requirePermission(
-  req: Request,
-  required: PermissionCode | PermissionCode[]
+	req: Request,
+	required: PermissionCode | PermissionCode[],
 ): Promise<PermissionGuardResult> {
-  const locale = getLocale(req);
-  const session = await getServerSession(authOptions);
+	const locale = getLocale(req);
+	const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { message: MSG[locale].unauthorized },
-        { status: 401 }
-      ),
-    };
-  }
+	if (!session?.user) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{ message: MSG[locale].unauthorized },
+				{ status: 401 },
+			),
+		};
+	}
 
-  const userPerms = (session.user as { permissions?: string[] }).permissions ?? [];
+	const userPerms =
+		(session.user as { permissions?: string[] }).permissions ?? [];
 
-  // Superadmin → tiene "*"
-  if (userPerms.includes("*")) {
-    return { ok: true, session };
-  }
+	// Superadmin → tiene "*"
+	if (userPerms.includes("*")) {
+		return { ok: true, session };
+	}
 
-  const requiredList = Array.isArray(required) ? required : [required];
+	const requiredList = Array.isArray(required) ? required : [required];
 
-  const hasSome = requiredList.some((p) => userPerms.includes(p));
+	const hasSome = requiredList.some((p) => userPerms.includes(p));
 
-  if (!hasSome) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { message: MSG[locale].forbidden },
-        { status: 403 }
-      ),
-    };
-  }
+	if (!hasSome) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{ message: MSG[locale].forbidden },
+				{ status: 403 },
+			),
+		};
+	}
 
-  return { ok: true, session };
+	return { ok: true, session };
 }

@@ -22,23 +22,23 @@
 import { Suspense, type ReactNode } from "react";
 
 interface PageSuspenseProps {
-  children: ReactNode;
-  fallbackText?: string;
+	children: ReactNode;
+	fallbackText?: string;
 }
 
 export default function PageSuspense({
-  children,
-  fallbackText = "Cargando...",
+	children,
+	fallbackText = "Cargando...",
 }: PageSuspenseProps) {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background text-text-secondary">
-          {fallbackText}
-        </div>
-      }
-    >
-      {children}
-    </Suspense>
-  );
+	return (
+		<Suspense
+			fallback={
+				<div className="flex min-h-screen items-center justify-center bg-background text-text-secondary">
+					{fallbackText}
+				</div>
+			}
+		>
+			{children}
+		</Suspense>
+	);
 }

@@ -59,68 +59,68 @@ export type UserStatus = "active" | "inactive";
 /* -------------------------------------------------------------------------- */
 
 export interface IUser extends Document {
-  _id: Types.ObjectId;
+	_id: Types.ObjectId;
 
-  /**
-   * Nombre visible del usuario interno.
-   */
-  name: string;
+	/**
+	 * Nombre visible del usuario interno.
+	 */
+	name: string;
 
-  /**
-   * Email único global dentro de la colección Users.
-   */
-  email: string;
+	/**
+	 * Email único global dentro de la colección Users.
+	 */
+	email: string;
 
-  /**
-   * Hash de contraseña para provider = credentials.
-   * Puede ser null en usuarios creados por OAuth.
-   */
-  password?: string | null;
+	/**
+	 * Hash de contraseña para provider = credentials.
+	 * Puede ser null en usuarios creados por OAuth.
+	 */
+	password?: string | null;
 
-  /**
-   * Teléfono opcional.
-   */
-  phone?: string | null;
+	/**
+	 * Teléfono opcional.
+	 */
+	phone?: string | null;
 
-  /**
-   * Código de rol dinámico.
-   * Ejemplo: superadmin, admin, staff, etc.
-   */
-  role: UserRole;
+	/**
+	 * Código de rol dinámico.
+	 * Ejemplo: superadmin, admin, staff, etc.
+	 */
+	role: UserRole;
 
-  /**
-   * Estado de activación del usuario.
-   */
-  status: UserStatus;
+	/**
+	 * Estado de activación del usuario.
+	 */
+	status: UserStatus;
 
-  /**
-   * Proveedor de identidad.
-   */
-  provider: "credentials" | "google";
+	/**
+	 * Proveedor de identidad.
+	 */
+	provider: "credentials" | "google";
 
-  /**
-   * Marca histórica utilizada por la plataforma base.
-   * Se conserva por compatibilidad.
-   */
-  isRegistered: boolean;
+	/**
+	 * Marca histórica utilizada por la plataforma base.
+	 * Se conserva por compatibilidad.
+	 */
+	isRegistered: boolean;
 
-  /**
-   * Último acceso conocido del usuario.
-   */
-  lastLogin?: Date | null;
+	/**
+	 * Último acceso conocido del usuario.
+	 */
+	lastLogin?: Date | null;
 
-  /**
-   * Token temporal de recuperación.
-   */
-  resetToken?: string | null;
+	/**
+	 * Token temporal de recuperación.
+	 */
+	resetToken?: string | null;
 
-  /**
-   * Expiración del token temporal de recuperación.
-   */
-  resetTokenExpiry?: Date | null;
+	/**
+	 * Expiración del token temporal de recuperación.
+	 */
+	resetTokenExpiry?: Date | null;
 
-  createdAt: Date;
-  updatedAt: Date;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -128,79 +128,79 @@ export interface IUser extends Document {
 /* -------------------------------------------------------------------------- */
 
 const UserSchema = new Schema<IUser>(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+	{
+		name: {
+			type: String,
+			required: true,
+			trim: true,
+		},
 
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-      index: true,
-    },
+		email: {
+			type: String,
+			required: true,
+			unique: true,
+			lowercase: true,
+			trim: true,
+			index: true,
+		},
 
-    password: {
-      type: String,
-      default: null,
-    },
+		password: {
+			type: String,
+			default: null,
+		},
 
-    phone: {
-      type: String,
-      default: null,
-      trim: true,
-    },
+		phone: {
+			type: String,
+			default: null,
+			trim: true,
+		},
 
-    role: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
+		role: {
+			type: String,
+			required: true,
+			trim: true,
+			index: true,
+		},
 
-    status: {
-      type: String,
-      enum: ["active", "inactive"],
-      default: "active",
-      index: true,
-    },
+		status: {
+			type: String,
+			enum: ["active", "inactive"],
+			default: "active",
+			index: true,
+		},
 
-    provider: {
-      type: String,
-      enum: ["credentials", "google"],
-      default: "credentials",
-      index: true,
-    },
+		provider: {
+			type: String,
+			enum: ["credentials", "google"],
+			default: "credentials",
+			index: true,
+		},
 
-    isRegistered: {
-      type: Boolean,
-      default: false,
-    },
+		isRegistered: {
+			type: Boolean,
+			default: false,
+		},
 
-    lastLogin: {
-      type: Date,
-      default: null,
-    },
+		lastLogin: {
+			type: Date,
+			default: null,
+		},
 
-    resetToken: {
-      type: String,
-      default: null,
-    },
+		resetToken: {
+			type: String,
+			default: null,
+		},
 
-    resetTokenExpiry: {
-      type: Date,
-      default: null,
-    },
-  },
-  {
-    collection: "Users",
-    timestamps: true,
-    versionKey: false,
-  }
+		resetTokenExpiry: {
+			type: Date,
+			default: null,
+		},
+	},
+	{
+		collection: "Users",
+		timestamps: true,
+		versionKey: false,
+	},
 );
 
 /* -------------------------------------------------------------------------- */

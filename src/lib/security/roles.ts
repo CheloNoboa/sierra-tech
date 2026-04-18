@@ -29,38 +29,38 @@
  */
 
 export interface RoleDef {
-  /**
-   * Internal unique role identifier.
-   * Used as the canonical code across backend, seeders and UI.
-   */
-  code: string;
+	/**
+	 * Internal unique role identifier.
+	 * Used as the canonical code across backend, seeders and UI.
+	 */
+	code: string;
 
-  /**
-   * Localized role names for administrative interfaces.
-   */
-  name_es: string;
-  name_en: string;
+	/**
+	 * Localized role names for administrative interfaces.
+	 */
+	name_es: string;
+	name_en: string;
 
-  /**
-   * Explicit list of assigned permission codes.
-   *
-   * Conventions:
-   * - "*" grants full access
-   * - "module.action" references a concrete permission defined in permissions.ts
-   */
-  permissions: string[];
+	/**
+	 * Explicit list of assigned permission codes.
+	 *
+	 * Conventions:
+	 * - "*" grants full access
+	 * - "module.action" references a concrete permission defined in permissions.ts
+	 */
+	permissions: string[];
 
-  /**
-   * Logical role scope.
-   * Preserved as part of the security contract.
-   */
-  scope: "GLOBAL" | "BRANCH";
+	/**
+	 * Logical role scope.
+	 * Preserved as part of the security contract.
+	 */
+	scope: "GLOBAL" | "BRANCH";
 
-  /**
-   * Indicates whether the role is restricted to branch-level visibility.
-   * Preserved for compatibility with the role model contract.
-   */
-  branch_limited: boolean;
+	/**
+	 * Indicates whether the role is restricted to branch-level visibility.
+	 * Preserved for compatibility with the role model contract.
+	 */
+	branch_limited: boolean;
 }
 
 /* ============================================================================
@@ -73,45 +73,45 @@ export interface RoleDef {
  * - `user` is the minimal authenticated administrative profile
  * ========================================================================== */
 export const ROLES: RoleDef[] = [
-  {
-    code: "superadmin",
-    name_es: "Super Administrador",
-    name_en: "Super Administrator",
-    permissions: ["*"],
-    scope: "GLOBAL",
-    branch_limited: false,
-  },
-  {
-    code: "admin",
-    name_es: "Administrador",
-    name_en: "Administrator",
-    permissions: [
-      "system.dashboard.view",
+	{
+		code: "superadmin",
+		name_es: "Super Administrador",
+		name_en: "Super Administrator",
+		permissions: ["*"],
+		scope: "GLOBAL",
+		branch_limited: false,
+	},
+	{
+		code: "admin",
+		name_es: "Administrador",
+		name_en: "Administrator",
+		permissions: [
+			"system.dashboard.view",
 
-      "users.view",
-      "users.create",
-      "users.update",
-      "users.delete",
+			"users.view",
+			"users.create",
+			"users.update",
+			"users.delete",
 
-      "roles.view",
-      "roles.update",
+			"roles.view",
+			"roles.update",
 
-      "settings.view",
-      "settings.update",
+			"settings.view",
+			"settings.update",
 
-      "policies.view",
-      "policies.update",
-      "policies.history",
-    ],
-    scope: "GLOBAL",
-    branch_limited: false,
-  },
-  {
-    code: "user",
-    name_es: "Usuario",
-    name_en: "User",
-    permissions: ["system.dashboard.view"],
-    scope: "GLOBAL",
-    branch_limited: false,
-  },
+			"policies.view",
+			"policies.update",
+			"policies.history",
+		],
+		scope: "GLOBAL",
+		branch_limited: false,
+	},
+	{
+		code: "user",
+		name_es: "Usuario",
+		name_en: "User",
+		permissions: ["system.dashboard.view"],
+		scope: "GLOBAL",
+		branch_limited: false,
+	},
 ];
