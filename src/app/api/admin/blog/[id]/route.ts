@@ -36,14 +36,18 @@
 
 import { Types } from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
-import BlogPostModel, {
-	type BlogGalleryItem,
-	type BlogPostDocument,
-	type BlogSeo,
-	type BlogStatus,
-	type LocalizedText,
-} from "@/models/BlogPost";
+import BlogPostModel from "@/models/BlogPost";
 import { connectToDB } from "@/lib/connectToDB";
+import type {
+	BlogGalleryItem,
+	BlogLocalizedText,
+	BlogPost,
+	BlogPostDeleteResponse,
+	BlogPostMutationResponse,
+	BlogPostSingleResponse,
+	BlogSeo,
+	BlogStatus,
+} from "@/types/blog";
 
 /* -------------------------------------------------------------------------- */
 /* Tipos internos                                                             */
@@ -57,38 +61,88 @@ interface RouteContext {
 
 interface BlogPostUpdatePayload {
 	slug?: string;
-	title?: Partial<LocalizedText>;
-	excerpt?: Partial<LocalizedText>;
-	content?: Partial<LocalizedText>;
+	title?: Partial<BlogLocalizedText>;
+	excerpt?: Partial<BlogLocalizedText>;
+	content?: Partial<BlogLocalizedText>;
 	coverImage?: string;
 	gallery?: Partial<BlogGalleryItem>[];
 	category?: string;
 	tags?: string[];
+	relatedProjectIds?: string[];
 	status?: BlogStatus;
 	featured?: boolean;
 	order?: number;
 	seo?: Partial<{
-		metaTitle: Partial<LocalizedText>;
-		metaDescription: Partial<LocalizedText>;
+		metaTitle: Partial<BlogLocalizedText>;
+		metaDescription: Partial<BlogLocalizedText>;
 		ogImage?: string;
 	}>;
 	createdBy?: string;
+}
+
+interface NormalizedBlogPostPayload {
+	slug: string;
+	title: BlogLocalizedText;
+	excerpt: BlogLocalizedText;
+	content: BlogLocalizedText;
+	coverImage: string;
+	gallery: BlogGalleryItem[];
+	category: string;
+	tags: string[];
+	relatedProjectIds: string[];
+	status: BlogStatus;
+	featured: boolean;
+	order: number;
+	seo: BlogSeo;
+	createdBy: string;
+}
+
+interface LeanBlogPostRecord {
+	_id: { toString(): string };
+	slug?: string;
+	title?: BlogLocalizedText;
+	excerpt?: BlogLocalizedText;
+	content?: BlogLocalizedText;
+	coverImage?: string;
+	gallery?: BlogGalleryItem[];
+	category?: string;
+	tags?: string[];
+	relatedProjectIds?: string[];
+	status?: BlogStatus;
+	featured?: boolean;
+	order?: number;
+	seo?: BlogSeo;
+	publishedAt?: Date | null;
+	createdBy?: string;
+	createdAt?: Date | null;
+	updatedAt?: Date | null;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function emptyLocalizedText(): LocalizedText {
+const EMPTY_LOCALIZED_TEXT: BlogLocalizedText = {
+	es: "",
+	en: "",
+};
+
+const EMPTY_SEO: BlogSeo = {
+	metaTitle: { es: "", en: "" },
+	metaDescription: { es: "", en: "" },
+	ogImage: "",
+};
+
+function cloneLocalizedText(): BlogLocalizedText {
 	return {
-		es: "",
-		en: "",
+		es: EMPTY_LOCALIZED_TEXT.es,
+		en: EMPTY_LOCALIZED_TEXT.en,
 	};
 }
 
 function normalizeLocalizedText(
-	value?: Partial<LocalizedText> | null,
-): LocalizedText {
+	value?: Partial<BlogLocalizedText> | null
+): BlogLocalizedText {
 	return {
 		es: typeof value?.es === "string" ? value.es.trim() : "",
 		en: typeof value?.en === "string" ? value.en.trim() : "",
@@ -116,13 +170,27 @@ function normalizeTags(tags?: string[]): string[] {
 		new Set(
 			tags
 				.map((tag) => (typeof tag === "string" ? tag.trim() : ""))
-				.filter((tag) => tag.length > 0),
-		),
+				.filter((tag) => tag.length > 0)
+		)
+	);
+}
+
+function normalizeRelatedProjectIds(value?: string[]): string[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return Array.from(
+		new Set(
+			value
+				.map((item) => (typeof item === "string" ? item.trim() : ""))
+				.filter((item) => item.length > 0)
+		)
 	);
 }
 
 function normalizeGallery(
-	gallery?: Partial<BlogGalleryItem>[],
+	gallery?: Partial<BlogGalleryItem>[]
 ): BlogGalleryItem[] {
 	if (!Array.isArray(gallery)) {
 		return [];
@@ -137,7 +205,7 @@ function normalizeGallery(
 				alt: normalizeLocalizedText(item?.alt),
 				order:
 					typeof item?.order === "number" && Number.isFinite(item.order)
-						? item.order
+						? Math.max(0, Math.floor(item.order))
 						: index,
 			};
 		})
@@ -165,23 +233,21 @@ function normalizeOrder(value?: number): number {
 	return Math.floor(value);
 }
 
-function normalizePayload(payload: BlogPostUpdatePayload) {
-	const title = normalizeLocalizedText(payload.title);
-	const excerpt = normalizeLocalizedText(payload.excerpt);
-	const content = normalizeLocalizedText(payload.content);
-	const slug = normalizeSlug(payload.slug ?? "");
-
+function normalizePayload(
+	payload: BlogPostUpdatePayload
+): NormalizedBlogPostPayload {
 	return {
-		slug,
-		title,
-		excerpt,
-		content,
+		slug: normalizeSlug(payload.slug ?? ""),
+		title: normalizeLocalizedText(payload.title),
+		excerpt: normalizeLocalizedText(payload.excerpt),
+		content: normalizeLocalizedText(payload.content),
 		coverImage:
 			typeof payload.coverImage === "string" ? payload.coverImage.trim() : "",
 		gallery: normalizeGallery(payload.gallery),
 		category:
 			typeof payload.category === "string" ? payload.category.trim() : "",
 		tags: normalizeTags(payload.tags),
+		relatedProjectIds: normalizeRelatedProjectIds(payload.relatedProjectIds),
 		status: normalizeStatus(payload.status),
 		featured: Boolean(payload.featured),
 		order: normalizeOrder(payload.order),
@@ -191,9 +257,7 @@ function normalizePayload(payload: BlogPostUpdatePayload) {
 	};
 }
 
-function validatePayload(
-	payload: ReturnType<typeof normalizePayload>,
-): string[] {
+function validatePayload(payload: NormalizedBlogPostPayload): string[] {
 	const errors: string[] = [];
 
 	if (!payload.slug) {
@@ -219,31 +283,32 @@ function isValidObjectId(value: string): boolean {
 	return Types.ObjectId.isValid(value);
 }
 
-function serializeBlogPost(
-	doc: BlogPostDocument & { _id: { toString(): string } },
-) {
+function serializeBlogPost(doc: LeanBlogPostRecord): BlogPost {
 	return {
 		_id: doc._id.toString(),
-		slug: doc.slug,
-		title: doc.title ?? emptyLocalizedText(),
-		excerpt: doc.excerpt ?? emptyLocalizedText(),
-		content: doc.content ?? emptyLocalizedText(),
+		slug: doc.slug ?? "",
+		title: doc.title ?? cloneLocalizedText(),
+		excerpt: doc.excerpt ?? cloneLocalizedText(),
+		content: doc.content ?? cloneLocalizedText(),
 		coverImage: doc.coverImage ?? "",
 		gallery: Array.isArray(doc.gallery) ? doc.gallery : [],
 		category: doc.category ?? "",
 		tags: Array.isArray(doc.tags) ? doc.tags : [],
-		status: doc.status,
+		relatedProjectIds: Array.isArray(doc.relatedProjectIds)
+			? doc.relatedProjectIds
+			: [],
+		status: doc.status === "published" ? "published" : "draft",
 		featured: Boolean(doc.featured),
 		order: typeof doc.order === "number" ? doc.order : 0,
 		seo: doc.seo ?? {
-			metaTitle: emptyLocalizedText(),
-			metaDescription: emptyLocalizedText(),
-			ogImage: "",
+			metaTitle: { ...EMPTY_SEO.metaTitle },
+			metaDescription: { ...EMPTY_SEO.metaDescription },
+			ogImage: EMPTY_SEO.ogImage,
 		},
 		publishedAt: doc.publishedAt ? doc.publishedAt.toISOString() : null,
 		createdBy: doc.createdBy ?? "",
-		createdAt: doc.createdAt?.toISOString() ?? null,
-		updatedAt: doc.updatedAt?.toISOString() ?? null,
+		createdAt: doc.createdAt ? doc.createdAt.toISOString() : null,
+		updatedAt: doc.updatedAt ? doc.updatedAt.toISOString() : null,
 	};
 }
 
@@ -258,46 +323,40 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 		const { id } = await context.params;
 
 		if (!isValidObjectId(id)) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Invalid blog post id.",
-				},
-				{ status: 400 },
-			);
+			const response: BlogPostSingleResponse = {
+				ok: false,
+				message: "Invalid blog post id.",
+			};
+
+			return NextResponse.json(response, { status: 400 });
 		}
 
-		const post = await BlogPostModel.findById(id).lean<
-			(BlogPostDocument & { _id: { toString(): string } }) | null
-		>();
+		const post = await BlogPostModel.findById(id).lean<LeanBlogPostRecord | null>();
 
 		if (!post) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Blog post not found.",
-				},
-				{ status: 404 },
-			);
+			const response: BlogPostSingleResponse = {
+				ok: false,
+				message: "Blog post not found.",
+			};
+
+			return NextResponse.json(response, { status: 404 });
 		}
 
-		return NextResponse.json(
-			{
-				ok: true,
-				data: serializeBlogPost(post),
-			},
-			{ status: 200 },
-		);
+		const response: BlogPostSingleResponse = {
+			ok: true,
+			data: serializeBlogPost(post),
+		};
+
+		return NextResponse.json(response, { status: 200 });
 	} catch (error) {
 		console.error("Admin Blog By ID GET error:", error);
 
-		return NextResponse.json(
-			{
-				ok: false,
-				message: "Failed to fetch blog post.",
-			},
-			{ status: 500 },
-		);
+		const response: BlogPostSingleResponse = {
+			ok: false,
+			message: "Failed to fetch blog post.",
+		};
+
+		return NextResponse.json(response, { status: 500 });
 	}
 }
 
@@ -312,25 +371,23 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 		const { id } = await context.params;
 
 		if (!isValidObjectId(id)) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Invalid blog post id.",
-				},
-				{ status: 400 },
-			);
+			const response: BlogPostMutationResponse = {
+				ok: false,
+				message: "Invalid blog post id.",
+			};
+
+			return NextResponse.json(response, { status: 400 });
 		}
 
 		const existingPost = await BlogPostModel.findById(id);
 
 		if (!existingPost) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Blog post not found.",
-				},
-				{ status: 404 },
-			);
+			const response: BlogPostMutationResponse = {
+				ok: false,
+				message: "Blog post not found.",
+			};
+
+			return NextResponse.json(response, { status: 404 });
 		}
 
 		const body = (await request.json()) as BlogPostUpdatePayload;
@@ -338,14 +395,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 		const validationErrors = validatePayload(payload);
 
 		if (validationErrors.length > 0) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Validation failed.",
-					errors: validationErrors,
-				},
-				{ status: 400 },
-			);
+			const response: BlogPostMutationResponse = {
+				ok: false,
+				message: "Validation failed.",
+				errors: validationErrors,
+			};
+
+			return NextResponse.json(response, { status: 400 });
 		}
 
 		const slugOwner = await BlogPostModel.findOne({
@@ -356,13 +412,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 			.lean<{ _id: { toString(): string } } | null>();
 
 		if (slugOwner) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "A blog post with this slug already exists.",
-				},
-				{ status: 409 },
-			);
+			const response: BlogPostMutationResponse = {
+				ok: false,
+				message: "A blog post with this slug already exists.",
+			};
+
+			return NextResponse.json(response, { status: 409 });
 		}
 
 		existingPost.slug = payload.slug;
@@ -373,36 +428,30 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 		existingPost.gallery = payload.gallery;
 		existingPost.category = payload.category;
 		existingPost.tags = payload.tags;
+		existingPost.relatedProjectIds = payload.relatedProjectIds;
 		existingPost.status = payload.status;
 		existingPost.featured = payload.featured;
 		existingPost.order = payload.order;
 		existingPost.seo = payload.seo;
-		existingPost.createdBy = payload.createdBy;
 
 		await existingPost.save();
 
-		return NextResponse.json(
-			{
-				ok: true,
-				message: "Blog post updated successfully.",
-				data: serializeBlogPost(
-					existingPost.toObject() as BlogPostDocument & {
-						_id: { toString(): string };
-					},
-				),
-			},
-			{ status: 200 },
-		);
+		const response: BlogPostMutationResponse = {
+			ok: true,
+			message: "Blog post updated successfully.",
+			data: serializeBlogPost(existingPost.toObject() as LeanBlogPostRecord),
+		};
+
+		return NextResponse.json(response, { status: 200 });
 	} catch (error) {
 		console.error("Admin Blog By ID PUT error:", error);
 
-		return NextResponse.json(
-			{
-				ok: false,
-				message: "Failed to update blog post.",
-			},
-			{ status: 500 },
-		);
+		const response: BlogPostMutationResponse = {
+			ok: false,
+			message: "Failed to update blog post.",
+		};
+
+		return NextResponse.json(response, { status: 500 });
 	}
 }
 
@@ -417,49 +466,45 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 		const { id } = await context.params;
 
 		if (!isValidObjectId(id)) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Invalid blog post id.",
-				},
-				{ status: 400 },
-			);
+			const response: BlogPostDeleteResponse = {
+				ok: false,
+				message: "Invalid blog post id.",
+			};
+
+			return NextResponse.json(response, { status: 400 });
 		}
 
 		const deletedPost = await BlogPostModel.findByIdAndDelete(id)
 			.select("_id slug")
-			.lean<{ _id: { toString(): string }; slug: string } | null>();
+			.lean<{ _id: { toString(): string }; slug?: string } | null>();
 
 		if (!deletedPost) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Blog post not found.",
-				},
-				{ status: 404 },
-			);
+			const response: BlogPostDeleteResponse = {
+				ok: false,
+				message: "Blog post not found.",
+			};
+
+			return NextResponse.json(response, { status: 404 });
 		}
 
-		return NextResponse.json(
-			{
-				ok: true,
-				message: "Blog post deleted successfully.",
-				data: {
-					_id: deletedPost._id.toString(),
-					slug: deletedPost.slug,
-				},
+		const response: BlogPostDeleteResponse = {
+			ok: true,
+			message: "Blog post deleted successfully.",
+			data: {
+				_id: deletedPost._id.toString(),
+				slug: deletedPost.slug ?? "",
 			},
-			{ status: 200 },
-		);
+		};
+
+		return NextResponse.json(response, { status: 200 });
 	} catch (error) {
 		console.error("Admin Blog By ID DELETE error:", error);
 
-		return NextResponse.json(
-			{
-				ok: false,
-				message: "Failed to delete blog post.",
-			},
-			{ status: 500 },
-		);
+		const response: BlogPostDeleteResponse = {
+			ok: false,
+			message: "Failed to delete blog post.",
+		};
+
+		return NextResponse.json(response, { status: 500 });
 	}
 }

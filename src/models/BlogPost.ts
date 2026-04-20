@@ -17,7 +17,7 @@
  *   Decisiones:
  *   - `slug` es obligatorio y único
  *   - `title`, `excerpt` y `content` se separan por idioma
- *   - `coverImage` se deja opcional en modelo para no bloquear borradores
+ *   - `coverImage` se deja opcional a nivel funcional usando default vacío
  *   - `category` inicia simple como string
  *   - `tags` inicia como string[]
  *   - `publishedAt` solo se usa cuando el artículo se publica
@@ -25,49 +25,26 @@
  *   - timestamps nativos de mongoose resuelven `createdAt` y `updatedAt`
  *
  *   Nota:
- *   - este modelo está pensado para integrarse luego con R2 en portada/galería
+ *   - este modelo reutiliza los contratos base de `@/types/blog`
+ *   - el modelo mongoose define persistencia, índices y normalización
  *   - no depende todavía de editor rico; `content` es texto largo
  * =============================================================================
  */
 
 import mongoose, { Model, Schema } from "mongoose";
+import type {
+	BlogGalleryItem,
+	BlogLocalizedText,
+	BlogPostBase,
+	BlogSeo,
+	BlogStatus,
+} from "@/types/blog";
 
 /* -------------------------------------------------------------------------- */
-/* Tipos auxiliares                                                           */
+/* Tipos de persistencia                                                      */
 /* -------------------------------------------------------------------------- */
 
-export type BlogStatus = "draft" | "published";
-
-export interface LocalizedText {
-	es: string;
-	en: string;
-}
-
-export interface BlogGalleryItem {
-	url: string;
-	alt: LocalizedText;
-	order: number;
-}
-
-export interface BlogSeo {
-	metaTitle: LocalizedText;
-	metaDescription: LocalizedText;
-	ogImage?: string;
-}
-
-export interface BlogPostDocument {
-	slug: string;
-	title: LocalizedText;
-	excerpt: LocalizedText;
-	content: LocalizedText;
-	coverImage?: string;
-	gallery: BlogGalleryItem[];
-	category: string;
-	tags: string[];
-	status: BlogStatus;
-	featured: boolean;
-	order: number;
-	seo: BlogSeo;
+export interface BlogPostDocument extends BlogPostBase {
 	publishedAt: Date | null;
 	createdBy: string;
 	createdAt: Date;
@@ -75,15 +52,30 @@ export interface BlogPostDocument {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Helpers locales                                                            */
+/* -------------------------------------------------------------------------- */
+
+const EMPTY_LOCALIZED_TEXT: BlogLocalizedText = {
+	es: "",
+	en: "",
+};
+
+const EMPTY_SEO: BlogSeo = {
+	metaTitle: { es: "", en: "" },
+	metaDescription: { es: "", en: "" },
+	ogImage: "",
+};
+
+/* -------------------------------------------------------------------------- */
 /* Subschemas                                                                 */
 /* -------------------------------------------------------------------------- */
 
-const LocalizedTextSchema = new Schema<LocalizedText>(
+const LocalizedTextSchema = new Schema<BlogLocalizedText>(
 	{
 		es: { type: String, trim: true, default: "" },
 		en: { type: String, trim: true, default: "" },
 	},
-	{ _id: false },
+	{ _id: false }
 );
 
 const BlogGalleryItemSchema = new Schema<BlogGalleryItem>(
@@ -96,7 +88,7 @@ const BlogGalleryItemSchema = new Schema<BlogGalleryItem>(
 		},
 		alt: {
 			type: LocalizedTextSchema,
-			default: () => ({ es: "", en: "" }),
+			default: () => ({ ...EMPTY_LOCALIZED_TEXT }),
 		},
 		order: {
 			type: Number,
@@ -104,18 +96,18 @@ const BlogGalleryItemSchema = new Schema<BlogGalleryItem>(
 			min: 0,
 		},
 	},
-	{ _id: false },
+	{ _id: false }
 );
 
 const BlogSeoSchema = new Schema<BlogSeo>(
 	{
 		metaTitle: {
 			type: LocalizedTextSchema,
-			default: () => ({ es: "", en: "" }),
+			default: () => ({ ...EMPTY_LOCALIZED_TEXT }),
 		},
 		metaDescription: {
 			type: LocalizedTextSchema,
-			default: () => ({ es: "", en: "" }),
+			default: () => ({ ...EMPTY_LOCALIZED_TEXT }),
 		},
 		ogImage: {
 			type: String,
@@ -123,7 +115,7 @@ const BlogSeoSchema = new Schema<BlogSeo>(
 			default: "",
 		},
 	},
-	{ _id: false },
+	{ _id: false }
 );
 
 /* -------------------------------------------------------------------------- */
@@ -144,19 +136,19 @@ const BlogPostSchema = new Schema<BlogPostDocument>(
 		title: {
 			type: LocalizedTextSchema,
 			required: true,
-			default: () => ({ es: "", en: "" }),
+			default: () => ({ ...EMPTY_LOCALIZED_TEXT }),
 		},
 
 		excerpt: {
 			type: LocalizedTextSchema,
 			required: true,
-			default: () => ({ es: "", en: "" }),
+			default: () => ({ ...EMPTY_LOCALIZED_TEXT }),
 		},
 
 		content: {
 			type: LocalizedTextSchema,
 			required: true,
-			default: () => ({ es: "", en: "" }),
+			default: () => ({ ...EMPTY_LOCALIZED_TEXT }),
 		},
 
 		coverImage: {
@@ -182,9 +174,14 @@ const BlogPostSchema = new Schema<BlogPostDocument>(
 			default: [],
 		},
 
+		relatedProjectIds: {
+			type: [String],
+			default: [],
+		},
+
 		status: {
 			type: String,
-			enum: ["draft", "published"],
+			enum: ["draft", "published"] satisfies BlogStatus[],
 			default: "draft",
 			index: true,
 		},
@@ -204,9 +201,9 @@ const BlogPostSchema = new Schema<BlogPostDocument>(
 		seo: {
 			type: BlogSeoSchema,
 			default: () => ({
-				metaTitle: { es: "", en: "" },
-				metaDescription: { es: "", en: "" },
-				ogImage: "",
+				metaTitle: { ...EMPTY_SEO.metaTitle },
+				metaDescription: { ...EMPTY_SEO.metaDescription },
+				ogImage: EMPTY_SEO.ogImage,
 			}),
 		},
 
@@ -226,13 +223,20 @@ const BlogPostSchema = new Schema<BlogPostDocument>(
 		timestamps: true,
 		versionKey: false,
 		collection: "BlogPosts",
-	},
+	}
 );
 
 /* -------------------------------------------------------------------------- */
 /* Índices                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * ES:
+ *   Índice de texto principal para búsquedas administrativas simples.
+ *
+ * Nota:
+ *   MongoDB permite un solo text index por colección.
+ */
 BlogPostSchema.index({
 	"title.es": "text",
 	"title.en": "text",
@@ -248,11 +252,41 @@ BlogPostSchema.index({
 /* Middleware                                                                 */
 /* -------------------------------------------------------------------------- */
 
-BlogPostSchema.pre("save", function normalizeTags(next) {
+BlogPostSchema.pre("save", function normalizeBeforeSave(next) {
+	if (typeof this.slug === "string") {
+		this.slug = this.slug.trim().toLowerCase();
+	}
+
+	if (typeof this.category === "string") {
+		this.category = this.category.trim();
+	}
+
+	if (typeof this.createdBy === "string") {
+		this.createdBy = this.createdBy.trim();
+	}
+
 	if (Array.isArray(this.tags)) {
-		this.tags = this.tags
-			.map((tag) => tag.trim())
-			.filter((tag) => tag.length > 0);
+		this.tags = Array.from(
+			new Set(
+				this.tags
+					.map((tag) => tag.trim())
+					.filter((tag) => tag.length > 0)
+			)
+		);
+	}
+
+	if (Array.isArray(this.relatedProjectIds)) {
+		this.relatedProjectIds = Array.from(
+			new Set(
+				this.relatedProjectIds
+					.map((id) => id.trim())
+					.filter((id) => id.length > 0)
+			)
+		);
+	}
+
+	if (Array.isArray(this.gallery)) {
+		this.gallery = [...this.gallery].sort((a, b) => a.order - b.order);
 	}
 
 	next();

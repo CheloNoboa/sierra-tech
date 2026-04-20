@@ -18,6 +18,10 @@
  * Decisiones:
  * - los proyectos destacados salen primero
  * - luego se respeta sortOrder y fechas recientes
+ * - las imágenes públicas conservan el contrato visual esperado por el sitio:
+ *   `{ url, alt, storageKey }`
+ * - si existe fileUrl absoluto se respeta
+ * - si solo existe storageKey en R2, se resuelve usando la base pública
  * =============================================================================
  */
 
@@ -26,6 +30,85 @@ import { NextResponse } from "next/server";
 import { connectToDB } from "@/lib/connectToDB";
 import { normalizeProjectEntity } from "@/lib/projects/projectPayload";
 import Project from "@/models/Project";
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function normalizeString(value: unknown): string {
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function resolvePublicAssetUrl(value: {
+	url?: string;
+	storageKey?: string;
+} | null): string {
+	if (!value) {
+		return "";
+	}
+
+	const directUrl = normalizeString(value.url);
+	const storageKey = normalizeString(value.storageKey);
+	const rawValue = directUrl || storageKey;
+
+	if (!rawValue) {
+		return "";
+	}
+
+	if (rawValue.startsWith("http://") || rawValue.startsWith("https://")) {
+		return rawValue;
+	}
+
+	if (rawValue.startsWith("/")) {
+		return rawValue;
+	}
+
+	if (rawValue.startsWith("admin/")) {
+		return `/api/admin/uploads/view?key=${encodeURIComponent(rawValue)}`;
+	}
+
+	const publicBaseUrl =
+		normalizeString(process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL) ||
+		normalizeString(process.env.R2_PUBLIC_BASE_URL);
+
+	if (publicBaseUrl) {
+		return `${publicBaseUrl.replace(/\/+$/, "")}/${rawValue.replace(/^\/+/, "")}`;
+	}
+
+	return rawValue;
+}
+
+function serializePublicImage(
+	value: {
+		url?: string;
+		alt?: { es?: string; en?: string };
+		storageKey?: string;
+	} | null
+) {
+	if (!value) {
+		return null;
+	}
+
+	const resolvedUrl = resolvePublicAssetUrl(value);
+	const safeStorageKey = normalizeString(value.storageKey);
+
+	if (!resolvedUrl && !safeStorageKey) {
+		return null;
+	}
+
+	return {
+		url: resolvedUrl,
+		alt: {
+			es: normalizeString(value.alt?.es),
+			en: normalizeString(value.alt?.en),
+		},
+		storageKey: safeStorageKey,
+	};
+}
+
+/* -------------------------------------------------------------------------- */
+/* GET                                                                        */
+/* -------------------------------------------------------------------------- */
 
 export async function GET() {
 	try {
@@ -52,15 +135,27 @@ export async function GET() {
 			title: item.publicSiteSettings.showTitle ? item.title : null,
 			summary: item.publicSiteSettings.showSummary ? item.summary : null,
 			coverImage: item.publicSiteSettings.showCoverImage
-				? item.coverImage
+				? serializePublicImage(item.coverImage)
 				: null,
-			gallery: item.publicSiteSettings.showGallery ? item.gallery : [],
+			gallery: item.publicSiteSettings.showGallery
+				? item.gallery
+					.map((image) => serializePublicImage(image))
+					.filter(
+						(
+							image
+						): image is {
+							url: string;
+							alt: { es: string; en: string };
+							storageKey: string;
+						} => Boolean(image)
+					)
+				: [],
 			documents: item.documents
 				.filter(
 					(document) =>
 						document.visibleInPublicSite &&
 						!document.visibleToInternalOnly &&
-						!!document.fileUrl,
+						!!document.fileUrl
 				)
 				.sort((a, b) => a.sortOrder - b.sortOrder)
 				.map((document) => ({
@@ -95,7 +190,7 @@ export async function GET() {
 						? error.message
 						: "Could not load public projects.",
 			},
-			{ status: 500 },
+			{ status: 500 }
 		);
 	}
 }

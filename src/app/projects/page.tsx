@@ -22,9 +22,9 @@
  * Decisiones:
  * - la carga usa URL absoluta construida desde headers para evitar problemas
  *   de fetch en Server Components
- * - las imágenes públicas resuelven tanto URL completa como storageKey
- * - el idioma visible queda estable en español por ahora, hasta conectar i18n
- *   público real para esta ruta
+ * - las imágenes públicas resuelven URL completa, ruta local, fileKey privado
+ *   de admin y objetos públicos de R2
+ * - el idioma visible se resuelve desde cookie
  * - los proyectos destacados se presentan primero en un bloque visual propio
  * =============================================================================
  */
@@ -58,13 +58,13 @@ type PublicProjectListItem = {
 
 type PublicProjectsResponse =
 	| {
-			ok: true;
-			items: PublicProjectListItem[];
-	  }
+		ok: true;
+		items: PublicProjectListItem[];
+	}
 	| {
-			ok: false;
-			error: string;
-	  };
+		ok: false;
+		error: string;
+	};
 
 function normalizeString(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
@@ -87,49 +87,55 @@ function resolveBaseUrl(host: string, forwardedProto: string | null): string {
 	return `${safeProto}://${safeHost}`;
 }
 
+/**
+ * -----------------------------------------------------------------------------
+ * Resuelve una imagen pública del proyecto.
+ *
+ * Prioridades:
+ * 1. URL absoluta
+ * 2. ruta local del sitio
+ * 3. fileKey privado admin/... -> endpoint seguro interno
+ * 4. objeto público R2 usando NEXT_PUBLIC / R2_PUBLIC_BASE_URL
+ * 5. fallback a ruta relativa sobre el sitio actual
+ * -----------------------------------------------------------------------------
+ */
 function resolveImageUrl(image: ProjectImage | null, baseUrl: string): string {
-	if (!image) return "";
+	if (!image) {
+		return "";
+	}
 
 	const directUrl = normalizeString(image.url);
 	const storageKey = normalizeString(image.storageKey);
 
-	if (directUrl.startsWith("http://") || directUrl.startsWith("https://")) {
-		return directUrl;
-	}
+	const publicR2Base =
+		normalizeString(process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL) ||
+		normalizeString(process.env.R2_PUBLIC_BASE_URL);
 
-	if (storageKey.startsWith("http://") || storageKey.startsWith("https://")) {
-		return storageKey;
-	}
+	const resolveCandidate = (candidate: string): string => {
+		if (!candidate) {
+			return "";
+		}
 
-	if (directUrl.startsWith("/")) {
-		return `${baseUrl}${directUrl}`;
-	}
+		if (candidate.startsWith("http://") || candidate.startsWith("https://")) {
+			return candidate;
+		}
 
-	if (storageKey.startsWith("/")) {
-		return `${baseUrl}${storageKey}`;
-	}
+		if (candidate.startsWith("/")) {
+			return `${baseUrl}${candidate}`;
+		}
 
-	if (directUrl.startsWith("admin/")) {
-		return `${baseUrl}/api/admin/uploads/view?key=${encodeURIComponent(
-			directUrl,
-		)}`;
-	}
+		if (candidate.startsWith("admin/")) {
+			return `${baseUrl}/api/admin/uploads/view?key=${encodeURIComponent(candidate)}`;
+		}
 
-	if (storageKey.startsWith("admin/")) {
-		return `${baseUrl}/api/admin/uploads/view?key=${encodeURIComponent(
-			storageKey,
-		)}`;
-	}
+		if (publicR2Base) {
+			return `${publicR2Base.replace(/\/+$/, "")}/${candidate.replace(/^\/+/, "")}`;
+		}
 
-	if (directUrl) {
-		return `${baseUrl}/${directUrl}`;
-	}
+		return `${baseUrl}/${candidate.replace(/^\/+/, "")}`;
+	};
 
-	if (storageKey) {
-		return `${baseUrl}/${storageKey}`;
-	}
-
-	return "";
+	return resolveCandidate(directUrl) || resolveCandidate(storageKey);
 }
 
 async function getProjects(baseUrl: string): Promise<PublicProjectListItem[]> {
@@ -192,10 +198,7 @@ function ProjectCard({
 					<img
 						src={imageUrl}
 						alt={
-							resolveText(
-								project.coverImage?.alt ?? { es: "", en: "" },
-								locale,
-							) ||
+							resolveText(project.coverImage?.alt ?? { es: "", en: "" }, locale) ||
 							title ||
 							ui.projectAlt
 						}
@@ -250,7 +253,7 @@ export default async function PublicProjectsPage() {
 
 	const projects = await getProjects(baseUrl);
 	const cookieStore = await cookies();
-	const localeCookie = cookieStore.get("locale")?.value;
+	const localeCookie = cookieStore.get("NEXT_LOCALE")?.value || cookieStore.get("locale")?.value;
 	const locale: "es" | "en" = localeCookie === "en" ? "en" : "es";
 
 	const ui = {

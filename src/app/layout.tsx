@@ -18,7 +18,7 @@
  *   - description
  *   - open graph
  *   - twitter card
- * - Respetar el idioma por defecto configurado en SiteSettings.
+ * - Respetar el idioma activo del usuario desde cookie cuando exista.
  * - Mantener la estructura global de la app.
  *
  * Reglas:
@@ -42,6 +42,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 import Script from "next/script";
+import { cookies } from "next/headers";
+
 import Providers from "./providers";
 import { getPublicSiteSettings } from "@/lib/siteSettings";
 
@@ -49,17 +51,6 @@ import { getPublicSiteSettings } from "@/lib/siteSettings";
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/**
- * -----------------------------------------------------------------------------
- * Resuelve una URL pública utilizable por metadata o por el documento HTML.
- *
- * Reglas:
- * - Si el valor ya es una URL absoluta, se usa tal cual.
- * - Si el valor es un fileKey privado de admin, se transforma al endpoint
- *   interno de lectura segura.
- * - Si el valor está vacío, devuelve undefined.
- * -----------------------------------------------------------------------------
- */
 function resolveAssetUrl(value: string): string | undefined {
 	const trimmed = value.trim();
 
@@ -78,6 +69,16 @@ function resolveAssetUrl(value: string): string | undefined {
 	return trimmed;
 }
 
+function resolveCookieLocale(
+	cookieValue: string | undefined | null
+): "es" | "en" | null {
+	if (!cookieValue) {
+		return null;
+	}
+
+	return cookieValue === "en" ? "en" : cookieValue === "es" ? "es" : null;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Metadata                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -85,39 +86,45 @@ function resolveAssetUrl(value: string): string | undefined {
 export async function generateMetadata(): Promise<Metadata> {
 	const settings = await getPublicSiteSettings();
 
+	const cookieStore = await cookies();
+	const cookieLocale =
+		resolveCookieLocale(cookieStore.get("NEXT_LOCALE")?.value) ??
+		resolveCookieLocale(cookieStore.get("locale")?.value);
+
 	const defaultLocale = settings.i18n.defaultLocale === "en" ? "en" : "es";
+	const activeLocale = cookieLocale ?? defaultLocale;
 
 	const siteName = settings.identity.siteName.trim() || "Sierra Tech";
 
 	const title =
-		defaultLocale === "en"
+		activeLocale === "en"
 			? settings.seo.defaultTitle.en.trim() || siteName
 			: settings.seo.defaultTitle.es.trim() || siteName;
 
 	const description =
-		defaultLocale === "en"
+		activeLocale === "en"
 			? settings.seo.defaultDescription.en.trim() ||
-				settings.identity.tagline.en.trim() ||
-				siteName
+			settings.identity.tagline.en.trim() ||
+			siteName
 			: settings.seo.defaultDescription.es.trim() ||
-				settings.identity.tagline.es.trim() ||
-				siteName;
+			settings.identity.tagline.es.trim() ||
+			siteName;
 
 	const ogImage = resolveAssetUrl(settings.seo.defaultOgImage);
 	const favicon = resolveAssetUrl(settings.identity.favicon);
 
 	return {
 		metadataBase: new URL(
-			process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+			process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
 		),
 		title,
 		description,
 		icons: favicon
 			? {
-					icon: favicon,
-					shortcut: favicon,
-					apple: favicon,
-				}
+				icon: favicon,
+				shortcut: favicon,
+				apple: favicon,
+			}
 			: undefined,
 		openGraph: {
 			type: "website",
@@ -145,12 +152,18 @@ export default async function RootLayout({
 	children: ReactNode;
 }) {
 	const settings = await getPublicSiteSettings();
+	const cookieStore = await cookies();
+
+	const cookieLocale =
+		resolveCookieLocale(cookieStore.get("NEXT_LOCALE")?.value) ??
+		resolveCookieLocale(cookieStore.get("locale")?.value);
 
 	const defaultLocale = settings.i18n.defaultLocale === "en" ? "en" : "es";
+	const activeLocale = cookieLocale ?? defaultLocale;
 
 	return (
 		<html
-			lang={defaultLocale}
+			lang={activeLocale}
 			data-scroll-behavior="smooth"
 			suppressHydrationWarning
 		>

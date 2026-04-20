@@ -111,18 +111,6 @@ const HEADER_SITE_SETTINGS_DEFAULTS: HeaderSiteSettings = {
 	},
 };
 
-/**
- * -----------------------------------------------------------------------------
- * Normaliza una referencia de imagen para branding público.
- *
- * Reglas:
- * - Si está vacía, devuelve string vacío.
- * - Si es una URL absoluta, la conserva.
- * - Si es una ruta relativa del proyecto, la conserva.
- * - Si es un fileKey privado de admin (`admin/...`), lo transforma al endpoint
- *   interno de lectura segura para poder usarlo en el frontend público.
- * -----------------------------------------------------------------------------
- */
 function normalizeImageSrc(value: string | undefined | null): string {
 	const raw = value?.trim() ?? "";
 
@@ -159,9 +147,6 @@ function hasLocalizedText(value: LocalizedText | null | undefined): boolean {
 	return value.es.trim().length > 0 || value.en.trim().length > 0;
 }
 
-/**
- * Hace scroll manual hacia una sección con reintentos.
- */
 function scrollToSection(sectionId: string, attempts = 12): void {
 	const safeId = sectionId.replace(/^#/, "");
 
@@ -224,7 +209,7 @@ export default function Header() {
 	const [showSignUp, setShowSignUp] = useState(false);
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [siteSettings, setSiteSettings] = useState<HeaderSiteSettings>(
-		HEADER_SITE_SETTINGS_DEFAULTS,
+		HEADER_SITE_SETTINGS_DEFAULTS
 	);
 	const [currentHash, setCurrentHash] = useState("");
 
@@ -335,7 +320,7 @@ export default function Header() {
 				label: lang === "es" ? "Contacto" : "Contact",
 			},
 		],
-		[lang],
+		[lang]
 	);
 
 	const authText = useMemo(
@@ -353,7 +338,7 @@ export default function Header() {
 					? "Solicitar cotización"
 					: "Request a quote",
 		}),
-		[lang, siteSettings],
+		[lang, siteSettings]
 	);
 
 	const showGlobalCta = siteSettings.globalPrimaryCta.enabled;
@@ -395,6 +380,7 @@ export default function Header() {
 
 		document.cookie = `locale=${safeLocale}; path=/; max-age=31536000; samesite=lax`;
 		document.cookie = `NEXT_LOCALE=${safeLocale}; path=/; max-age=31536000; samesite=lax`;
+		document.documentElement.lang = safeLocale;
 
 		setLocale(safeLocale);
 		router.refresh();
@@ -416,7 +402,7 @@ export default function Header() {
 
 			window.location.href = `/${sectionHref}`;
 		},
-		[pathname],
+		[pathname]
 	);
 
 	const handleGlobalCtaNavigation = useCallback(() => {
@@ -446,14 +432,12 @@ export default function Header() {
 			}
 
 			if (item.href === "/") {
-				return (
-					pathname === "/" && (currentHash === "" || currentHash === "#home")
-				);
+				return pathname === "/" && (currentHash === "" || currentHash === "#home");
 			}
 
 			return pathname === item.href;
 		},
-		[currentHash, pathname],
+		[currentHash, pathname]
 	);
 
 	return (

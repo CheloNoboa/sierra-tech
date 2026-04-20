@@ -51,6 +51,9 @@ const ALLOWED_SCOPES = [
 	"projects/covers",
 	"projects/gallery",
 	"projects/maintenance",
+	"blog/covers",
+	"blog/gallery",
+	"blog/seo",
 ] as const;
 
 const IMAGE_MIME_TYPES = [

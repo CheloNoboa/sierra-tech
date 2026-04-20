@@ -31,7 +31,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import {
 	Loader2,
 	RefreshCcw,
@@ -50,6 +49,24 @@ import type {
 	BlogPost,
 	BlogPostListResponse,
 } from "@/types/blog";
+import Image from "next/image";
+
+interface ServiceClassListItem {
+	_id: string;
+	key: string;
+	label: {
+		es: string;
+		en: string;
+	};
+	enabled: boolean;
+	order: number;
+}
+
+interface ServiceClassesResponse {
+	ok: boolean;
+	items?: ServiceClassListItem[];
+	message?: string;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -97,6 +114,26 @@ function getLocalizedValue(
 	return primary?.trim() || fallback?.trim() || "";
 }
 
+function resolveCategoryLabel(
+	categoryKey: string,
+	serviceClasses: ServiceClassListItem[],
+	locale: BlogLocale,
+): string {
+	const safeKey = categoryKey.trim();
+
+	if (!safeKey) {
+		return locale === "es" ? "Sin categoría" : "No category";
+	}
+
+	const match = serviceClasses.find((item) => item.key === safeKey);
+
+	if (!match) {
+		return safeKey;
+	}
+
+	return getLocalizedValue(match.label, locale) || safeKey;
+}
+
 function mapPostToListItem(post: BlogPost): BlogListItem {
 	return {
 		_id: post._id,
@@ -105,7 +142,10 @@ function mapPostToListItem(post: BlogPost): BlogListItem {
 		excerpt: post.excerpt,
 		coverImage: post.coverImage,
 		category: post.category,
-		tags: post.tags,
+		tags: Array.isArray(post.tags) ? post.tags : [],
+		relatedProjectIds: Array.isArray(post.relatedProjectIds)
+			? post.relatedProjectIds
+			: [],
 		status: post.status,
 		featured: post.featured,
 		order: post.order,
@@ -134,13 +174,25 @@ function buildQueryString(filters: BlogAdminFilters): string {
 	return query ? `?${query}` : "";
 }
 
-function matchesFilters(post: BlogPost, filters: BlogAdminFilters): boolean {
+function matchesFilters(
+	post: BlogPost,
+	filters: BlogAdminFilters,
+	serviceClasses: ServiceClassListItem[],
+	locale: BlogLocale,
+): boolean {
 	const normalizedQuery = filters.q.trim().toLowerCase();
+
+	const visibleCategory = resolveCategoryLabel(
+		post.category,
+		serviceClasses,
+		locale,
+	).toLowerCase();
 
 	const matchesQuery =
 		!normalizedQuery ||
 		post.slug.toLowerCase().includes(normalizedQuery) ||
 		post.category.toLowerCase().includes(normalizedQuery) ||
+		visibleCategory.includes(normalizedQuery) ||
 		post.title.es.toLowerCase().includes(normalizedQuery) ||
 		post.title.en.toLowerCase().includes(normalizedQuery) ||
 		post.excerpt.es.toLowerCase().includes(normalizedQuery) ||
@@ -181,6 +233,12 @@ function sortPosts(items: BlogListItem[]): BlogListItem[] {
 	});
 }
 
+function isRenderableImageUrl(value: string): boolean {
+	const safeValue = value.trim();
+
+	return safeValue.startsWith("/api/admin/uploads/view?key=") || safeValue.startsWith("/");
+}
+
 /* -------------------------------------------------------------------------- */
 /* Page                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -198,12 +256,57 @@ export default function AdminBlogPage() {
 	const [isDeletingId, setIsDeletingId] = useState<string>("");
 	const [errorMessage, setErrorMessage] = useState<string>("");
 
+	const [deleteTarget, setDeleteTarget] = useState<BlogListItem | null>(null);
+	const [pageNotice, setPageNotice] = useState<string>("");
+
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 	const [modalMode, setModalMode] = useState<"create" | "edit">("create");
 	const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
 
+	const [serviceClasses, setServiceClasses] = useState<ServiceClassListItem[]>([]);
+
 	useEffect(() => {
 		setLocale(getPreferredLocale());
+	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		const loadServiceClasses = async () => {
+			try {
+				const response = await fetch("/api/admin/service-classes", {
+					method: "GET",
+					cache: "no-store",
+				});
+
+				const result = (await response.json()) as ServiceClassesResponse;
+
+				if (!response.ok || !result.ok) {
+					if (!cancelled) {
+						setServiceClasses([]);
+					}
+					return;
+				}
+
+				if (!cancelled) {
+					setServiceClasses(
+						(Array.isArray(result.items) ? result.items : [])
+							.filter((item) => item.enabled)
+							.sort((a, b) => a.order - b.order),
+					);
+				}
+			} catch {
+				if (!cancelled) {
+					setServiceClasses([]);
+				}
+			}
+		};
+
+		void loadServiceClasses();
+
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	const labels = useMemo(() => {
@@ -258,6 +361,21 @@ export default function AdminBlogPage() {
 			featuredBadge: locale === "es" ? "Destacado" : "Featured",
 			records: locale === "es" ? "artículos" : "posts",
 			close: locale === "es" ? "Cerrar" : "Close",
+			confirmDeleteTitle:
+				locale === "es" ? "Eliminar artículo" : "Delete article",
+			confirmDeleteMessage:
+				locale === "es"
+					? "Esta acción eliminará el artículo de forma permanente."
+					: "This action will permanently delete the article.",
+			confirmDeleteAction:
+				locale === "es" ? "Sí, eliminar" : "Yes, delete",
+			dismissNotice:
+				locale === "es" ? "Cerrar mensaje" : "Dismiss message",
+			editLoadFailed:
+				locale === "es"
+					? "No se pudo cargar el artículo para edición."
+					: "Could not load the post for editing.",
+			cancel: locale === "es" ? "Cancelar" : "Cancel",
 		};
 	}, [locale]);
 
@@ -308,17 +426,25 @@ export default function AdminBlogPage() {
 		await fetchPosts(true);
 	};
 
-	const handleDelete = async (id: string) => {
-		const confirmed = window.confirm(labels.deleteConfirm);
+	const handleRequestDelete = (post: BlogListItem) => {
+		if (isDeletingId) {
+			return;
+		}
 
-		if (!confirmed) {
+		setDeleteTarget(post);
+	};
+
+	const handleConfirmDelete = async () => {
+		if (!deleteTarget?._id) {
 			return;
 		}
 
 		try {
-			setIsDeletingId(id);
+			setIsDeletingId(deleteTarget._id);
+			setPageNotice("");
+			setErrorMessage("");
 
-			const response = await fetch(`/api/admin/blog/${id}`, {
+			const response = await fetch(`/api/admin/blog/${deleteTarget._id}`, {
 				method: "DELETE",
 			});
 
@@ -331,14 +457,18 @@ export default function AdminBlogPage() {
 				throw new Error(result.message || labels.deleteFailed);
 			}
 
-			setPosts((current) => current.filter((post) => post._id !== id));
+			setPosts((current) =>
+				current.filter((post) => post._id !== deleteTarget._id),
+			);
 
-			if (selectedPost?._id === id) {
+			if (selectedPost?._id === deleteTarget._id) {
 				setSelectedPost(null);
 			}
+
+			setDeleteTarget(null);
 		} catch (error) {
 			console.error("Failed to delete blog post:", error);
-			window.alert(
+			setPageNotice(
 				error instanceof Error ? error.message : labels.deleteFailed,
 			);
 		} finally {
@@ -347,6 +477,7 @@ export default function AdminBlogPage() {
 	};
 
 	const handleOpenCreate = () => {
+		setPageNotice("");
 		setModalMode("create");
 		setSelectedPost(null);
 		setIsModalOpen(true);
@@ -354,6 +485,8 @@ export default function AdminBlogPage() {
 
 	const handleOpenEdit = async (id: string) => {
 		try {
+			setPageNotice("");
+
 			const response = await fetch(`/api/admin/blog/${id}`, {
 				method: "GET",
 				cache: "no-store",
@@ -374,7 +507,9 @@ export default function AdminBlogPage() {
 			setIsModalOpen(true);
 		} catch (error) {
 			console.error("Failed to load blog post for edit:", error);
-			window.alert(error instanceof Error ? error.message : labels.fetchFailed);
+			setPageNotice(
+				error instanceof Error ? error.message : labels.editLoadFailed,
+			);
 		}
 	};
 
@@ -385,7 +520,7 @@ export default function AdminBlogPage() {
 			const exists = current.some((item) => item._id === nextListItem._id);
 
 			if (!exists) {
-				if (!matchesFilters(post, filters)) {
+				if (!matchesFilters(post, filters, serviceClasses, locale)) {
 					return current;
 				}
 
@@ -396,7 +531,7 @@ export default function AdminBlogPage() {
 				item._id === nextListItem._id ? nextListItem : item,
 			);
 
-			if (!matchesFilters(post, filters)) {
+			if (!matchesFilters(post, filters, serviceClasses, locale)) {
 				return sortPosts(
 					updated.filter((item) => item._id !== nextListItem._id),
 				);
@@ -420,6 +555,21 @@ export default function AdminBlogPage() {
 	return (
 		<>
 			<div className="space-y-6">
+				{pageNotice ? (
+					<section className="rounded-3xl border border-red-200 bg-red-50 px-5 py-4 shadow-sm">
+						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<p className="text-sm font-medium text-red-700">{pageNotice}</p>
+
+							<button
+								type="button"
+								onClick={() => setPageNotice("")}
+								className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
+							>
+								{labels.dismissNotice}
+							</button>
+						</div>
+					</section>
+				) : null}
 				<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
 					<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 						<div className="space-y-2">
@@ -653,13 +803,14 @@ export default function AdminBlogPage() {
 											>
 												<td className="px-5 py-4">
 													<div className="relative h-16 w-24 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-														{post.coverImage ? (
+														{post.coverImage && isRenderableImageUrl(post.coverImage) ? (
 															<Image
 																src={post.coverImage}
 																alt={localizedTitle}
 																fill
 																sizes="96px"
 																className="object-cover"
+																unoptimized
 															/>
 														) : (
 															<div className="flex h-full w-full items-center justify-center text-slate-400">
@@ -709,17 +860,16 @@ export default function AdminBlogPage() {
 
 												<td className="px-5 py-4">
 													<span className="text-sm text-slate-700">
-														{post.category || labels.noCategory}
+														{resolveCategoryLabel(post.category, serviceClasses, locale)}
 													</span>
 												</td>
 
 												<td className="px-5 py-4">
 													<span
-														className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-															post.status === "published"
-																? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
-																: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200"
-														}`}
+														className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${post.status === "published"
+															? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+															: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200"
+															}`}
 													>
 														{post.status === "published"
 															? labels.published
@@ -746,7 +896,7 @@ export default function AdminBlogPage() {
 
 														<button
 															type="button"
-															onClick={() => void handleDelete(post._id)}
+															onClick={() => handleRequestDelete(post)}
 															disabled={isDeletingId === post._id}
 															className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
 														>
@@ -781,6 +931,64 @@ export default function AdminBlogPage() {
 				onClose={handleCloseModal}
 				onSuccess={handleModalSuccess}
 			/>
+
+			{/* 🔴 MODAL DE CONFIRMACIÓN DELETE */}
+			{deleteTarget ? (
+				<div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 p-4">
+					<div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+						<div className="border-b border-slate-200 px-6 py-5">
+							<h2 className="text-lg font-semibold text-slate-900">
+								{labels.confirmDeleteTitle}
+							</h2>
+						</div>
+
+						<div className="px-6 py-5">
+							<p className="text-sm leading-6 text-slate-600">
+								{labels.confirmDeleteMessage}
+							</p>
+
+							<p className="mt-3 text-sm font-semibold text-slate-900">
+								{getLocalizedValue(deleteTarget.title, locale) ||
+									(locale === "es" ? "Sin título" : "Untitled")}
+							</p>
+
+							<p className="mt-1 text-xs text-slate-500">
+								/blog/{deleteTarget.slug}
+							</p>
+						</div>
+
+						<div className="flex flex-col gap-3 border-t border-slate-200 px-6 py-5 sm:flex-row sm:justify-end">
+							<button
+								type="button"
+								onClick={() => setDeleteTarget(null)}
+								disabled={isDeletingId === deleteTarget._id}
+								className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								{labels.cancel}
+							</button>
+
+							<button
+								type="button"
+								onClick={() => void handleConfirmDelete()}
+								disabled={isDeletingId === deleteTarget._id}
+								className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								{isDeletingId === deleteTarget._id ? (
+									<Loader2 className="h-4 w-4 animate-spin" />
+								) : (
+									<Trash2 className="h-4 w-4" />
+								)}
+								<span>
+									{isDeletingId === deleteTarget._id
+										? labels.deleting
+										: labels.confirmDeleteAction}
+								</span>
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
+
 		</>
 	);
 }

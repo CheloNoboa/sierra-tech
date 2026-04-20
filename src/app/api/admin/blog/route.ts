@@ -26,20 +26,23 @@
  *
  *   Nota:
  *   - esta versión no incorpora todavía control de permisos/roles
- *   - si tu proyecto ya protege admin por sesión/middleware, este endpoint
+ *   - si el proyecto ya protege admin por sesión/middleware, este endpoint
  *     puede integrarse después con esa misma lógica
  * =============================================================================
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import BlogPostModel, {
-	type BlogGalleryItem,
-	type BlogPostDocument,
-	type BlogSeo,
-	type BlogStatus,
-	type LocalizedText,
-} from "@/models/BlogPost";
+import BlogPostModel from "@/models/BlogPost";
 import { connectToDB } from "@/lib/connectToDB";
+import type {
+	BlogGalleryItem,
+	BlogLocalizedText,
+	BlogPost,
+	BlogPostListResponse,
+	BlogPostMutationResponse,
+	BlogSeo,
+	BlogStatus,
+} from "@/types/blog";
 
 /* -------------------------------------------------------------------------- */
 /* Tipos internos                                                             */
@@ -47,38 +50,88 @@ import { connectToDB } from "@/lib/connectToDB";
 
 interface BlogPostCreatePayload {
 	slug?: string;
-	title?: Partial<LocalizedText>;
-	excerpt?: Partial<LocalizedText>;
-	content?: Partial<LocalizedText>;
+	title?: Partial<BlogLocalizedText>;
+	excerpt?: Partial<BlogLocalizedText>;
+	content?: Partial<BlogLocalizedText>;
 	coverImage?: string;
 	gallery?: Partial<BlogGalleryItem>[];
 	category?: string;
 	tags?: string[];
+	relatedProjectIds?: string[];
 	status?: BlogStatus;
 	featured?: boolean;
 	order?: number;
 	seo?: Partial<{
-		metaTitle: Partial<LocalizedText>;
-		metaDescription: Partial<LocalizedText>;
+		metaTitle: Partial<BlogLocalizedText>;
+		metaDescription: Partial<BlogLocalizedText>;
 		ogImage?: string;
 	}>;
 	createdBy?: string;
+}
+
+interface LeanBlogPostRecord {
+	_id: { toString(): string };
+	slug?: string;
+	title?: BlogLocalizedText;
+	excerpt?: BlogLocalizedText;
+	content?: BlogLocalizedText;
+	coverImage?: string;
+	gallery?: BlogGalleryItem[];
+	category?: string;
+	tags?: string[];
+	relatedProjectIds?: string[];
+	status?: BlogStatus;
+	featured?: boolean;
+	order?: number;
+	seo?: BlogSeo;
+	publishedAt?: Date | null;
+	createdBy?: string;
+	createdAt?: Date | null;
+	updatedAt?: Date | null;
+}
+
+interface NormalizedBlogPostPayload {
+	slug: string;
+	title: BlogLocalizedText;
+	excerpt: BlogLocalizedText;
+	content: BlogLocalizedText;
+	coverImage: string;
+	gallery: BlogGalleryItem[];
+	category: string;
+	tags: string[];
+	relatedProjectIds: string[];
+	status: BlogStatus;
+	featured: boolean;
+	order: number;
+	seo: BlogSeo;
+	createdBy: string;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function emptyLocalizedText(): LocalizedText {
+const EMPTY_LOCALIZED_TEXT: BlogLocalizedText = {
+	es: "",
+	en: "",
+};
+
+const EMPTY_SEO: BlogSeo = {
+	metaTitle: { es: "", en: "" },
+	metaDescription: { es: "", en: "" },
+	ogImage: "",
+};
+
+function cloneLocalizedText(): BlogLocalizedText {
 	return {
-		es: "",
-		en: "",
+		es: EMPTY_LOCALIZED_TEXT.es,
+		en: EMPTY_LOCALIZED_TEXT.en,
 	};
 }
 
 function normalizeLocalizedText(
-	value?: Partial<LocalizedText> | null,
-): LocalizedText {
+	value?: Partial<BlogLocalizedText> | null
+): BlogLocalizedText {
 	return {
 		es: typeof value?.es === "string" ? value.es.trim() : "",
 		en: typeof value?.en === "string" ? value.en.trim() : "",
@@ -106,13 +159,27 @@ function normalizeTags(tags?: string[]): string[] {
 		new Set(
 			tags
 				.map((tag) => (typeof tag === "string" ? tag.trim() : ""))
-				.filter((tag) => tag.length > 0),
-		),
+				.filter((tag) => tag.length > 0)
+		)
+	);
+}
+
+function normalizeRelatedProjectIds(value?: string[]): string[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return Array.from(
+		new Set(
+			value
+				.map((item) => (typeof item === "string" ? item.trim() : ""))
+				.filter((item) => item.length > 0)
+		)
 	);
 }
 
 function normalizeGallery(
-	gallery?: Partial<BlogGalleryItem>[],
+	gallery?: Partial<BlogGalleryItem>[]
 ): BlogGalleryItem[] {
 	if (!Array.isArray(gallery)) {
 		return [];
@@ -127,7 +194,7 @@ function normalizeGallery(
 				alt: normalizeLocalizedText(item?.alt),
 				order:
 					typeof item?.order === "number" && Number.isFinite(item.order)
-						? item.order
+						? Math.max(0, Math.floor(item.order))
 						: index,
 			};
 		})
@@ -155,23 +222,21 @@ function normalizeOrder(value?: number): number {
 	return Math.floor(value);
 }
 
-function normalizePayload(payload: BlogPostCreatePayload) {
-	const title = normalizeLocalizedText(payload.title);
-	const excerpt = normalizeLocalizedText(payload.excerpt);
-	const content = normalizeLocalizedText(payload.content);
-	const slug = normalizeSlug(payload.slug ?? "");
-
+function normalizePayload(
+	payload: BlogPostCreatePayload
+): NormalizedBlogPostPayload {
 	return {
-		slug,
-		title,
-		excerpt,
-		content,
+		slug: normalizeSlug(payload.slug ?? ""),
+		title: normalizeLocalizedText(payload.title),
+		excerpt: normalizeLocalizedText(payload.excerpt),
+		content: normalizeLocalizedText(payload.content),
 		coverImage:
 			typeof payload.coverImage === "string" ? payload.coverImage.trim() : "",
 		gallery: normalizeGallery(payload.gallery),
 		category:
 			typeof payload.category === "string" ? payload.category.trim() : "",
 		tags: normalizeTags(payload.tags),
+		relatedProjectIds: normalizeRelatedProjectIds(payload.relatedProjectIds),
 		status: normalizeStatus(payload.status),
 		featured: Boolean(payload.featured),
 		order: normalizeOrder(payload.order),
@@ -181,9 +246,7 @@ function normalizePayload(payload: BlogPostCreatePayload) {
 	};
 }
 
-function validatePayload(
-	payload: ReturnType<typeof normalizePayload>,
-): string[] {
+function validatePayload(payload: NormalizedBlogPostPayload): string[] {
 	const errors: string[] = [];
 
 	if (!payload.slug) {
@@ -205,31 +268,32 @@ function validatePayload(
 	return errors;
 }
 
-function serializeBlogPost(
-	doc: BlogPostDocument & { _id: { toString(): string } },
-) {
+function serializeBlogPost(doc: LeanBlogPostRecord): BlogPost {
 	return {
 		_id: doc._id.toString(),
-		slug: doc.slug,
-		title: doc.title ?? emptyLocalizedText(),
-		excerpt: doc.excerpt ?? emptyLocalizedText(),
-		content: doc.content ?? emptyLocalizedText(),
+		slug: doc.slug ?? "",
+		title: doc.title ?? cloneLocalizedText(),
+		excerpt: doc.excerpt ?? cloneLocalizedText(),
+		content: doc.content ?? cloneLocalizedText(),
 		coverImage: doc.coverImage ?? "",
 		gallery: Array.isArray(doc.gallery) ? doc.gallery : [],
 		category: doc.category ?? "",
 		tags: Array.isArray(doc.tags) ? doc.tags : [],
-		status: doc.status,
+		relatedProjectIds: Array.isArray(doc.relatedProjectIds)
+			? doc.relatedProjectIds
+			: [],
+		status: doc.status === "published" ? "published" : "draft",
 		featured: Boolean(doc.featured),
 		order: typeof doc.order === "number" ? doc.order : 0,
 		seo: doc.seo ?? {
-			metaTitle: emptyLocalizedText(),
-			metaDescription: emptyLocalizedText(),
-			ogImage: "",
+			metaTitle: { ...EMPTY_SEO.metaTitle },
+			metaDescription: { ...EMPTY_SEO.metaDescription },
+			ogImage: EMPTY_SEO.ogImage,
 		},
 		publishedAt: doc.publishedAt ? doc.publishedAt.toISOString() : null,
 		createdBy: doc.createdBy ?? "",
-		createdAt: doc.createdAt?.toISOString() ?? null,
-		updatedAt: doc.updatedAt?.toISOString() ?? null,
+		createdAt: doc.createdAt ? doc.createdAt.toISOString() : null,
+		updatedAt: doc.updatedAt ? doc.updatedAt.toISOString() : null,
 	};
 }
 
@@ -254,9 +318,7 @@ export async function GET(request: NextRequest) {
 
 		if (featured === "true") {
 			filters.featured = true;
-		}
-
-		if (featured === "false") {
+		} else if (featured === "false") {
 			filters.featured = false;
 		}
 
@@ -279,29 +341,24 @@ export async function GET(request: NextRequest) {
 				publishedAt: -1,
 				createdAt: -1,
 			})
-			.lean<BlogPostDocument[]>();
+			.lean<LeanBlogPostRecord[]>();
 
-		return NextResponse.json(
-			{
-				ok: true,
-				data: posts.map((post) =>
-					serializeBlogPost(
-						post as BlogPostDocument & { _id: { toString(): string } },
-					),
-				),
-			},
-			{ status: 200 },
-		);
+		const response: BlogPostListResponse = {
+			ok: true,
+			data: posts.map((post) => serializeBlogPost(post)),
+		};
+
+		return NextResponse.json(response, { status: 200 });
 	} catch (error) {
 		console.error("Admin Blog GET error:", error);
 
-		return NextResponse.json(
-			{
-				ok: false,
-				message: "Failed to fetch blog posts.",
-			},
-			{ status: 500 },
-		);
+		const response: BlogPostListResponse = {
+			ok: false,
+			data: [],
+			message: "Failed to fetch blog posts.",
+		};
+
+		return NextResponse.json(response, { status: 500 });
 	}
 }
 
@@ -318,14 +375,13 @@ export async function POST(request: NextRequest) {
 		const validationErrors = validatePayload(payload);
 
 		if (validationErrors.length > 0) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "Validation failed.",
-					errors: validationErrors,
-				},
-				{ status: 400 },
-			);
+			const response: BlogPostMutationResponse = {
+				ok: false,
+				message: "Validation failed.",
+				errors: validationErrors,
+			};
+
+			return NextResponse.json(response, { status: 400 });
 		}
 
 		const existingPost = await BlogPostModel.findOne({
@@ -335,38 +391,34 @@ export async function POST(request: NextRequest) {
 			.lean<{ _id: { toString(): string } } | null>();
 
 		if (existingPost) {
-			return NextResponse.json(
-				{
-					ok: false,
-					message: "A blog post with this slug already exists.",
-				},
-				{ status: 409 },
-			);
+			const response: BlogPostMutationResponse = {
+				ok: false,
+				message: "A blog post with this slug already exists.",
+			};
+
+			return NextResponse.json(response, { status: 409 });
 		}
 
 		const createdPost = await BlogPostModel.create(payload);
-
-		return NextResponse.json(
-			{
-				ok: true,
-				message: "Blog post created successfully.",
-				data: serializeBlogPost(
-					createdPost.toObject() as BlogPostDocument & {
-						_id: { toString(): string };
-					},
-				),
-			},
-			{ status: 201 },
+		const serialized = serializeBlogPost(
+			createdPost.toObject() as LeanBlogPostRecord
 		);
+
+		const response: BlogPostMutationResponse = {
+			ok: true,
+			message: "Blog post created successfully.",
+			data: serialized,
+		};
+
+		return NextResponse.json(response, { status: 201 });
 	} catch (error) {
 		console.error("Admin Blog POST error:", error);
 
-		return NextResponse.json(
-			{
-				ok: false,
-				message: "Failed to create blog post.",
-			},
-			{ status: 500 },
-		);
+		const response: BlogPostMutationResponse = {
+			ok: false,
+			message: "Failed to create blog post.",
+		};
+
+		return NextResponse.json(response, { status: 500 });
 	}
 }

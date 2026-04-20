@@ -40,7 +40,10 @@ export type AdminUploadScope =
 	| "documents/thumbnails"
 	| "projects/covers"
 	| "projects/gallery"
-	| "projects/maintenance";
+	| "projects/maintenance"
+	| "blog/covers"
+	| "blog/gallery"
+	| "blog/seo";
 
 export interface UploadedAdminFile {
 	storageProvider: "r2";
@@ -118,7 +121,11 @@ export async function uploadAdminFile(
 
 		return {
 			ok: true,
-			file: json.file,
+			file: {
+				...json.file,
+				originalName:
+					json.file.originalName?.trim() || file.name?.trim() || json.file.fileName,
+			},
 		};
 	} catch (error) {
 		return {
