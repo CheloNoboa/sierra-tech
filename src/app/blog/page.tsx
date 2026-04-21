@@ -17,6 +17,8 @@
  *
  *   Decisiones:
  *   - consume solo la API pública del blog
+ *   - consume branding público desde /api/site-settings
+ *   - usa el mismo criterio de resolución de imágenes ya aplicado en Header
  *   - usa bilingüismo estable ES/EN
  *   - featured se usa para priorizar contenido editorial destacado
  *   - si existen destacados, la sección "Contenido destacado" muestra TODOS
@@ -33,6 +35,7 @@
  *   - chips por categoría
  *   - cards limpias y visuales
  *   - CTA final hacia proyectos y contacto
+ *   - búsqueda con botón fijo para limpiar sin saltos visuales
  * =============================================================================
  */
 
@@ -45,6 +48,7 @@ import {
 	Loader2,
 	Search,
 	Sparkles,
+	X,
 } from "lucide-react";
 
 import { useTranslation } from "@/hooks/useTranslation";
@@ -84,6 +88,16 @@ interface PublicBlogListResponse {
 interface CategoryFilterOption {
 	key: string;
 	label: string;
+}
+
+
+interface PublicSiteSettingsResponse {
+	identity?: {
+		siteName?: string;
+		siteNameShort?: string;
+		logoLight?: string;
+		logoDark?: string;
+	};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -135,9 +149,47 @@ function formatDate(value: string | null, locale: "es" | "en"): string {
 	}).format(parsed);
 }
 
+/**
+ * ES:
+ * Mismo criterio ya usado correctamente en Header.
+ *
+ * Casos:
+ * - http/https  -> usar directo
+ * - /ruta local -> usar directo
+ * - admin/...   -> resolver mediante endpoint interno seguro
+ */
+function normalizeImageSrc(value: string | undefined | null): string {
+	const raw = value?.trim() ?? "";
+
+	if (!raw) {
+		return "";
+	}
+
+	const normalized = raw.replace(/\\/g, "/");
+
+	if (/^https?:\/\//i.test(normalized)) {
+		return normalized;
+	}
+
+	if (normalized.startsWith("/")) {
+		return normalized;
+	}
+
+	if (normalized.startsWith("admin/")) {
+		return `/api/admin/uploads/view?key=${encodeURIComponent(normalized)}`;
+	}
+
+	return "";
+}
+
 function isRenderableImage(value: string): boolean {
 	const safe = value.trim();
-	return safe.startsWith("/") || safe.startsWith("http");
+
+	return (
+		safe.startsWith("/") ||
+		safe.startsWith("http://") ||
+		safe.startsWith("https://")
+	);
 }
 
 function buildCategoryList(
@@ -224,6 +276,10 @@ export default function BlogPage() {
 	const [searchValue, setSearchValue] = useState<string>("");
 	const [activeCategoryKey, setActiveCategoryKey] = useState<string>("");
 
+	const [siteName, setSiteName] = useState<string>("Sierra Tech");
+	const [siteLogoDark, setSiteLogoDark] = useState<string>("");
+	const [isSideLogoBroken, setIsSideLogoBroken] = useState<boolean>(false);
+
 	const labels = useMemo(() => {
 		return {
 			eyebrow: safeLocale === "es" ? "Blog Sierra Tech" : "Sierra Tech Blog",
@@ -250,6 +306,8 @@ export default function BlogPage() {
 				safeLocale === "es"
 					? "Buscar por título, categoría o tags"
 					: "Search by title, category or tags",
+			clearSearch:
+				safeLocale === "es" ? "Limpiar búsqueda" : "Clear search",
 			latest:
 				safeLocale === "es"
 					? "Perspectivas, casos y contenido técnico"
@@ -318,9 +376,43 @@ export default function BlogPage() {
 		}
 	}, [labels.error]);
 
+	const fetchSiteBranding = useCallback(async () => {
+		try {
+			const response = await fetch("/api/site-settings", {
+				method: "GET",
+				cache: "no-store",
+			});
+
+			if (!response.ok) {
+				setSiteName("Sierra Tech");
+				setSiteLogoDark("");
+				setIsSideLogoBroken(true);
+				return;
+			}
+
+			const result = (await response.json()) as PublicSiteSettingsResponse;
+
+			const nextSiteName =
+				result.identity?.siteName?.trim() ||
+				result.identity?.siteNameShort?.trim() ||
+				"Sierra Tech";
+
+			const nextLogoDark = normalizeImageSrc(result.identity?.logoDark);
+
+			setSiteName(nextSiteName);
+			setSiteLogoDark(nextLogoDark);
+			setIsSideLogoBroken(false);
+		} catch {
+			setSiteName("Sierra Tech");
+			setSiteLogoDark("");
+			setIsSideLogoBroken(true);
+		}
+	}, []);
+
 	useEffect(() => {
 		void fetchBlog();
-	}, [fetchBlog]);
+		void fetchSiteBranding();
+	}, [fetchBlog, fetchSiteBranding]);
 
 	const categories = useMemo(() => {
 		return buildCategoryList(items, safeLocale);
@@ -349,6 +441,12 @@ export default function BlogPage() {
 	const nonFeaturedItems = useMemo(() => {
 		return filteredItems.filter((item) => !item.featured);
 	}, [filteredItems]);
+
+	const hasSearchValue = searchValue.trim().length > 0;
+
+	const handleClearSearch = useCallback(() => {
+		setSearchValue("");
+	}, []);
 
 	/**
 	 * ES:
@@ -433,13 +531,34 @@ export default function BlogPage() {
 
 							<div className="relative">
 								<Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
 								<input
 									type="text"
 									value={searchValue}
 									onChange={(event) => setSearchValue(event.target.value)}
 									placeholder={labels.searchPlaceholder}
-									className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+									className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-12 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
 								/>
+
+								<span className="absolute right-3 top-1/2 -translate-y-1/2">
+									<button
+										type="button"
+										onClick={handleClearSearch}
+										disabled={!hasSearchValue}
+										aria-label={labels.clearSearch}
+										title={labels.clearSearch}
+										className="block h-4 w-4"
+									>
+										<X
+											className={
+												hasSearchValue
+													? "h-4 w-4 text-slate-400"
+													: "h-4 w-4 text-slate-200"
+											}
+											strokeWidth={2}
+										/>
+									</button>
+								</span>
 							</div>
 						</div>
 
@@ -458,8 +577,8 @@ export default function BlogPage() {
 											type="button"
 											onClick={() => setActiveCategoryKey(category.key)}
 											className={`rounded-full px-4 py-2 text-sm font-medium transition ${isActive
-													? "bg-slate-950 text-white"
-													: "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+												? "bg-slate-950 text-white"
+												: "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
 												}`}
 										>
 											{category.label}
@@ -524,63 +643,68 @@ export default function BlogPage() {
 							</div>
 
 							<div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-								{featuredItems.map((item) => (
-									<Link
-										key={item._id}
-										href={`/blog/${item.slug}`}
-										className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-									>
-										<div className="relative aspect-[16/10] bg-slate-100">
-											{item.coverImage && isRenderableImage(item.coverImage) ? (
-												<Image
-													src={item.coverImage}
-													alt={
-														getLocalizedText(item.title, safeLocale) ||
-														labels.untitled
-													}
-													fill
-													unoptimized
-													className="object-cover transition duration-300 group-hover:scale-[1.02]"
-													sizes="(max-width: 1280px) 100vw, 33vw"
-												/>
-											) : (
-												<div className="flex h-full w-full items-center justify-center text-slate-400">
-													<FileText className="h-8 w-8" />
+								{featuredItems.map((item) => {
+									const coverSrc = normalizeImageSrc(item.coverImage);
+
+									return (
+										<Link
+											key={item._id}
+											href={`/blog/${item.slug}`}
+											className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+										>
+											<div className="relative aspect-[16/10] bg-slate-100">
+												{coverSrc && isRenderableImage(coverSrc) ? (
+													<Image
+														src={coverSrc}
+														alt={
+															getLocalizedText(item.title, safeLocale) ||
+															labels.untitled
+														}
+														fill
+														unoptimized
+														className="object-cover transition duration-300 group-hover:scale-[1.02]"
+														sizes="(max-width: 1280px) 100vw, 33vw"
+													/>
+												) : (
+													<div className="flex h-full w-full items-center justify-center text-slate-400">
+														<FileText className="h-8 w-8" />
+													</div>
+												)}
+											</div>
+
+											<div className="p-5">
+												<div className="flex flex-wrap items-center gap-2">
+													{getCategoryDisplayLabel(item, safeLocale) ? (
+														<span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+															{getCategoryDisplayLabel(item, safeLocale)}
+														</span>
+													) : null}
 												</div>
-											)}
-										</div>
 
-										<div className="p-5">
-											<div className="flex flex-wrap items-center gap-2">
-												{getCategoryDisplayLabel(item, safeLocale) ? (
-													<span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
-														{getCategoryDisplayLabel(item, safeLocale)}
+												<h3 className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">
+													{getLocalizedText(item.title, safeLocale) ||
+														labels.untitled}
+												</h3>
+
+												<p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
+													{getLocalizedText(item.excerpt, safeLocale) ||
+														labels.noExcerpt}
+												</p>
+
+												<div className="mt-5 flex items-center justify-between gap-4">
+													<span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+														{formatDate(item.publishedAt, safeLocale)}
 													</span>
-												) : null}
+
+													<span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-950">
+														{labels.readMore}
+														<ArrowRight className="h-4 w-4" />
+													</span>
+												</div>
 											</div>
-
-											<h3 className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">
-												{getLocalizedText(item.title, safeLocale) || labels.untitled}
-											</h3>
-
-											<p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
-												{getLocalizedText(item.excerpt, safeLocale) ||
-													labels.noExcerpt}
-											</p>
-
-											<div className="mt-5 flex items-center justify-between gap-4">
-												<span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-													{formatDate(item.publishedAt, safeLocale)}
-												</span>
-
-												<span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-950">
-													{labels.readMore}
-													<ArrowRight className="h-4 w-4" />
-												</span>
-											</div>
-										</div>
-									</Link>
-								))}
+										</Link>
+									);
+								})}
 							</div>
 						</section>
 					) : null}
@@ -602,63 +726,68 @@ export default function BlogPage() {
 							</div>
 
 							<div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-								{gridItems.map((item) => (
-									<Link
-										key={item._id}
-										href={`/blog/${item.slug}`}
-										className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-									>
-										<div className="relative aspect-[16/10] bg-slate-100">
-											{item.coverImage && isRenderableImage(item.coverImage) ? (
-												<Image
-													src={item.coverImage}
-													alt={
-														getLocalizedText(item.title, safeLocale) ||
-														labels.untitled
-													}
-													fill
-													unoptimized
-													className="object-cover transition duration-300 group-hover:scale-[1.02]"
-													sizes="(max-width: 1280px) 100vw, 33vw"
-												/>
-											) : (
-												<div className="flex h-full w-full items-center justify-center text-slate-400">
-													<FileText className="h-8 w-8" />
+								{gridItems.map((item) => {
+									const coverSrc = normalizeImageSrc(item.coverImage);
+
+									return (
+										<Link
+											key={item._id}
+											href={`/blog/${item.slug}`}
+											className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+										>
+											<div className="relative aspect-[16/10] bg-slate-100">
+												{coverSrc && isRenderableImage(coverSrc) ? (
+													<Image
+														src={coverSrc}
+														alt={
+															getLocalizedText(item.title, safeLocale) ||
+															labels.untitled
+														}
+														fill
+														unoptimized
+														className="object-cover transition duration-300 group-hover:scale-[1.02]"
+														sizes="(max-width: 1280px) 100vw, 33vw"
+													/>
+												) : (
+													<div className="flex h-full w-full items-center justify-center text-slate-400">
+														<FileText className="h-8 w-8" />
+													</div>
+												)}
+											</div>
+
+											<div className="p-5">
+												<div className="flex flex-wrap items-center gap-2">
+													{getCategoryDisplayLabel(item, safeLocale) ? (
+														<span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+															{getCategoryDisplayLabel(item, safeLocale)}
+														</span>
+													) : null}
 												</div>
-											)}
-										</div>
 
-										<div className="p-5">
-											<div className="flex flex-wrap items-center gap-2">
-												{getCategoryDisplayLabel(item, safeLocale) ? (
-													<span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
-														{getCategoryDisplayLabel(item, safeLocale)}
+												<h3 className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">
+													{getLocalizedText(item.title, safeLocale) ||
+														labels.untitled}
+												</h3>
+
+												<p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
+													{getLocalizedText(item.excerpt, safeLocale) ||
+														labels.noExcerpt}
+												</p>
+
+												<div className="mt-5 flex items-center justify-between gap-4">
+													<span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+														{formatDate(item.publishedAt, safeLocale)}
 													</span>
-												) : null}
+
+													<span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-950">
+														{labels.readMore}
+														<ArrowRight className="h-4 w-4" />
+													</span>
+												</div>
 											</div>
-
-											<h3 className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">
-												{getLocalizedText(item.title, safeLocale) || labels.untitled}
-											</h3>
-
-											<p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
-												{getLocalizedText(item.excerpt, safeLocale) ||
-													labels.noExcerpt}
-											</p>
-
-											<div className="mt-5 flex items-center justify-between gap-4">
-												<span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-													{formatDate(item.publishedAt, safeLocale)}
-												</span>
-
-												<span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-950">
-													{labels.readMore}
-													<ArrowRight className="h-4 w-4" />
-												</span>
-											</div>
-										</div>
-									</Link>
-								))}
+										</Link>
+									);
+								})}
 							</div>
 						</section>
 					) : null}
@@ -704,12 +833,36 @@ export default function BlogPage() {
 									</div>
 								</div>
 
-								<div className="flex items-center justify-center border-t border-slate-200 bg-slate-950 p-8 text-white lg:col-span-4 lg:border-l lg:border-t-0">
-									<div className="max-w-xs">
+								<div className="flex items-center border-t border-slate-200 bg-slate-950 p-8 text-white lg:col-span-4 lg:border-l lg:border-t-0">
+									<div className="w-full max-w-sm">
+										<div className="mb-7 rounded-[24px] border border-slate-200 bg-white/95 px-6 py-5 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.28)]">
+											{siteLogoDark &&
+												!isSideLogoBroken &&
+												isRenderableImage(siteLogoDark) ? (
+												<div className="flex h-[84px] items-center justify-start">
+													<Image
+														src={siteLogoDark}
+														alt={siteName}
+														width={300}
+														height={64}
+														unoptimized
+														className="max-h-[64px] w-auto max-w-[300px] object-contain"
+														onError={() => setIsSideLogoBroken(true)}
+													/>
+												</div>
+											) : (
+												<div className="flex h-[84px] items-center">
+													<span className="text-lg font-semibold tracking-[0.06em] text-slate-900">
+														{siteName}
+													</span>
+												</div>
+											)}
+										</div>
+
 										<p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
 											{labels.approach}
 										</p>
-										<p className="mt-4 text-sm leading-7 text-slate-100">
+										<p className="mt-4 max-w-xs text-sm leading-7 text-slate-100">
 											{labels.approachText}
 										</p>
 									</div>

@@ -8,13 +8,19 @@
  *   Contrato tipado compartido del módulo Home de Sierra Tech.
  *
  *   Objetivo:
- *   - centralizar tipos usados por:
+ *   - centralizar los tipos usados por:
  *     - admin Home
  *     - API admin Home
  *     - API pública Home
  *     - página pública Home
- *   - evitar duplicación
- *   - mantener una sola fuente de verdad
+ *   - evitar duplicación de contratos
+ *   - mantener una sola fuente de verdad para todo el módulo
+ *
+ *   Regla oficial del módulo:
+ *   - todo asset visual o documental del Home debe persistirse como metadata
+ *     estructurada de un archivo servido desde R2
+ *   - no se deben mezclar URLs sueltas con assets tipados
+ *   - Leadership, Partners y documentos comparten el mismo patrón base
  *
  * EN:
  *   Shared typed contract for Sierra Tech Home module.
@@ -23,7 +29,18 @@
 
 export type Locale = "es" | "en";
 export type AllowedRole = "admin" | "superadmin";
-export type UploadKind = "partner-logo" | "partner-document";
+
+/**
+ * Tipos de upload admitidos por el módulo Home.
+ *
+ * Regla:
+ * - cada kind representa un flujo administrado de archivos dentro del Home
+ * - todos terminan resolviéndose en metadata persistida de R2
+ */
+export type UploadKind =
+	| "partner-logo"
+	| "partner-document"
+	| "leadership-image";
 
 export interface LocalizedText {
 	es: string;
@@ -49,7 +66,15 @@ export interface WhyChooseUsItem {
 	description: LocalizedText;
 }
 
-export interface PartnerAsset {
+/**
+ * Asset base reutilizable del módulo Home.
+ *
+ * Regla:
+ * - representa un archivo ya subido y persistido en R2
+ * - no contiene el archivo binario
+ * - solo conserva la metadata necesaria para render, reemplazo y auditoría
+ */
+export interface HomeAsset {
 	url: string;
 	fileName: string;
 	mimeType: string;
@@ -62,7 +87,7 @@ export interface PartnerDocument {
 	title: LocalizedText;
 	description: LocalizedText;
 	label: LocalizedText;
-	file: PartnerAsset;
+	file: HomeAsset;
 	order: number;
 	enabled: boolean;
 }
@@ -74,7 +99,7 @@ export interface PartnerItem {
 	badgeLabel: LocalizedText;
 	summary: LocalizedText;
 	description: LocalizedText;
-	logo: PartnerAsset;
+	logo: HomeAsset;
 	coverageItems: LocalizedText[];
 	tags: LocalizedText[];
 	ctaLabel: LocalizedText;
@@ -106,11 +131,14 @@ export interface HomePayload {
 		primaryCta: HomeCta;
 		secondaryCta: HomeCta;
 	};
+
 	highlightPanel: {
 		coverageLabel: LocalizedText;
 		enabled: boolean;
 	};
+
 	featuredCards: HomeFeaturedCard[];
+
 	coverageSection: {
 		eyebrow: LocalizedText;
 		title: LocalizedText;
@@ -120,6 +148,7 @@ export interface HomePayload {
 		showOpenMapsLink: boolean;
 		enabled: boolean;
 	};
+
 	aboutSection: {
 		eyebrow: LocalizedText;
 		title: LocalizedText;
@@ -127,19 +156,30 @@ export interface HomePayload {
 		highlights: LocalizedText[];
 		enabled: boolean;
 	};
+
 	partnerSection: PartnerSection;
+
+	/**
+	 * Bloque institucional de liderazgo.
+	 *
+	 * Regla:
+	 * - la imagen debe seguir el mismo patrón de asset estructurado del Home
+	 * - no se permite un imageUrl suelto como contrato principal
+	 */
 	leadershipSection: {
 		name: string;
 		role: LocalizedText;
 		message: LocalizedText;
-		imageUrl: string;
+		image: HomeAsset;
 		enabled: boolean;
 	};
+
 	whyChooseUs: {
 		title: LocalizedText;
 		items: WhyChooseUsItem[];
 		enabled: boolean;
 	};
+
 	mapSection: {
 		enabled: boolean;
 		useBrowserGeolocation: boolean;
@@ -147,6 +187,7 @@ export interface HomePayload {
 		fallbackLng: number | null;
 		zoom: number;
 	};
+
 	updatedAt?: string;
 	updatedBy?: string;
 	updatedByEmail?: string;

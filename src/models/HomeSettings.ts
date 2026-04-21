@@ -27,13 +27,10 @@
  *   - Los bloques institucionales del Home deben ser reutilizables y
  *     completamente administrables desde el panel.
  *
- *   Partner Section:
- *   - Ya NO representa una sola alianza.
- *   - Debe soportar múltiples partners.
- *   - Cada partner puede tener logo propio.
- *   - Cada partner puede tener uno o varios documentos.
- *   - Los archivos físicos viven en R2; aquí solo se persiste metadata útil.
- *   - El Home solo consume la estructura ya administrada.
+ *   Regla estructural:
+ *   - todos los assets del Home deben mantener la misma estructura persistida
+ *     basada en metadata útil de archivos servidos desde R2
+ *   - no se deben mezclar strings sueltos con assets estructurados
  *
  * EN:
  *   Administrative configuration model for the public home page.
@@ -98,18 +95,19 @@ const WhyChooseUsItemSchema = new Schema(
 );
 
 /* -------------------------------------------------------------------------- */
-/* Partner / Alliances sub-schemas                                            */
+/* Home assets                                                                */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Asset reutilizable para archivos servidos desde R2.
+ * Asset reutilizable del módulo Home para archivos servidos desde R2.
  *
  * Regla:
- * - Aquí no se sube el archivo.
- * - Solo se conserva la referencia persistente necesaria para render,
- *   descargar, auditar o reemplazar desde admin.
+ * - aquí no se sube el archivo binario
+ * - solo se conserva la referencia persistente necesaria para render,
+ *   descarga, reemplazo y auditoría
+ * - este mismo schema se reutiliza en leadership, logos y documentos
  */
-const PartnerAssetSchema = new Schema(
+const HomeAssetSchema = new Schema(
 	{
 		url: { type: String, default: "" },
 		fileName: { type: String, default: "" },
@@ -120,16 +118,12 @@ const PartnerAssetSchema = new Schema(
 	{ _id: false },
 );
 
+/* -------------------------------------------------------------------------- */
+/* Partner / Alliances sub-schemas                                            */
+/* -------------------------------------------------------------------------- */
+
 /**
  * Documento público o institucional asociado a un partner.
- *
- * Casos de uso:
- * - fichas técnicas
- * - brochures
- * - cartas de representación
- * - certificados
- * - catálogos
- * - PDFs descargables o visualizables
  */
 const PartnerDocumentSchema = new Schema(
 	{
@@ -151,7 +145,7 @@ const PartnerDocumentSchema = new Schema(
 		},
 
 		file: {
-			type: PartnerAssetSchema,
+			type: HomeAssetSchema,
 			default: () => ({
 				url: "",
 				fileName: "",
@@ -167,15 +161,6 @@ const PartnerDocumentSchema = new Schema(
 	{ _id: false },
 );
 
-/**
- * Entidad individual de partner / alianza.
- *
- * Reglas:
- * - Cada item representa una empresa, marca, fabricante o alianza.
- * - El logo se persiste como asset de R2.
- * - Puede tener múltiples documentos.
- * - Se renderiza según order + enabled.
- */
 const PartnerItemSchema = new Schema(
 	{
 		id: { type: String, required: true, trim: true },
@@ -199,12 +184,8 @@ const PartnerItemSchema = new Schema(
 			default: () => ({ es: "", en: "" }),
 		},
 
-		/**
-		 * Logo oficial del partner.
-		 * Debe venir desde R2 o URL administrada equivalente.
-		 */
 		logo: {
-			type: PartnerAssetSchema,
+			type: HomeAssetSchema,
 			default: () => ({
 				url: "",
 				fileName: "",
@@ -214,32 +195,16 @@ const PartnerItemSchema = new Schema(
 			}),
 		},
 
-		/**
-		 * Elementos cortos de cobertura, representación o alcance.
-		 * Ejemplo:
-		 * - "Distribución autorizada en Ecuador"
-		 * - "Soporte técnico y comercial"
-		 */
 		coverageItems: {
 			type: [LocalizedTextSchema],
 			default: [],
 		},
 
-		/**
-		 * Tags breves para chips o etiquetas visuales.
-		 */
 		tags: {
 			type: [LocalizedTextSchema],
 			default: [],
 		},
 
-		/**
-		 * CTA opcional por partner.
-		 * Ejemplo:
-		 * - Ver catálogo
-		 * - Conocer alianza
-		 * - Solicitar información
-		 */
 		ctaLabel: {
 			type: LocalizedTextSchema,
 			default: () => ({ es: "", en: "" }),
@@ -247,10 +212,6 @@ const PartnerItemSchema = new Schema(
 
 		ctaHref: { type: String, default: "" },
 
-		/**
-		 * Documentos propios del partner.
-		 * Pueden mostrarse en Home y/o enlazarse desde páginas futuras.
-		 */
 		documents: {
 			type: [PartnerDocumentSchema],
 			default: [],
@@ -262,14 +223,6 @@ const PartnerItemSchema = new Schema(
 	{ _id: false },
 );
 
-/**
- * Contenedor editorial de toda la sección.
- *
- * Reglas:
- * - Controla heading y texto general del bloque.
- * - La data real de partners vive en items[].
- * - Permite administrar el bloque sin tocar layout.
- */
 const PartnerSectionSchema = new Schema(
 	{
 		enabled: { type: Boolean, default: false },
@@ -289,19 +242,11 @@ const PartnerSectionSchema = new Schema(
 			default: () => ({ es: "", en: "" }),
 		},
 
-		/**
-		 * Etiqueta superior opcional del bloque completo.
-		 * No reemplaza el badge individual de cada partner.
-		 */
 		badgeLabel: {
 			type: LocalizedTextSchema,
 			default: () => ({ es: "", en: "" }),
 		},
 
-		/**
-		 * CTA general del bloque.
-		 * Útil si en el futuro se enlaza a una página de partners.
-		 */
 		ctaLabel: {
 			type: LocalizedTextSchema,
 			default: () => ({ es: "", en: "" }),
@@ -309,9 +254,6 @@ const PartnerSectionSchema = new Schema(
 
 		ctaHref: { type: String, default: "" },
 
-		/**
-		 * Alianzas / partners administrables.
-		 */
 		items: {
 			type: [PartnerItemSchema],
 			default: [],
@@ -394,34 +336,14 @@ const HomeSettingsSchema = new Schema(
 				type: LocalizedTextSchema,
 				default: () => ({ es: "", en: "" }),
 			},
-
-			/**
-			 * Etiqueta editorial del CTA hacia Google Maps u otro destino equivalente.
-			 * El contenido se conserva aunque el botón esté oculto, para permitir
-			 * reutilización futura sin perder traducciones ya cargadas.
-			 */
 			openMapsLabel: {
 				type: LocalizedTextSchema,
 				default: () => ({ es: "", en: "" }),
 			},
-
-			/**
-			 * Control explícito de visibilidad del botón de ubicación.
-			 * Regla:
-			 * - No depende de que exista texto en openMapsLabel.
-			 * - No depende de que el mapa embebido esté habilitado.
-			 * - Permite mostrar cobertura sin exponer CTA de ubicación.
-			 */
 			showOpenMapsLink: { type: Boolean, default: false },
-
 			enabled: { type: Boolean, default: true },
 		},
 
-		/**
-		 * Bloque institucional "Nosotros".
-		 * Permite explicar quiénes son, qué hacen y cuál es su enfoque,
-		 * acompañado de highlights breves y editables.
-		 */
 		aboutSection: {
 			eyebrow: {
 				type: LocalizedTextSchema,
@@ -442,17 +364,6 @@ const HomeSettingsSchema = new Schema(
 			enabled: { type: Boolean, default: true },
 		},
 
-		/**
-		 * Bloque institucional de alianzas, marcas representadas,
-		 * partners estratégicos o representación técnica/comercial.
-		 *
-		 * Reglas:
-		 * - Totalmente administrable desde Home.
-		 * - Bilingüe ES/EN.
-		 * - Soporta múltiples partners.
-		 * - Cada partner puede tener logo y documentos desde R2.
-		 * - La capa pública solo consume items habilitados.
-		 */
 		partnerSection: {
 			type: PartnerSectionSchema,
 			default: () => ({
@@ -468,9 +379,12 @@ const HomeSettingsSchema = new Schema(
 		},
 
 		/**
-		 * Bloque de liderazgo / visión institucional.
-		 * Diseñado para mostrar una figura visible del negocio sin convertir
-		 * la portada en un perfil personal excesivo.
+		 * Bloque de liderazgo institucional.
+		 *
+		 * Regla:
+		 * - usa el mismo patrón estructural de assets que el resto del Home
+		 * - evita strings sueltos para imágenes
+		 * - mantiene metadata útil de R2 para render y administración
 		 */
 		leadershipSection: {
 			name: { type: String, default: "" },
@@ -482,14 +396,19 @@ const HomeSettingsSchema = new Schema(
 				type: LocalizedTextSchema,
 				default: () => ({ es: "", en: "" }),
 			},
-			imageUrl: { type: String, default: "" },
+			image: {
+				type: HomeAssetSchema,
+				default: () => ({
+					url: "",
+					fileName: "",
+					mimeType: "",
+					sizeBytes: 0,
+					storageKey: "",
+				}),
+			},
 			enabled: { type: Boolean, default: true },
 		},
 
-		/**
-		 * Bloque "Por qué elegirnos".
-		 * Presenta razones breves y estructuradas en formato de cards o grid.
-		 */
 		whyChooseUs: {
 			title: {
 				type: LocalizedTextSchema,
@@ -503,19 +422,8 @@ const HomeSettingsSchema = new Schema(
 		},
 
 		mapSection: {
-			/**
-			 * Controla la visibilidad del mapa embebido.
-			 * Si está deshabilitado, cualquier lógica de geolocalización debe ignorarse
-			 * en la capa de frontend.
-			 */
 			enabled: { type: Boolean, default: true },
-
-			/**
-			 * Permite centrar el mapa usando la geolocalización del navegador.
-			 * Solo tiene efecto si el mapa está habilitado y renderizado.
-			 */
 			useBrowserGeolocation: { type: Boolean, default: true },
-
 			fallbackLat: { type: Number, default: null },
 			fallbackLng: { type: Number, default: null },
 			zoom: { type: Number, default: 7, min: 1, max: 20 },

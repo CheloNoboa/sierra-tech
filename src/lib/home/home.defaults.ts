@@ -10,6 +10,11 @@
  *   Objetivo:
  *   - evitar duplicación de estructuras vacías
  *   - mantener consistencia entre admin, API y frontend público
+ *   - mantener una estructura homogénea para assets servidos desde R2
+ *
+ *   Regla oficial:
+ *   - todo asset del módulo Home debe seguir el mismo contrato base
+ *   - Leadership, Partners y documentos comparten el mismo patrón de metadata
  *
  * EN:
  *   Shared defaults for the Home module.
@@ -17,9 +22,9 @@
  */
 
 import type {
+	HomeAsset,
 	HomePayload,
 	LocalizedText,
-	PartnerAsset,
 	PartnerDocument,
 	PartnerItem,
 	PartnerSection,
@@ -30,7 +35,15 @@ export const EMPTY_LOCALIZED_TEXT: LocalizedText = {
 	en: "",
 };
 
-export const DEFAULT_PARTNER_ASSET: PartnerAsset = {
+/**
+ * Asset vacío reutilizable para cualquier archivo del módulo Home.
+ *
+ * Regla:
+ * - representa un asset persistido vía metadata
+ * - no contiene contenido binario
+ * - se usa como base para imágenes y documentos administrados desde R2
+ */
+export const DEFAULT_HOME_ASSET: HomeAsset = {
 	url: "",
 	fileName: "",
 	mimeType: "",
@@ -43,7 +56,7 @@ export const DEFAULT_PARTNER_DOCUMENT: PartnerDocument = {
 	title: { es: "", en: "" },
 	description: { es: "", en: "" },
 	label: { es: "", en: "" },
-	file: { ...DEFAULT_PARTNER_ASSET },
+	file: { ...DEFAULT_HOME_ASSET },
 	order: 1,
 	enabled: true,
 };
@@ -55,7 +68,7 @@ export const DEFAULT_PARTNER_ITEM: PartnerItem = {
 	badgeLabel: { es: "", en: "" },
 	summary: { es: "", en: "" },
 	description: { es: "", en: "" },
-	logo: { ...DEFAULT_PARTNER_ASSET },
+	logo: { ...DEFAULT_HOME_ASSET },
 	coverageItems: [],
 	tags: [],
 	ctaLabel: { es: "", en: "" },
@@ -127,7 +140,7 @@ export const HOME_DEFAULTS: HomePayload = {
 		name: "",
 		role: { es: "", en: "" },
 		message: { es: "", en: "" },
-		imageUrl: "",
+		image: { ...DEFAULT_HOME_ASSET },
 		enabled: true,
 	},
 
@@ -169,11 +182,14 @@ export const EMPTY_HOME_PAYLOAD: HomePayload = {
 			enabled: false,
 		},
 	},
+
 	highlightPanel: {
 		coverageLabel: { es: "", en: "" },
 		enabled: false,
 	},
+
 	featuredCards: [],
+
 	coverageSection: {
 		eyebrow: { es: "", en: "" },
 		title: { es: "", en: "" },
@@ -183,6 +199,7 @@ export const EMPTY_HOME_PAYLOAD: HomePayload = {
 		showOpenMapsLink: false,
 		enabled: false,
 	},
+
 	aboutSection: {
 		eyebrow: { es: "", en: "" },
 		title: { es: "", en: "" },
@@ -190,6 +207,7 @@ export const EMPTY_HOME_PAYLOAD: HomePayload = {
 		highlights: [],
 		enabled: false,
 	},
+
 	partnerSection: {
 		enabled: true,
 		eyebrow: { es: "", en: "" },
@@ -200,18 +218,21 @@ export const EMPTY_HOME_PAYLOAD: HomePayload = {
 		ctaHref: "",
 		items: [],
 	},
+
 	leadershipSection: {
 		name: "",
 		role: { es: "", en: "" },
 		message: { es: "", en: "" },
-		imageUrl: "",
+		image: { ...DEFAULT_HOME_ASSET },
 		enabled: false,
 	},
+
 	whyChooseUs: {
 		title: { es: "", en: "" },
 		items: [],
 		enabled: false,
 	},
+
 	mapSection: {
 		enabled: false,
 		useBrowserGeolocation: true,

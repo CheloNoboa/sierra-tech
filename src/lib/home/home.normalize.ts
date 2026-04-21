@@ -9,8 +9,13 @@
  *
  *   Reglas:
  *   - aceptan datos desconocidos (`unknown`) cuando vienen de API o DB
- *   - normalizan el nuevo contrato de partnerSection.items[]
+ *   - normalizan el contrato oficial actual del Home
+ *   - mantienen consistencia para todos los assets servidos desde R2
  *   - mantienen compatibilidad con estructura legacy de partner único
+ *
+ *   Regla oficial:
+ *   - todo asset del Home se normaliza con la misma estructura base
+ *   - no se mezclan URLs sueltas con contratos tipados de asset
  *
  * EN:
  *   Shared helpers to create, sort and normalize Home structures.
@@ -18,7 +23,7 @@
  */
 
 import {
-	DEFAULT_PARTNER_ASSET,
+	DEFAULT_HOME_ASSET,
 	DEFAULT_PARTNER_DOCUMENT,
 	DEFAULT_PARTNER_ITEM,
 	DEFAULT_PARTNER_SECTION,
@@ -27,10 +32,10 @@ import {
 } from "@/lib/home/home.defaults";
 
 import type {
+	HomeAsset,
 	HomeFeaturedCard,
 	HomePayload,
 	LocalizedText,
-	PartnerAsset,
 	PartnerDocument,
 	PartnerItem,
 	PartnerSection,
@@ -138,15 +143,19 @@ export function normalizeCards(cards: HomeFeaturedCard[]): HomeFeaturedCard[] {
 	}));
 }
 
-export function createEmptyPartnerAsset(): PartnerAsset {
-	return { ...DEFAULT_PARTNER_ASSET };
+/* -------------------------------------------------------------------------- */
+/* Home assets                                                                */
+/* -------------------------------------------------------------------------- */
+
+export function createEmptyHomeAsset(): HomeAsset {
+	return { ...DEFAULT_HOME_ASSET };
 }
 
-export function normalizePartnerAsset(
-	asset: Partial<PartnerAsset> | unknown | null | undefined,
-): PartnerAsset {
+export function normalizeHomeAsset(
+	asset: Partial<HomeAsset> | unknown | null | undefined,
+): HomeAsset {
 	if (!asset || typeof asset !== "object") {
-		return createEmptyPartnerAsset();
+		return createEmptyHomeAsset();
 	}
 
 	const value = asset as Record<string, unknown>;
@@ -163,6 +172,10 @@ export function normalizePartnerAsset(
 	};
 }
 
+/* -------------------------------------------------------------------------- */
+/* Partner documents                                                          */
+/* -------------------------------------------------------------------------- */
+
 export function createEmptyPartnerDocument(nextOrder: number): PartnerDocument {
 	return {
 		...DEFAULT_PARTNER_DOCUMENT,
@@ -170,7 +183,7 @@ export function createEmptyPartnerDocument(nextOrder: number): PartnerDocument {
 		title: { es: "", en: "" },
 		description: { es: "", en: "" },
 		label: { es: "", en: "" },
-		file: createEmptyPartnerAsset(),
+		file: createEmptyHomeAsset(),
 		order: nextOrder,
 		enabled: true,
 	};
@@ -211,7 +224,7 @@ export function normalizePartnerDocumentsArray(
 				title: normalizeLocalizedText(record.title),
 				description: normalizeLocalizedText(record.description),
 				label: normalizeLocalizedText(record.label),
-				file: normalizePartnerAsset(record.file),
+				file: normalizeHomeAsset(record.file),
 				order:
 					typeof record.order === "number" && Number.isFinite(record.order)
 						? record.order
@@ -222,6 +235,10 @@ export function normalizePartnerDocumentsArray(
 	);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Partner items                                                              */
+/* -------------------------------------------------------------------------- */
+
 export function createEmptyPartnerItem(nextOrder: number): PartnerItem {
 	return {
 		...DEFAULT_PARTNER_ITEM,
@@ -229,7 +246,7 @@ export function createEmptyPartnerItem(nextOrder: number): PartnerItem {
 		badgeLabel: { es: "", en: "" },
 		summary: { es: "", en: "" },
 		description: { es: "", en: "" },
-		logo: createEmptyPartnerAsset(),
+		logo: createEmptyHomeAsset(),
 		coverageItems: [],
 		tags: [],
 		ctaLabel: { es: "", en: "" },
@@ -263,7 +280,7 @@ export function normalizePartnerItemsArray(value: unknown): PartnerItem[] {
 				badgeLabel: normalizeLocalizedText(record.badgeLabel),
 				summary: normalizeLocalizedText(record.summary),
 				description: normalizeLocalizedText(record.description),
-				logo: normalizePartnerAsset(record.logo),
+				logo: normalizeHomeAsset(record.logo),
 				coverageItems: normalizeLocalizedTextArray(record.coverageItems),
 				tags: normalizeLocalizedTextArray(record.tags),
 				ctaLabel: normalizeLocalizedText(record.ctaLabel),
@@ -299,6 +316,10 @@ function normalizeWhyChooseUsItems(value: unknown): WhyChooseUsItem[] {
 		.filter((item): item is WhyChooseUsItem => item !== null);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Legacy compatibility                                                       */
+/* -------------------------------------------------------------------------- */
+
 function normalizeLegacyPartnerSection(
 	value: Record<string, unknown>,
 ): PartnerSection {
@@ -326,44 +347,44 @@ function normalizeLegacyPartnerSection(
 
 	const items: PartnerItem[] = hasLegacyContent
 		? [
-				{
-					id: "partner-1",
-					name: partnerName,
-					shortName: "",
-					badgeLabel: normalizeLocalizedText(value.badgeLabel),
-					summary,
-					description: { es: "", en: "" },
-					logo: {
-						...DEFAULT_PARTNER_ASSET,
-						url: partnerLogo,
-					},
-					coverageItems,
-					tags,
-					ctaLabel,
-					ctaHref,
-					documents:
-						documentUrl.trim().length > 0 ||
+			{
+				id: "partner-1",
+				name: partnerName,
+				shortName: "",
+				badgeLabel: normalizeLocalizedText(value.badgeLabel),
+				summary,
+				description: { es: "", en: "" },
+				logo: {
+					...DEFAULT_HOME_ASSET,
+					url: partnerLogo,
+				},
+				coverageItems,
+				tags,
+				ctaLabel,
+				ctaHref,
+				documents:
+					documentUrl.trim().length > 0 ||
 						documentLabel.es.trim().length > 0 ||
 						documentLabel.en.trim().length > 0
-							? [
-									{
-										id: "partner-doc-1",
-										title: { es: "", en: "" },
-										description: { es: "", en: "" },
-										label: documentLabel,
-										file: {
-											...DEFAULT_PARTNER_ASSET,
-											url: documentUrl,
-										},
-										order: 1,
-										enabled: true,
-									},
-								]
-							: [],
-					order: 1,
-					enabled: true,
-				},
-			]
+						? [
+							{
+								id: "partner-doc-1",
+								title: { es: "", en: "" },
+								description: { es: "", en: "" },
+								label: documentLabel,
+								file: {
+									...DEFAULT_HOME_ASSET,
+									url: documentUrl,
+								},
+								order: 1,
+								enabled: true,
+							},
+						]
+						: [],
+				order: 1,
+				enabled: true,
+			},
+		]
 		: [];
 
 	return {
@@ -408,6 +429,41 @@ function normalizePartnerSection(value: unknown): PartnerSection {
 		items: legacySection.items ?? [],
 	};
 }
+
+function normalizeFeaturedCards(value: unknown): HomeFeaturedCard[] {
+	if (!Array.isArray(value)) return [];
+
+	return value
+		.map((item, index): HomeFeaturedCard | null => {
+			if (!item || typeof item !== "object") return null;
+
+			const record = item as Record<string, unknown>;
+
+			return {
+				id:
+					typeof record.id === "string" && record.id.trim().length > 0
+						? record.id
+						: createStableId(`card-${index + 1}`),
+				title: normalizeLocalizedText(record.title),
+				description: normalizeLocalizedText(record.description),
+				order:
+					typeof record.order === "number" && Number.isFinite(record.order)
+						? record.order
+						: index + 1,
+				enabled: normalizeBoolean(record.enabled, true),
+			};
+		})
+		.filter((item): item is HomeFeaturedCard => item !== null)
+		.sort((a, b) => a.order - b.order)
+		.map((item, index) => ({
+			...item,
+			order: index + 1,
+		}));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Main payload normalization                                                 */
+/* -------------------------------------------------------------------------- */
 
 export function normalizeHomePayload(payload: unknown): HomePayload {
 	if (!payload || typeof payload !== "object") {
@@ -495,7 +551,7 @@ export function normalizeHomePayload(payload: unknown): HomePayload {
 			name: normalizeString(leadershipSection.name),
 			role: normalizeLocalizedText(leadershipSection.role),
 			message: normalizeLocalizedText(leadershipSection.message),
-			imageUrl: normalizeString(leadershipSection.imageUrl),
+			image: normalizeHomeAsset(leadershipSection.image),
 			enabled: normalizeBoolean(
 				leadershipSection.enabled,
 				HOME_DEFAULTS.leadershipSection.enabled,
@@ -530,9 +586,9 @@ export function normalizeHomePayload(payload: unknown): HomePayload {
 			),
 			zoom:
 				typeof mapSection.zoom === "number" &&
-				Number.isFinite(mapSection.zoom) &&
-				mapSection.zoom >= 1 &&
-				mapSection.zoom <= 20
+					Number.isFinite(mapSection.zoom) &&
+					mapSection.zoom >= 1 &&
+					mapSection.zoom <= 20
 					? mapSection.zoom
 					: HOME_DEFAULTS.mapSection.zoom,
 		},
@@ -541,37 +597,6 @@ export function normalizeHomePayload(payload: unknown): HomePayload {
 		updatedBy: normalizeString(record.updatedBy),
 		updatedByEmail: normalizeString(record.updatedByEmail),
 	};
-}
-
-function normalizeFeaturedCards(value: unknown): HomeFeaturedCard[] {
-	if (!Array.isArray(value)) return [];
-
-	return value
-		.map((item, index): HomeFeaturedCard | null => {
-			if (!item || typeof item !== "object") return null;
-
-			const record = item as Record<string, unknown>;
-
-			return {
-				id:
-					typeof record.id === "string" && record.id.trim().length > 0
-						? record.id
-						: createStableId(`card-${index + 1}`),
-				title: normalizeLocalizedText(record.title),
-				description: normalizeLocalizedText(record.description),
-				order:
-					typeof record.order === "number" && Number.isFinite(record.order)
-						? record.order
-						: index + 1,
-				enabled: normalizeBoolean(record.enabled, true),
-			};
-		})
-		.filter((item): item is HomeFeaturedCard => item !== null)
-		.sort((a, b) => a.order - b.order)
-		.map((item, index) => ({
-			...item,
-			order: index + 1,
-		}));
 }
 
 export function safeNumberFromInput(value: string): number | null {

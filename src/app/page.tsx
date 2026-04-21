@@ -31,6 +31,9 @@
  *   - La geolocalización del navegador solo se usa si el mapa está habilitado.
  *   - Los bloques institucionales adicionales deben renderizarse solo cuando
  *     tengan contenido real o estén habilitados explícitamente.
+ *   - Leadership Section consume un asset estructurado sin alterar la UI.
+ *   - Todos los assets del Home deben resolverse con la misma lógica estable,
+ *     incluyendo imágenes y documentos servidos desde R2 o rutas admin/*.
  *
  *   Navegación interna:
  *   - La home expone anclas estables para navegación pública.
@@ -46,10 +49,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+
 import { useTranslation } from "@/hooks/useTranslation";
 import { getPublicBranding, listenBrandingUpdates } from "@/lib/publicBranding";
-import type { HomePayload, Locale, LocalizedText } from "@/types/home";
 import { HOME_DEFAULTS } from "@/lib/home/home.defaults";
+
+import type { HomePayload, Locale, LocalizedText } from "@/types/home";
 
 interface SiteSettingsPublic {
 	identity: {
@@ -302,7 +307,7 @@ export default function HomePage() {
 	}, [homeContent.whyChooseUs]);
 
 	const leadershipImageSrc = normalizeImageSrc(
-		homeContent.leadershipSection.imageUrl,
+		homeContent.leadershipSection.image.url,
 	);
 
 	const showHeroBadge =
@@ -369,12 +374,12 @@ export default function HomePage() {
 
 				const documents = Array.isArray(item.documents)
 					? item.documents.filter(
-							(document) =>
-								document.enabled &&
-								(hasLocalizedText(document.label) ||
-									hasLocalizedText(document.title) ||
-									document.file.url.trim().length > 0),
-						)
+						(document) =>
+							document.enabled &&
+							(hasLocalizedText(document.label) ||
+								hasLocalizedText(document.title) ||
+								document.file.url.trim().length > 0),
+					)
 					: [];
 
 				return (
@@ -866,10 +871,18 @@ export default function HomePage() {
 																	? "Abrir documento"
 																	: "Open document");
 
+															const documentHref = normalizeImageSrc(
+																document.file.url,
+															);
+
+															if (!documentHref) {
+																return null;
+															}
+
 															return (
 																<Link
 																	key={document.id}
-																	href={document.file.url}
+																	href={documentHref}
 																	target="_blank"
 																	rel="noreferrer"
 																	className="inline-flex items-center rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
@@ -886,6 +899,8 @@ export default function HomePage() {
 												<div className="mt-6">
 													<Link
 														href={partner.ctaHref}
+														target="_blank"
+														rel="noreferrer noopener"
 														className="inline-flex items-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-lime-600"
 													>
 														{getLocalizedText(partner.ctaLabel, lang)}
@@ -915,7 +930,7 @@ export default function HomePage() {
 										}
 										fill
 										sizes="(max-width: 1024px) 350px, 350px"
-										className="object-cover object-top"
+										className="object-contain object-center"
 									/>
 								</div>
 							) : (

@@ -15,20 +15,21 @@
  *   - Panel destacado lateral
  *   - Cards destacadas
  *   - Cobertura / capacidad operativa
- *   - Sección de Partners / Alianzas (múltiples)
- *   - Upload real de logos y documentos de partners hacia R2
  *   - Mapa
+ *   - Sección Nosotros
+ *   - Sección de Partners / Alianzas (múltiples)
+ *   - Sección de Liderazgo
+ *   - Sección "Por qué elegirnos"
+ *   - Upload real de logos y documentos de partners hacia R2
  *   - Guardado / restauración
  *
  *   Decisiones:
- *   - La página mantiene el contrato completo del Home, aunque no edite todos
- *     los bloques en esta versión.
- *   - partnerSection ya no representa una sola alianza.
- *   - partnerSection.items[] es la fuente de verdad del bloque.
+ *   - La página mantiene el contrato actual del Home sin tocar la página pública.
+ *   - partnerSection.items[] es la fuente de verdad del bloque de alianzas.
  *   - Cada partner puede tener logo y múltiples documentos.
- *   - Los uploads se realizan contra /api/admin/home/upload.
- *   - La metadata del archivo se persiste dentro del formulario para luego
- *     guardarse en HomeSettings.
+ *   - Los uploads reales existentes se mantienen solo para partners y documentos.
+ *   - Leadership se administra respetando el contrato actual (`image: PartnerAsset`).
+ *   - El orden administrativo se alinea al flujo de la portada pública.
  *
  * EN:
  *   Administrative page used to configure Sierra Tech's public home page.
@@ -51,12 +52,17 @@ import {
 	Eye,
 	X,
 	Image as ImageIcon,
+	UserRound,
+	Info,
+	MapPinned,
+	ShieldCheck,
 } from "lucide-react";
+import Image from "next/image";
 
 import { useTranslation } from "@/hooks/useTranslation";
 import { AdminPageHeader } from "@/components/ui/AdminPageHeader";
 import { useToast } from "@/components/ui/GlobalToastProvider";
-import type { AllowedRole, HomePayload, Locale } from "@/types/home";
+import type { AllowedRole, HomeAsset, HomePayload, Locale } from "@/types/home";
 
 import { HOME_DEFAULTS } from "@/lib/home/home.defaults";
 
@@ -75,7 +81,6 @@ import {
 } from "@/lib/home/home.normalize";
 
 import { uploadHomeAsset } from "@/lib/home/home.uploads";
-import Image from "next/image";
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -93,6 +98,20 @@ type HomeValidationIssue = {
 
 function hasLocalizedText(value: { es: string; en: string }): boolean {
 	return value.es.trim().length > 0 || value.en.trim().length > 0;
+}
+
+function isEmptyLocalizedText(value: { es: string; en: string }): boolean {
+	return value.es.trim().length === 0 && value.en.trim().length === 0;
+}
+
+function createEmptyHomeAsset(): HomeAsset {
+	return {
+		url: "",
+		fileName: "",
+		mimeType: "",
+		sizeBytes: 0,
+		storageKey: "",
+	};
 }
 
 function hasPartnerContent(
@@ -120,6 +139,47 @@ function getDocumentNameForMessage(
 		document.title.en.trim() ||
 		document.file.fileName.trim() ||
 		`#${document.order}`
+	);
+}
+
+function hasPartnerLogo(
+	partner: HomePayload["partnerSection"]["items"][number],
+): boolean {
+	return partner.logo.url.trim().length > 0;
+}
+
+function hasPartnerDocumentFile(
+	document: HomePayload["partnerSection"]["items"][number]["documents"][number],
+): boolean {
+	return document.file.url.trim().length > 0;
+}
+
+function shouldKeepDocument(
+	document: HomePayload["partnerSection"]["items"][number]["documents"][number],
+): boolean {
+	return (
+		!isEmptyLocalizedText(document.title) ||
+		!isEmptyLocalizedText(document.description) ||
+		!isEmptyLocalizedText(document.label) ||
+		hasPartnerDocumentFile(document)
+	);
+}
+
+function shouldKeepPartner(
+	partner: HomePayload["partnerSection"]["items"][number],
+): boolean {
+	return (
+		partner.name.trim().length > 0 ||
+		partner.shortName.trim().length > 0 ||
+		!isEmptyLocalizedText(partner.badgeLabel) ||
+		!isEmptyLocalizedText(partner.summary) ||
+		!isEmptyLocalizedText(partner.description) ||
+		!isEmptyLocalizedText(partner.ctaLabel) ||
+		partner.ctaHref.trim().length > 0 ||
+		hasPartnerLogo(partner) ||
+		partner.coverageItems.some((item) => !isEmptyLocalizedText(item)) ||
+		partner.tags.some((item) => !isEmptyLocalizedText(item)) ||
+		partner.documents.some((document) => shouldKeepDocument(document))
 	);
 }
 
@@ -175,51 +235,6 @@ function validateHomeForm(payload: HomePayload): HomeValidationIssue[] {
 	return issues;
 }
 
-function isEmptyLocalizedText(value: { es: string; en: string }): boolean {
-	return value.es.trim().length === 0 && value.en.trim().length === 0;
-}
-
-function hasPartnerLogo(
-	partner: HomePayload["partnerSection"]["items"][number],
-): boolean {
-	return partner.logo.url.trim().length > 0;
-}
-
-function hasPartnerDocumentFile(
-	document: HomePayload["partnerSection"]["items"][number]["documents"][number],
-): boolean {
-	return document.file.url.trim().length > 0;
-}
-
-function shouldKeepPartner(
-	partner: HomePayload["partnerSection"]["items"][number],
-): boolean {
-	return (
-		partner.name.trim().length > 0 ||
-		partner.shortName.trim().length > 0 ||
-		!isEmptyLocalizedText(partner.badgeLabel) ||
-		!isEmptyLocalizedText(partner.summary) ||
-		!isEmptyLocalizedText(partner.description) ||
-		!isEmptyLocalizedText(partner.ctaLabel) ||
-		partner.ctaHref.trim().length > 0 ||
-		hasPartnerLogo(partner) ||
-		partner.coverageItems.some((item) => !isEmptyLocalizedText(item)) ||
-		partner.tags.some((item) => !isEmptyLocalizedText(item)) ||
-		partner.documents.some((document) => shouldKeepDocument(document))
-	);
-}
-
-function shouldKeepDocument(
-	document: HomePayload["partnerSection"]["items"][number]["documents"][number],
-): boolean {
-	return (
-		!isEmptyLocalizedText(document.title) ||
-		!isEmptyLocalizedText(document.description) ||
-		!isEmptyLocalizedText(document.label) ||
-		hasPartnerDocumentFile(document)
-	);
-}
-
 function sanitizeHomeBeforeSave(payload: HomePayload): HomePayload {
 	const cleanedPartners = sortPartnerItems(
 		payload.partnerSection.items
@@ -249,11 +264,28 @@ function sanitizeHomeBeforeSave(payload: HomePayload): HomePayload {
 		order: index + 1,
 	}));
 
+	const cleanedAboutHighlights = payload.aboutSection.highlights.filter(
+		(item) => !isEmptyLocalizedText(item),
+	);
+
+	const cleanedWhyChooseUsItems = payload.whyChooseUs.items.filter(
+		(item) =>
+			!isEmptyLocalizedText(item.title) || !isEmptyLocalizedText(item.description),
+	);
+
 	return {
 		...payload,
+		aboutSection: {
+			...payload.aboutSection,
+			highlights: cleanedAboutHighlights,
+		},
 		partnerSection: {
 			...payload.partnerSection,
 			items: cleanedPartners,
+		},
+		whyChooseUs: {
+			...payload.whyChooseUs,
+			items: cleanedWhyChooseUsItems,
 		},
 	};
 }
@@ -265,18 +297,28 @@ function sanitizeHomeBeforeSave(payload: HomePayload): HomePayload {
 function SectionCard(props: {
 	title: string;
 	subtitle?: string;
+	icon?: ReactNode;
 	children: ReactNode;
 }) {
 	return (
 		<section className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
-			<div className="mb-5">
-				<h2 className="text-lg font-semibold text-text-primary">
-					{props.title}
-				</h2>
-				{props.subtitle ? (
-					<p className="mt-1 text-sm text-text-secondary">{props.subtitle}</p>
+			<div className="mb-5 flex items-start gap-3">
+				{props.icon ? (
+					<div className="rounded-xl border border-border bg-background p-2 text-brand-primaryStrong">
+						{props.icon}
+					</div>
 				) : null}
+
+				<div>
+					<h2 className="text-lg font-semibold text-text-primary">
+						{props.title}
+					</h2>
+					{props.subtitle ? (
+						<p className="mt-1 text-sm text-text-secondary">{props.subtitle}</p>
+					) : null}
+				</div>
 			</div>
+
 			<div className="space-y-5">{props.children}</div>
 		</section>
 	);
@@ -324,7 +366,7 @@ function Toggle(props: {
 	onChange: (value: boolean) => void;
 }) {
 	return (
-		<label className="inline-flex cursor-pointer items-center gap-3 text-sm text-text-primary">
+		<label className="flex w-full cursor-pointer items-center gap-3 text-sm text-text-primary">
 			<input
 				type="checkbox"
 				checked={props.checked}
@@ -372,6 +414,7 @@ export default function HomeAdminPage() {
 	const documentFileInputsRef = useRef<Record<string, HTMLInputElement | null>>(
 		{},
 	);
+	const leadershipImageInputRef = useRef<HTMLInputElement | null>(null);
 	const hasLoadedInitialDataRef = useRef(false);
 	const latestLangRef = useRef<Locale>(lang);
 	const toastRef = useRef(toast);
@@ -395,6 +438,8 @@ export default function HomeAdminPage() {
 	const [uploadingDocumentKey, setUploadingDocumentKey] = useState<
 		string | null
 	>(null);
+	const [uploadingLeadershipImage, setUploadingLeadershipImage] =
+		useState(false);
 	const [expandedPartners, setExpandedPartners] = useState<
 		Record<string, boolean>
 	>({});
@@ -460,7 +505,6 @@ export default function HomeAdminPage() {
 
 		if (issues.length > 0) {
 			const firstIssue = issues[0];
-
 			toast.error(lang === "es" ? firstIssue.messageEs : firstIssue.messageEn);
 			return;
 		}
@@ -509,6 +553,10 @@ export default function HomeAdminPage() {
 		setForm(structuredClone(initialData));
 	}
 
+	/* ---------------------------------------------------------------------- */
+	/* Uploads                                                                */
+	/* ---------------------------------------------------------------------- */
+
 	async function handlePartnerLogoSelected(
 		partnerId: string,
 		file: File | null,
@@ -531,15 +579,15 @@ export default function HomeAdminPage() {
 					items: prev.partnerSection.items.map((item) =>
 						item.id === partnerId
 							? {
-									...item,
-									logo: {
-										url: uploaded.url,
-										fileName: uploaded.fileName,
-										mimeType: uploaded.mimeType,
-										sizeBytes: uploaded.sizeBytes,
-										storageKey: uploaded.storageKey,
-									},
-								}
+								...item,
+								logo: {
+									url: uploaded.url,
+									fileName: uploaded.fileName,
+									mimeType: uploaded.mimeType,
+									sizeBytes: uploaded.sizeBytes,
+									storageKey: uploaded.storageKey,
+								},
+							}
 							: item,
 					),
 				},
@@ -592,22 +640,22 @@ export default function HomeAdminPage() {
 					items: prev.partnerSection.items.map((item) =>
 						item.id === partnerId
 							? {
-									...item,
-									documents: item.documents.map((document) =>
-										document.id === documentId
-											? {
-													...document,
-													file: {
-														url: uploaded.url,
-														fileName: uploaded.fileName,
-														mimeType: uploaded.mimeType,
-														sizeBytes: uploaded.sizeBytes,
-														storageKey: uploaded.storageKey,
-													},
-												}
-											: document,
-									),
-								}
+								...item,
+								documents: item.documents.map((document) =>
+									document.id === documentId
+										? {
+											...document,
+											file: {
+												url: uploaded.url,
+												fileName: uploaded.fileName,
+												mimeType: uploaded.mimeType,
+												sizeBytes: uploaded.sizeBytes,
+												storageKey: uploaded.storageKey,
+											},
+										}
+										: document,
+								),
+							}
 							: item,
 					),
 				},
@@ -634,6 +682,59 @@ export default function HomeAdminPage() {
 			}
 		}
 	}
+
+	async function handleLeadershipImageSelected(
+		file: File | null,
+	): Promise<void> {
+		if (!file) return;
+
+		try {
+			setUploadingLeadershipImage(true);
+
+			const uploaded = await uploadHomeAsset({
+				file,
+				kind: "leadership-image",
+			});
+
+			setForm((prev) => ({
+				...prev,
+				leadershipSection: {
+					...prev.leadershipSection,
+					image: {
+						url: uploaded.url,
+						fileName: uploaded.fileName,
+						mimeType: uploaded.mimeType,
+						sizeBytes: uploaded.sizeBytes,
+						storageKey: uploaded.storageKey,
+					},
+				},
+			}));
+
+			toast.success(
+				lang === "es"
+					? "Imagen de liderazgo cargada correctamente."
+					: "Leadership image uploaded successfully.",
+			);
+		} catch (error) {
+			console.error("[HomeAdminPage] Leadership image upload error:", error);
+
+			toast.error(
+				lang === "es"
+					? "No se pudo cargar la imagen de liderazgo."
+					: "Could not upload the leadership image.",
+			);
+		} finally {
+			setUploadingLeadershipImage(false);
+
+			if (leadershipImageInputRef.current) {
+				leadershipImageInputRef.current.value = "";
+			}
+		}
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Hero                                                                   */
+	/* ---------------------------------------------------------------------- */
 
 	function updateHeroLocalized(
 		field: "title" | "subtitle",
@@ -742,12 +843,12 @@ export default function HomeAdminPage() {
 			featuredCards: prev.featuredCards.map((card) =>
 				card.id === cardId
 					? {
-							...card,
-							[field]: {
-								...card[field],
-								[localeKey]: value,
-							},
-						}
+						...card,
+						[field]: {
+							...card[field],
+							[localeKey]: value,
+						},
+					}
 					: card,
 			),
 		}));
@@ -790,6 +891,10 @@ export default function HomeAdminPage() {
 		}));
 	}
 
+	/* ---------------------------------------------------------------------- */
+	/* Coverage + Map                                                         */
+	/* ---------------------------------------------------------------------- */
+
 	function updateCoverageLocalized(
 		field: "eyebrow" | "title" | "description" | "note" | "openMapsLabel",
 		localeKey: Locale,
@@ -806,6 +911,105 @@ export default function HomeAdminPage() {
 			},
 		}));
 	}
+
+	function updateMapField(
+		field:
+			| "enabled"
+			| "useBrowserGeolocation"
+			| "fallbackLat"
+			| "fallbackLng"
+			| "zoom",
+		value: boolean | number | null,
+	): void {
+		setForm((prev) => {
+			const nextMapSection = {
+				...prev.mapSection,
+				[field]: value,
+			};
+
+			const shouldHideOpenMapsLink =
+				field === "enabled" && value === false;
+
+			return {
+				...prev,
+				mapSection: nextMapSection,
+				coverageSection: shouldHideOpenMapsLink
+					? {
+						...prev.coverageSection,
+						showOpenMapsLink: false,
+					}
+					: prev.coverageSection,
+			};
+		});
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* About                                                                  */
+	/* ---------------------------------------------------------------------- */
+
+	function updateAboutLocalized(
+		field: "eyebrow" | "title" | "description",
+		localeKey: Locale,
+		value: string,
+	): void {
+		setForm((prev) => ({
+			...prev,
+			aboutSection: {
+				...prev.aboutSection,
+				[field]: {
+					...prev.aboutSection[field],
+					[localeKey]: value,
+				},
+			},
+		}));
+	}
+
+	function addAboutHighlight(): void {
+		setForm((prev) => ({
+			...prev,
+			aboutSection: {
+				...prev.aboutSection,
+				highlights: [...prev.aboutSection.highlights, createEmptyLocalizedItem()],
+			},
+		}));
+	}
+
+	function updateAboutHighlight(
+		index: number,
+		localeKey: Locale,
+		value: string,
+	): void {
+		setForm((prev) => ({
+			...prev,
+			aboutSection: {
+				...prev.aboutSection,
+				highlights: prev.aboutSection.highlights.map((item, itemIndex) =>
+					itemIndex === index
+						? {
+							...item,
+							[localeKey]: value,
+						}
+						: item,
+				),
+			},
+		}));
+	}
+
+	function removeAboutHighlight(index: number): void {
+		setForm((prev) => ({
+			...prev,
+			aboutSection: {
+				...prev.aboutSection,
+				highlights: prev.aboutSection.highlights.filter(
+					(_, itemIndex) => itemIndex !== index,
+				),
+			},
+		}));
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Partners                                                               */
+	/* ---------------------------------------------------------------------- */
 
 	function updatePartnerSectionLocalized(
 		field: "eyebrow" | "title" | "description" | "badgeLabel" | "ctaLabel",
@@ -923,12 +1127,12 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								[field]: {
-									...item[field],
-									[localeKey]: value,
-								},
-							}
+							...item,
+							[field]: {
+								...item[field],
+								[localeKey]: value,
+							},
+						}
 						: item,
 				),
 			},
@@ -943,12 +1147,12 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								coverageItems: [
-									...item.coverageItems,
-									createEmptyLocalizedItem(),
-								],
-							}
+							...item,
+							coverageItems: [
+								...item.coverageItems,
+								createEmptyLocalizedItem(),
+							],
+						}
 						: item,
 				),
 			},
@@ -968,17 +1172,17 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								coverageItems: item.coverageItems.map(
-									(coverageItem, itemIndex) =>
-										itemIndex === index
-											? {
-													...coverageItem,
-													[localeKey]: value,
-												}
-											: coverageItem,
-								),
-							}
+							...item,
+							coverageItems: item.coverageItems.map(
+								(coverageItem, itemIndex) =>
+									itemIndex === index
+										? {
+											...coverageItem,
+											[localeKey]: value,
+										}
+										: coverageItem,
+							),
+						}
 						: item,
 				),
 			},
@@ -993,11 +1197,11 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								coverageItems: item.coverageItems.filter(
-									(_, itemIndex) => itemIndex !== index,
-								),
-							}
+							...item,
+							coverageItems: item.coverageItems.filter(
+								(_, itemIndex) => itemIndex !== index,
+							),
+						}
 						: item,
 				),
 			},
@@ -1012,9 +1216,9 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								tags: [...item.tags, createEmptyLocalizedItem()],
-							}
+							...item,
+							tags: [...item.tags, createEmptyLocalizedItem()],
+						}
 						: item,
 				),
 			},
@@ -1034,16 +1238,16 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								tags: item.tags.map((tag, itemIndex) =>
-									itemIndex === index
-										? {
-												...tag,
-												[localeKey]: value,
-											}
-										: tag,
-								),
-							}
+							...item,
+							tags: item.tags.map((tag, itemIndex) =>
+								itemIndex === index
+									? {
+										...tag,
+										[localeKey]: value,
+									}
+									: tag,
+							),
+						}
 						: item,
 				),
 			},
@@ -1058,9 +1262,9 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								tags: item.tags.filter((_, itemIndex) => itemIndex !== index),
-							}
+							...item,
+							tags: item.tags.filter((_, itemIndex) => itemIndex !== index),
+						}
 						: item,
 				),
 			},
@@ -1080,9 +1284,9 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								documents: [...item.documents, nextDocument],
-							}
+							...item,
+							documents: [...item.documents, nextDocument],
+						}
 						: item,
 				),
 			},
@@ -1102,13 +1306,13 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								documents: normalizePartnerDocuments(
-									item.documents.filter(
-										(document) => document.id !== documentId,
-									),
+							...item,
+							documents: normalizePartnerDocuments(
+								item.documents.filter(
+									(document) => document.id !== documentId,
 								),
-							}
+							),
+						}
 						: item,
 				),
 			},
@@ -1144,9 +1348,9 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								documents: normalizePartnerDocuments(copy),
-							}
+							...item,
+							documents: normalizePartnerDocuments(copy),
+						}
 						: item,
 				),
 			},
@@ -1167,19 +1371,19 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								documents: item.documents.map((document) =>
-									document.id === documentId
-										? {
-												...document,
-												[field]: {
-													...document[field],
-													[localeKey]: value,
-												},
-											}
-										: document,
-								),
-							}
+							...item,
+							documents: item.documents.map((document) =>
+								document.id === documentId
+									? {
+										...document,
+										[field]: {
+											...document[field],
+											[localeKey]: value,
+										},
+									}
+									: document,
+							),
+						}
 						: item,
 				),
 			},
@@ -1199,33 +1403,15 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								documents: item.documents.map((document) =>
-									document.id === documentId
-										? { ...document, [field]: value }
-										: document,
-								),
-							}
+							...item,
+							documents: item.documents.map((document) =>
+								document.id === documentId
+									? { ...document, [field]: value }
+									: document,
+							),
+						}
 						: item,
 				),
-			},
-		}));
-	}
-
-	function updateMapField(
-		field:
-			| "enabled"
-			| "useBrowserGeolocation"
-			| "fallbackLat"
-			| "fallbackLng"
-			| "zoom",
-		value: boolean | number | null,
-	): void {
-		setForm((prev) => ({
-			...prev,
-			mapSection: {
-				...prev.mapSection,
-				[field]: value,
 			},
 		}));
 	}
@@ -1271,15 +1457,15 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								logo: {
-									url: "",
-									fileName: "",
-									mimeType: "",
-									sizeBytes: 0,
-									storageKey: "",
-								},
-							}
+							...item,
+							logo: {
+								url: "",
+								fileName: "",
+								mimeType: "",
+								sizeBytes: 0,
+								storageKey: "",
+							},
+						}
 						: item,
 				),
 			},
@@ -1297,24 +1483,143 @@ export default function HomeAdminPage() {
 				items: prev.partnerSection.items.map((item) =>
 					item.id === partnerId
 						? {
-								...item,
-								documents: item.documents.map((document) =>
-									document.id === documentId
-										? {
-												...document,
-												file: {
-													url: "",
-													fileName: "",
-													mimeType: "",
-													sizeBytes: 0,
-													storageKey: "",
-												},
-											}
-										: document,
-								),
-							}
+							...item,
+							documents: item.documents.map((document) =>
+								document.id === documentId
+									? {
+										...document,
+										file: {
+											url: "",
+											fileName: "",
+											mimeType: "",
+											sizeBytes: 0,
+											storageKey: "",
+										},
+									}
+									: document,
+							),
+						}
 						: item,
 				),
+			},
+		}));
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Leadership                                                             */
+	/* ---------------------------------------------------------------------- */
+
+	function updateLeadershipLocalized(
+		field: "role" | "message",
+		localeKey: Locale,
+		value: string,
+	): void {
+		setForm((prev) => ({
+			...prev,
+			leadershipSection: {
+				...prev.leadershipSection,
+				[field]: {
+					...prev.leadershipSection[field],
+					[localeKey]: value,
+				},
+			},
+		}));
+	}
+
+	function removeLeadershipImage(): void {
+		setForm((prev) => ({
+			...prev,
+			leadershipSection: {
+				...prev.leadershipSection,
+				image: createEmptyHomeAsset(),
+			},
+		}));
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Why choose us                                                          */
+	/* ---------------------------------------------------------------------- */
+
+	function updateWhyChooseUsTitle(localeKey: Locale, value: string): void {
+		setForm((prev) => ({
+			...prev,
+			whyChooseUs: {
+				...prev.whyChooseUs,
+				title: {
+					...prev.whyChooseUs.title,
+					[localeKey]: value,
+				},
+			},
+		}));
+	}
+
+	function addWhyChooseUsItem(): void {
+		setForm((prev) => ({
+			...prev,
+			whyChooseUs: {
+				...prev.whyChooseUs,
+				items: [
+					...prev.whyChooseUs.items,
+					{
+						title: { es: "", en: "" },
+						description: { es: "", en: "" },
+					},
+				],
+			},
+		}));
+	}
+
+	function updateWhyChooseUsItem(
+		index: number,
+		field: "title" | "description",
+		localeKey: Locale,
+		value: string,
+	): void {
+		setForm((prev) => ({
+			...prev,
+			whyChooseUs: {
+				...prev.whyChooseUs,
+				items: prev.whyChooseUs.items.map((item, itemIndex) =>
+					itemIndex === index
+						? {
+							...item,
+							[field]: {
+								...item[field],
+								[localeKey]: value,
+							},
+						}
+						: item,
+				),
+			},
+		}));
+	}
+
+	function removeWhyChooseUsItem(index: number): void {
+		setForm((prev) => ({
+			...prev,
+			whyChooseUs: {
+				...prev.whyChooseUs,
+				items: prev.whyChooseUs.items.filter(
+					(_, itemIndex) => itemIndex !== index,
+				),
+			},
+		}));
+	}
+
+	function moveWhyChooseUsItem(index: number, direction: "up" | "down"): void {
+		const items = [...form.whyChooseUs.items];
+
+		if (direction === "up" && index === 0) return;
+		if (direction === "down" && index === items.length - 1) return;
+
+		const swapIndex = direction === "up" ? index - 1 : index + 1;
+		[items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+
+		setForm((prev) => ({
+			...prev,
+			whyChooseUs: {
+				...prev.whyChooseUs,
+				items,
 			},
 		}));
 	}
@@ -1402,6 +1707,7 @@ export default function HomeAdminPage() {
 			</div>
 
 			<SectionCard
+				icon={<HomeIcon className="h-5 w-5" />}
 				title={lang === "es" ? "Hero principal" : "Main hero"}
 				subtitle={
 					lang === "es"
@@ -1472,9 +1778,7 @@ export default function HomeAdminPage() {
 
 				<div className="grid gap-5 md:grid-cols-2">
 					<div>
-						<FieldLabel>
-							{lang === "es" ? "Subtítulo ES" : "Subtitle ES"}
-						</FieldLabel>
+						<FieldLabel>{lang === "es" ? "Subtítulo ES" : "Subtitle ES"}</FieldLabel>
 						<TextArea
 							value={form.hero.subtitle.es}
 							onChange={(e) =>
@@ -1484,63 +1788,11 @@ export default function HomeAdminPage() {
 					</div>
 
 					<div>
-						<FieldLabel>
-							{lang === "es" ? "Subtítulo EN" : "Subtitle EN"}
-						</FieldLabel>
+						<FieldLabel>{lang === "es" ? "Subtítulo EN" : "Subtitle EN"}</FieldLabel>
 						<TextArea
 							value={form.hero.subtitle.en}
 							onChange={(e) =>
 								updateHeroLocalized("subtitle", "en", e.target.value)
-							}
-						/>
-					</div>
-				</div>
-
-				<div className="rounded-2xl border border-border bg-background p-4">
-					<SectionTitle>
-						{lang === "es" ? "CTA primario" : "Primary CTA"}
-					</SectionTitle>
-
-					<div className="mt-4 grid gap-5 md:grid-cols-2">
-						<div>
-							<FieldLabel>Label ES</FieldLabel>
-							<TextInput
-								value={form.hero.primaryCta.label.es}
-								onChange={(e) =>
-									updateHeroCtaLabel("primaryCta", "es", e.target.value)
-								}
-							/>
-						</div>
-
-						<div>
-							<FieldLabel>Label EN</FieldLabel>
-							<TextInput
-								value={form.hero.primaryCta.label.en}
-								onChange={(e) =>
-									updateHeroCtaLabel("primaryCta", "en", e.target.value)
-								}
-							/>
-						</div>
-					</div>
-
-					<div className="mt-4">
-						<FieldLabel>Href</FieldLabel>
-						<TextInput
-							value={form.hero.primaryCta.href}
-							onChange={(e) =>
-								updateHeroCta("primaryCta", "href", e.target.value)
-							}
-						/>
-					</div>
-
-					<div className="mt-4">
-						<Toggle
-							label={
-								lang === "es" ? "CTA primario activo" : "Primary CTA enabled"
-							}
-							checked={form.hero.primaryCta.enabled}
-							onChange={(value) =>
-								updateHeroCta("primaryCta", "enabled", value)
 							}
 						/>
 					</div>
@@ -1600,9 +1852,8 @@ export default function HomeAdminPage() {
 			</SectionCard>
 
 			<SectionCard
-				title={
-					lang === "es" ? "Panel destacado lateral" : "Highlight side panel"
-				}
+				icon={<Info className="h-5 w-5" />}
+				title={lang === "es" ? "Panel destacado lateral" : "Highlight side panel"}
 				subtitle={
 					lang === "es"
 						? "Controla la etiqueta visual del panel complementario."
@@ -1632,9 +1883,7 @@ export default function HomeAdminPage() {
 				</div>
 
 				<Toggle
-					label={
-						lang === "es" ? "Mostrar panel destacado" : "Show highlight panel"
-					}
+					label={lang === "es" ? "Mostrar panel destacado" : "Show highlight panel"}
 					checked={form.highlightPanel.enabled}
 					onChange={(value) =>
 						setForm((prev) => ({
@@ -1649,6 +1898,7 @@ export default function HomeAdminPage() {
 			</SectionCard>
 
 			<SectionCard
+				icon={<FileText className="h-5 w-5" />}
 				title={lang === "es" ? "Cards destacadas" : "Featured cards"}
 				subtitle={
 					lang === "es"
@@ -1724,35 +1974,21 @@ export default function HomeAdminPage() {
 
 								<div className="grid gap-5 md:grid-cols-2">
 									<div>
-										<FieldLabel>
-											{lang === "es" ? "Título ES" : "Title ES"}
-										</FieldLabel>
+										<FieldLabel>{lang === "es" ? "Título ES" : "Title ES"}</FieldLabel>
 										<TextInput
 											value={card.title.es}
 											onChange={(e) =>
-												updateCardLocalized(
-													card.id,
-													"title",
-													"es",
-													e.target.value,
-												)
+												updateCardLocalized(card.id, "title", "es", e.target.value)
 											}
 										/>
 									</div>
 
 									<div>
-										<FieldLabel>
-											{lang === "es" ? "Título EN" : "Title EN"}
-										</FieldLabel>
+										<FieldLabel>{lang === "es" ? "Título EN" : "Title EN"}</FieldLabel>
 										<TextInput
 											value={card.title.en}
 											onChange={(e) =>
-												updateCardLocalized(
-													card.id,
-													"title",
-													"en",
-													e.target.value,
-												)
+												updateCardLocalized(card.id, "title", "en", e.target.value)
 											}
 										/>
 									</div>
@@ -1808,6 +2044,7 @@ export default function HomeAdminPage() {
 			</SectionCard>
 
 			<SectionCard
+				icon={<MapPinned className="h-5 w-5" />}
 				title={
 					lang === "es"
 						? "Cobertura / capacidad operativa"
@@ -1839,9 +2076,6 @@ export default function HomeAdminPage() {
 							}
 						/>
 					</div>
-				</div>
-
-				<div className="grid gap-5 md:grid-cols-2">
 					<div>
 						<FieldLabel>{lang === "es" ? "Título ES" : "Title ES"}</FieldLabel>
 						<TextInput
@@ -1865,9 +2099,7 @@ export default function HomeAdminPage() {
 
 				<div className="grid gap-5 md:grid-cols-2">
 					<div>
-						<FieldLabel>
-							{lang === "es" ? "Descripción ES" : "Description ES"}
-						</FieldLabel>
+						<FieldLabel>{lang === "es" ? "Descripción ES" : "Description ES"}</FieldLabel>
 						<TextArea
 							value={form.coverageSection.description.es}
 							onChange={(e) =>
@@ -1877,9 +2109,7 @@ export default function HomeAdminPage() {
 					</div>
 
 					<div>
-						<FieldLabel>
-							{lang === "es" ? "Descripción EN" : "Description EN"}
-						</FieldLabel>
+						<FieldLabel>{lang === "es" ? "Descripción EN" : "Description EN"}</FieldLabel>
 						<TextArea
 							value={form.coverageSection.description.en}
 							onChange={(e) =>
@@ -1937,42 +2167,263 @@ export default function HomeAdminPage() {
 					</div>
 				</div>
 
-				<Toggle
-					label={
-						lang === "es" ? "Mostrar enlace abrir mapas" : "Show open maps link"
-					}
-					checked={form.coverageSection.showOpenMapsLink}
-					onChange={(value) =>
-						setForm((prev) => ({
-							...prev,
-							coverageSection: {
-								...prev.coverageSection,
-								showOpenMapsLink: value,
-							},
-						}))
-					}
-				/>
+				<div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+					<p className="text-sm font-medium text-text-primary">
+						{lang === "es" ? "Visibilidad del bloque de cobertura" : "Coverage block visibility"}
+					</p>
 
+					<Toggle
+						label={lang === "es" ? "Mostrar bloque de cobertura" : "Show coverage block"}
+						checked={form.coverageSection.enabled}
+						onChange={(value) =>
+							setForm((prev) => ({
+								...prev,
+								coverageSection: {
+									...prev.coverageSection,
+									enabled: value,
+								},
+							}))
+						}
+					/>
+				</div>
+			</SectionCard>
+
+			<SectionCard
+				icon={<MapPinned className="h-5 w-5" />}
+				title={lang === "es" ? "Mapa" : "Map"}
+				subtitle={
+					lang === "es"
+						? "Configura la referencia geográfica y el fallback del mapa."
+						: "Configure the geographic reference and fallback map values."
+				}
+			>
+				<div className="space-y-3">
+					<Toggle
+						label={lang === "es" ? "Mostrar mapa interactivo" : "Show interactive map"}
+						checked={form.mapSection.enabled}
+						onChange={(value) => updateMapField("enabled", value)}
+					/>
+
+					<Toggle
+						label={
+							lang === "es"
+								? "Usar geolocalización del navegador"
+								: "Use browser geolocation"
+						}
+						checked={form.mapSection.useBrowserGeolocation}
+						onChange={(value) => updateMapField("useBrowserGeolocation", value)}
+					/>
+				</div>
+
+				<div className="grid gap-5 md:grid-cols-3">
+					<div>
+						<FieldLabel>Latitude</FieldLabel>
+						<TextInput
+							type="number"
+							step="any"
+							value={form.mapSection.fallbackLat ?? ""}
+							onChange={(e) =>
+								updateMapField(
+									"fallbackLat",
+									safeNumberFromInput(e.target.value),
+								)
+							}
+						/>
+					</div>
+
+					<div>
+						<FieldLabel>Longitude</FieldLabel>
+						<TextInput
+							type="number"
+							step="any"
+							value={form.mapSection.fallbackLng ?? ""}
+							onChange={(e) =>
+								updateMapField(
+									"fallbackLng",
+									safeNumberFromInput(e.target.value),
+								)
+							}
+						/>
+					</div>
+
+					<div>
+						<FieldLabel>Zoom</FieldLabel>
+						<TextInput
+							type="number"
+							min={1}
+							max={20}
+							value={form.mapSection.zoom}
+							onChange={(e) =>
+								updateMapField(
+									"zoom",
+									Number.isFinite(Number(e.target.value))
+										? Number(e.target.value)
+										: 7,
+								)
+							}
+						/>
+					</div>
+				</div>
+			</SectionCard>
+
+			<SectionCard
+				icon={<Info className="h-5 w-5" />}
+				title={lang === "es" ? "Nosotros" : "About"}
+				subtitle={
+					lang === "es"
+						? "Administra el bloque institucional que presenta a Sierra Tech."
+						: "Manage the institutional block that presents Sierra Tech."
+				}
+			>
 				<Toggle
-					label={
-						lang === "es"
-							? "Mostrar bloque de cobertura"
-							: "Show coverage block"
-					}
-					checked={form.coverageSection.enabled}
+					label={lang === "es" ? "Mostrar sección" : "Show section"}
+					checked={form.aboutSection.enabled}
 					onChange={(value) =>
 						setForm((prev) => ({
 							...prev,
-							coverageSection: {
-								...prev.coverageSection,
+							aboutSection: {
+								...prev.aboutSection,
 								enabled: value,
 							},
 						}))
 					}
 				/>
+
+				<div className="grid gap-5 md:grid-cols-2">
+					<div>
+						<FieldLabel>Eyebrow ES</FieldLabel>
+						<TextInput
+							value={form.aboutSection.eyebrow.es}
+							onChange={(e) =>
+								updateAboutLocalized("eyebrow", "es", e.target.value)
+							}
+						/>
+					</div>
+
+					<div>
+						<FieldLabel>Eyebrow EN</FieldLabel>
+						<TextInput
+							value={form.aboutSection.eyebrow.en}
+							onChange={(e) =>
+								updateAboutLocalized("eyebrow", "en", e.target.value)
+							}
+						/>
+					</div>
+				</div>
+
+				<div className="grid gap-5 md:grid-cols-2">
+					<div>
+						<FieldLabel>{lang === "es" ? "Título ES" : "Title ES"}</FieldLabel>
+						<TextInput
+							value={form.aboutSection.title.es}
+							onChange={(e) =>
+								updateAboutLocalized("title", "es", e.target.value)
+							}
+						/>
+					</div>
+
+					<div>
+						<FieldLabel>{lang === "es" ? "Título EN" : "Title EN"}</FieldLabel>
+						<TextInput
+							value={form.aboutSection.title.en}
+							onChange={(e) =>
+								updateAboutLocalized("title", "en", e.target.value)
+							}
+						/>
+					</div>
+				</div>
+
+				<div className="grid gap-5 md:grid-cols-2">
+					<div>
+						<FieldLabel>
+							{lang === "es" ? "Descripción ES" : "Description ES"}
+						</FieldLabel>
+						<TextArea
+							value={form.aboutSection.description.es}
+							onChange={(e) =>
+								updateAboutLocalized("description", "es", e.target.value)
+							}
+						/>
+					</div>
+
+					<div>
+						<FieldLabel>
+							{lang === "es" ? "Descripción EN" : "Description EN"}
+						</FieldLabel>
+						<TextArea
+							value={form.aboutSection.description.en}
+							onChange={(e) =>
+								updateAboutLocalized("description", "en", e.target.value)
+							}
+						/>
+					</div>
+				</div>
+
+				<div className="rounded-2xl border border-border bg-background p-4">
+					<div className="mb-4 flex items-center justify-between gap-3">
+						<SectionTitle>
+							{lang === "es" ? "Highlights" : "Highlights"}
+						</SectionTitle>
+
+						<ActionButton onClick={addAboutHighlight}>
+							<Plus className="mr-2 h-4 w-4" />
+							{lang === "es" ? "Agregar item" : "Add item"}
+						</ActionButton>
+					</div>
+
+					{form.aboutSection.highlights.length === 0 ? (
+						<div className="rounded-xl border border-dashed border-border bg-surface p-4 text-sm text-text-secondary">
+							{lang === "es"
+								? "No hay highlights todavía."
+								: "No highlights yet."}
+						</div>
+					) : (
+						<div className="space-y-4">
+							{form.aboutSection.highlights.map((item, index) => (
+								<div
+									key={`about-highlight-${index}`}
+									className="rounded-xl border border-border bg-surface p-4"
+								>
+									<div className="mb-3 flex items-center justify-between gap-3">
+										<p className="text-sm font-medium text-text-primary">
+											{lang === "es" ? "Item" : "Item"} #{index + 1}
+										</p>
+
+										<ActionButton onClick={() => removeAboutHighlight(index)}>
+											<Trash2 className="h-4 w-4" />
+										</ActionButton>
+									</div>
+
+									<div className="grid gap-5 md:grid-cols-2">
+										<div>
+											<FieldLabel>ES</FieldLabel>
+											<TextInput
+												value={item.es}
+												onChange={(e) =>
+													updateAboutHighlight(index, "es", e.target.value)
+												}
+											/>
+										</div>
+
+										<div>
+											<FieldLabel>EN</FieldLabel>
+											<TextInput
+												value={item.en}
+												onChange={(e) =>
+													updateAboutHighlight(index, "en", e.target.value)
+												}
+											/>
+										</div>
+									</div>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
 			</SectionCard>
 
 			<SectionCard
+				icon={<Building2 className="h-5 w-5" />}
 				title={
 					lang === "es"
 						? "Alianzas, representación técnica y comercial"
@@ -2070,11 +2521,7 @@ export default function HomeAdminPage() {
 						<TextInput
 							value={form.partnerSection.badgeLabel.es}
 							onChange={(e) =>
-								updatePartnerSectionLocalized(
-									"badgeLabel",
-									"es",
-									e.target.value,
-								)
+								updatePartnerSectionLocalized("badgeLabel", "es", e.target.value)
 							}
 						/>
 					</div>
@@ -2084,11 +2531,7 @@ export default function HomeAdminPage() {
 						<TextInput
 							value={form.partnerSection.badgeLabel.en}
 							onChange={(e) =>
-								updatePartnerSectionLocalized(
-									"badgeLabel",
-									"en",
-									e.target.value,
-								)
+								updatePartnerSectionLocalized("badgeLabel", "en", e.target.value)
 							}
 						/>
 					</div>
@@ -2105,11 +2548,7 @@ export default function HomeAdminPage() {
 							<TextInput
 								value={form.partnerSection.ctaLabel.es}
 								onChange={(e) =>
-									updatePartnerSectionLocalized(
-										"ctaLabel",
-										"es",
-										e.target.value,
-									)
+									updatePartnerSectionLocalized("ctaLabel", "es", e.target.value)
 								}
 							/>
 						</div>
@@ -2119,11 +2558,7 @@ export default function HomeAdminPage() {
 							<TextInput
 								value={form.partnerSection.ctaLabel.en}
 								onChange={(e) =>
-									updatePartnerSectionLocalized(
-										"ctaLabel",
-										"en",
-										e.target.value,
-									)
+									updatePartnerSectionLocalized("ctaLabel", "en", e.target.value)
 								}
 							/>
 						</div>
@@ -2142,9 +2577,7 @@ export default function HomeAdminPage() {
 
 				<div className="flex items-center justify-between gap-3">
 					<div>
-						<SectionTitle>
-							{lang === "es" ? "Partners" : "Partners"}
-						</SectionTitle>
+						<SectionTitle>{lang === "es" ? "Partners" : "Partners"}</SectionTitle>
 						<p className="mt-1 text-sm text-text-secondary">
 							{lang === "es"
 								? "Crea y administra múltiples alianzas con su propio contenido."
@@ -2202,8 +2635,7 @@ export default function HomeAdminPage() {
 
 													<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
 														<span>
-															{lang === "es" ? "Partner" : "Partner"} #
-															{partner.order}
+															{lang === "es" ? "Partner" : "Partner"} #{partner.order}
 														</span>
 														<span>•</span>
 														<span>
@@ -2239,8 +2671,7 @@ export default function HomeAdminPage() {
 														</span>
 														<span>•</span>
 														<span>
-															{coverageCount}{" "}
-															{lang === "es" ? "alcance" : "scope"}
+															{coverageCount} {lang === "es" ? "alcance" : "scope"}
 														</span>
 														<span>•</span>
 														<span>
@@ -2248,11 +2679,10 @@ export default function HomeAdminPage() {
 														</span>
 														<span>•</span>
 														<span
-															className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${
-																partnerIsValid
-																	? "bg-emerald-100 text-emerald-700"
-																	: "bg-amber-100 text-amber-700"
-															}`}
+															className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${partnerIsValid
+																? "bg-emerald-100 text-emerald-700"
+																: "bg-amber-100 text-amber-700"
+																}`}
 														>
 															{partnerIsValid
 																? lang === "es"
@@ -2305,9 +2735,7 @@ export default function HomeAdminPage() {
 									{isPartnerExpanded ? (
 										<div className="space-y-5">
 											<Toggle
-												label={
-													lang === "es" ? "Partner activo" : "Partner enabled"
-												}
+												label={lang === "es" ? "Partner activo" : "Partner enabled"}
 												checked={partner.enabled}
 												onChange={(value) =>
 													updatePartnerField(partner.id, "enabled", value)
@@ -2316,17 +2744,11 @@ export default function HomeAdminPage() {
 
 											<div className="grid gap-5 md:grid-cols-2">
 												<div>
-													<FieldLabel>
-														{lang === "es" ? "Nombre" : "Name"}
-													</FieldLabel>
+													<FieldLabel>{lang === "es" ? "Nombre" : "Name"}</FieldLabel>
 													<TextInput
 														value={partner.name}
 														onChange={(e) =>
-															updatePartnerField(
-																partner.id,
-																"name",
-																e.target.value,
-															)
+															updatePartnerField(partner.id, "name", e.target.value)
 														}
 													/>
 												</div>
@@ -2447,9 +2869,7 @@ export default function HomeAdminPage() {
 											<div className="rounded-2xl border border-border bg-surface p-4">
 												<div className="flex flex-wrap items-center justify-between gap-3">
 													<SectionTitle>
-														{lang === "es"
-															? "Logo del partner"
-															: "Partner logo"}
+														{lang === "es" ? "Logo del partner" : "Partner logo"}
 													</SectionTitle>
 
 													<input
@@ -2501,9 +2921,7 @@ export default function HomeAdminPage() {
 
 															<div>
 																<FieldLabel>
-																	{lang === "es"
-																		? "Nombre de archivo"
-																		: "File name"}
+																	{lang === "es" ? "Nombre de archivo" : "File name"}
 																</FieldLabel>
 																<TextInput
 																	value={
@@ -2516,25 +2934,17 @@ export default function HomeAdminPage() {
 
 															<div>
 																<FieldLabel>MIME Type</FieldLabel>
-																<TextInput
-																	value={partner.logo.mimeType}
-																	readOnly
-																/>
+																<TextInput value={partner.logo.mimeType} readOnly />
 															</div>
 
 															<div>
 																<FieldLabel>Storage Key</FieldLabel>
-																<TextInput
-																	value={partner.logo.storageKey}
-																	readOnly
-																/>
+																<TextInput value={partner.logo.storageKey} readOnly />
 															</div>
 
 															<div>
 																<FieldLabel>
-																	{lang === "es"
-																		? "Tamaño (bytes)"
-																		: "Size (bytes)"}
+																	{lang === "es" ? "Tamaño (bytes)" : "Size (bytes)"}
 																</FieldLabel>
 																<TextInput
 																	value={String(partner.logo.sizeBytes)}
@@ -2579,15 +2989,11 @@ export default function HomeAdminPage() {
 
 																	<ActionButton
 																		type="button"
-																		onClick={() =>
-																			removePartnerLogo(partner.id)
-																		}
+																		onClick={() => removePartnerLogo(partner.id)}
 																		className="text-status-error hover:text-status-error"
 																	>
 																		<X className="mr-2 h-4 w-4" />
-																		{lang === "es"
-																			? "Quitar logo"
-																			: "Remove logo"}
+																		{lang === "es" ? "Quitar logo" : "Remove logo"}
 																	</ActionButton>
 																</>
 															) : null}
@@ -2599,9 +3005,7 @@ export default function HomeAdminPage() {
 											<div className="rounded-2xl border border-border bg-surface p-4">
 												<div className="mb-4 flex items-center justify-between gap-3">
 													<SectionTitle>
-														{lang === "es"
-															? "Cobertura / alcance"
-															: "Coverage / scope"}
+														{lang === "es" ? "Cobertura / alcance" : "Coverage / scope"}
 													</SectionTitle>
 
 													<ActionButton
@@ -2627,16 +3031,12 @@ export default function HomeAdminPage() {
 															>
 																<div className="mb-3 flex items-center justify-between gap-3">
 																	<p className="text-sm font-medium text-text-primary">
-																		{lang === "es" ? "Item" : "Item"} #
-																		{itemIndex + 1}
+																		{lang === "es" ? "Item" : "Item"} #{itemIndex + 1}
 																	</p>
 
 																	<ActionButton
 																		onClick={() =>
-																			removePartnerCoverageItem(
-																				partner.id,
-																				itemIndex,
-																			)
+																			removePartnerCoverageItem(partner.id, itemIndex)
 																		}
 																	>
 																		<Trash2 className="h-4 w-4" />
@@ -2682,13 +3082,9 @@ export default function HomeAdminPage() {
 
 											<div className="rounded-2xl border border-border bg-surface p-4">
 												<div className="mb-4 flex items-center justify-between gap-3">
-													<SectionTitle>
-														{lang === "es" ? "Etiquetas" : "Tags"}
-													</SectionTitle>
+													<SectionTitle>{lang === "es" ? "Etiquetas" : "Tags"}</SectionTitle>
 
-													<ActionButton
-														onClick={() => addPartnerTag(partner.id)}
-													>
+													<ActionButton onClick={() => addPartnerTag(partner.id)}>
 														<Plus className="mr-2 h-4 w-4" />
 														{lang === "es" ? "Agregar etiqueta" : "Add tag"}
 													</ActionButton>
@@ -2696,9 +3092,7 @@ export default function HomeAdminPage() {
 
 												{partner.tags.length === 0 ? (
 													<div className="rounded-xl border border-dashed border-border bg-background p-4 text-sm text-text-secondary">
-														{lang === "es"
-															? "No hay etiquetas."
-															: "No tags yet."}
+														{lang === "es" ? "No hay etiquetas." : "No tags yet."}
 													</div>
 												) : (
 													<div className="space-y-4">
@@ -2709,8 +3103,7 @@ export default function HomeAdminPage() {
 															>
 																<div className="mb-3 flex items-center justify-between gap-3">
 																	<p className="text-sm font-medium text-text-primary">
-																		{lang === "es" ? "Etiqueta" : "Tag"} #
-																		{itemIndex + 1}
+																		{lang === "es" ? "Etiqueta" : "Tag"} #{itemIndex + 1}
 																	</p>
 
 																	<ActionButton
@@ -2824,9 +3217,7 @@ export default function HomeAdminPage() {
 														onClick={() => addPartnerDocument(partner.id)}
 													>
 														<Plus className="mr-2 h-4 w-4" />
-														{lang === "es"
-															? "Agregar documento"
-															: "Add document"}
+														{lang === "es" ? "Agregar documento" : "Add document"}
 													</ActionButton>
 												</div>
 
@@ -2870,10 +3261,8 @@ export default function HomeAdminPage() {
 
 																					<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
 																						<span>
-																							{lang === "es"
-																								? "Documento"
-																								: "Document"}{" "}
-																							#{document.order}
+																							{lang === "es" ? "Documento" : "Document"} #
+																							{document.order}
 																						</span>
 																						<span>•</span>
 																						<span>
@@ -2897,11 +3286,10 @@ export default function HomeAdminPage() {
 																						</span>
 																						<span>•</span>
 																						<span
-																							className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${
-																								documentIsValid
-																									? "bg-emerald-100 text-emerald-700"
-																									: "bg-amber-100 text-amber-700"
-																							}`}
+																							className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${documentIsValid
+																								? "bg-emerald-100 text-emerald-700"
+																								: "bg-amber-100 text-amber-700"
+																								}`}
 																						>
 																							{documentIsValid
 																								? lang === "es"
@@ -2918,9 +3306,7 @@ export default function HomeAdminPage() {
 																					<ActionButton
 																						type="button"
 																						onClick={() =>
-																							toggleDocumentExpanded(
-																								documentKey,
-																							)
+																							toggleDocumentExpanded(documentKey)
 																						}
 																					>
 																						{isDocumentExpanded ? (
@@ -3028,9 +3414,7 @@ export default function HomeAdminPage() {
 
 																				<div className="grid gap-5 md:grid-cols-2">
 																					<div>
-																						<FieldLabel>
-																							Descripción ES
-																						</FieldLabel>
+																						<FieldLabel>Descripción ES</FieldLabel>
 																						<TextArea
 																							value={document.description.es}
 																							onChange={(e) =>
@@ -3046,9 +3430,7 @@ export default function HomeAdminPage() {
 																					</div>
 
 																					<div>
-																						<FieldLabel>
-																							Descripción EN
-																						</FieldLabel>
+																						<FieldLabel>Descripción EN</FieldLabel>
 																						<TextArea
 																							value={document.description.en}
 																							onChange={(e) =>
@@ -3127,9 +3509,7 @@ export default function HomeAdminPage() {
 																								<div className="flex flex-col items-center gap-2 text-text-secondary">
 																									<FileText className="h-8 w-8" />
 																									<span className="text-xs">
-																										{lang === "es"
-																											? "Sin archivo"
-																											: "No file"}
+																										{lang === "es" ? "Sin archivo" : "No file"}
 																									</span>
 																								</div>
 																							)}
@@ -3148,8 +3528,7 @@ export default function HomeAdminPage() {
 																							className="hidden"
 																							onChange={(event) => {
 																								const file =
-																									event.currentTarget
-																										.files?.[0] ?? null;
+																									event.currentTarget.files?.[0] ?? null;
 																								void handlePartnerDocumentSelected(
 																									partner.id,
 																									document.id,
@@ -3161,10 +3540,7 @@ export default function HomeAdminPage() {
 																						<div className="grid gap-4 md:grid-cols-2">
 																							<div>
 																								<FieldLabel>URL</FieldLabel>
-																								<TextInput
-																									value={document.file.url}
-																									readOnly
-																								/>
+																								<TextInput value={document.file.url} readOnly />
 																							</div>
 
 																							<div>
@@ -3185,9 +3561,7 @@ export default function HomeAdminPage() {
 																							</div>
 
 																							<div>
-																								<FieldLabel>
-																									MIME Type
-																								</FieldLabel>
+																								<FieldLabel>MIME Type</FieldLabel>
 																								<TextInput
 																									value={document.file.mimeType}
 																									readOnly
@@ -3195,13 +3569,9 @@ export default function HomeAdminPage() {
 																							</div>
 
 																							<div>
-																								<FieldLabel>
-																									Storage Key
-																								</FieldLabel>
+																								<FieldLabel>Storage Key</FieldLabel>
 																								<TextInput
-																									value={
-																										document.file.storageKey
-																									}
+																									value={document.file.storageKey}
 																									readOnly
 																								/>
 																							</div>
@@ -3213,9 +3583,7 @@ export default function HomeAdminPage() {
 																										: "Size (bytes)"}
 																								</FieldLabel>
 																								<TextInput
-																									value={String(
-																										document.file.sizeBytes,
-																									)}
+																									value={String(document.file.sizeBytes)}
 																									readOnly
 																								/>
 																							</div>
@@ -3254,9 +3622,7 @@ export default function HomeAdminPage() {
 																										className="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft"
 																									>
 																										<Eye className="mr-2 h-4 w-4" />
-																										{lang === "es"
-																											? "Ver"
-																											: "View"}
+																										{lang === "es" ? "Ver" : "View"}
 																									</a>
 
 																									<ActionButton
@@ -3298,77 +3664,383 @@ export default function HomeAdminPage() {
 			</SectionCard>
 
 			<SectionCard
-				title={lang === "es" ? "Mapa" : "Map"}
+				icon={<UserRound className="h-5 w-5" />}
+				title={lang === "es" ? "Liderazgo" : "Leadership"}
 				subtitle={
 					lang === "es"
-						? "Configura la referencia geográfica y el fallback del mapa."
-						: "Configure the geographic reference and fallback map values."
+						? "Administra el bloque visible de liderazgo de la portada."
+						: "Manage the visible leadership block on the landing page."
 				}
 			>
 				<Toggle
-					label={lang === "es" ? "Mostrar mapa" : "Show map"}
-					checked={form.mapSection.enabled}
-					onChange={(value) => updateMapField("enabled", value)}
-				/>
-
-				<Toggle
-					label={
-						lang === "es"
-							? "Usar geolocalización del navegador"
-							: "Use browser geolocation"
+					label={lang === "es" ? "Mostrar sección" : "Show section"}
+					checked={form.leadershipSection.enabled}
+					onChange={(value) =>
+						setForm((prev) => ({
+							...prev,
+							leadershipSection: {
+								...prev.leadershipSection,
+								enabled: value,
+							},
+						}))
 					}
-					checked={form.mapSection.useBrowserGeolocation}
-					onChange={(value) => updateMapField("useBrowserGeolocation", value)}
 				/>
 
-				<div className="grid gap-5 md:grid-cols-3">
+				<div className="grid gap-5 md:grid-cols-2">
 					<div>
-						<FieldLabel>Latitude</FieldLabel>
+						<FieldLabel>{lang === "es" ? "Nombre" : "Name"}</FieldLabel>
 						<TextInput
-							type="number"
-							step="any"
-							value={form.mapSection.fallbackLat ?? ""}
+							value={form.leadershipSection.name}
 							onChange={(e) =>
-								updateMapField(
-									"fallbackLat",
-									safeNumberFromInput(e.target.value),
-								)
+								setForm((prev) => ({
+									...prev,
+									leadershipSection: {
+										...prev.leadershipSection,
+										name: e.target.value,
+									},
+								}))
+							}
+						/>
+					</div>
+				</div>
+
+				<div className="grid gap-5 md:grid-cols-2">
+					<div>
+						<FieldLabel>{lang === "es" ? "Cargo ES" : "Role ES"}</FieldLabel>
+						<TextInput
+							value={form.leadershipSection.role.es}
+							onChange={(e) =>
+								updateLeadershipLocalized("role", "es", e.target.value)
 							}
 						/>
 					</div>
 
 					<div>
-						<FieldLabel>Longitude</FieldLabel>
+						<FieldLabel>{lang === "es" ? "Cargo EN" : "Role EN"}</FieldLabel>
 						<TextInput
-							type="number"
-							step="any"
-							value={form.mapSection.fallbackLng ?? ""}
+							value={form.leadershipSection.role.en}
 							onChange={(e) =>
-								updateMapField(
-									"fallbackLng",
-									safeNumberFromInput(e.target.value),
-								)
+								updateLeadershipLocalized("role", "en", e.target.value)
+							}
+						/>
+					</div>
+				</div>
+
+				<div className="grid gap-5 md:grid-cols-2">
+					<div>
+						<FieldLabel>{lang === "es" ? "Mensaje ES" : "Message ES"}</FieldLabel>
+						<TextArea
+							value={form.leadershipSection.message.es}
+							onChange={(e) =>
+								updateLeadershipLocalized("message", "es", e.target.value)
 							}
 						/>
 					</div>
 
 					<div>
-						<FieldLabel>Zoom</FieldLabel>
-						<TextInput
-							type="number"
-							min={1}
-							max={20}
-							value={form.mapSection.zoom}
+						<FieldLabel>{lang === "es" ? "Mensaje EN" : "Message EN"}</FieldLabel>
+						<TextArea
+							value={form.leadershipSection.message.en}
 							onChange={(e) =>
-								updateMapField(
-									"zoom",
-									Number.isFinite(Number(e.target.value))
-										? Number(e.target.value)
-										: 7,
-								)
+								updateLeadershipLocalized("message", "en", e.target.value)
 							}
 						/>
 					</div>
+				</div>
+
+				<div className="rounded-2xl border border-border bg-background p-4">
+					<div className="flex flex-wrap items-center justify-between gap-3">
+						<SectionTitle>
+							{lang === "es" ? "Imagen de liderazgo" : "Leadership image"}
+						</SectionTitle>
+
+						<input
+							ref={leadershipImageInputRef}
+							type="file"
+							accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+							className="hidden"
+							onChange={(event) => {
+								const file = event.currentTarget.files?.[0] ?? null;
+								void handleLeadershipImageSelected(file);
+							}}
+						/>
+					</div>
+
+					<div className="mt-4 grid gap-5 lg:grid-cols-[220px_1fr]">
+						<div className="rounded-2xl border border-dashed border-border bg-surface p-4">
+							<div className="flex h-48 items-center justify-center rounded-xl border border-border bg-background">
+								{form.leadershipSection.image.url ? (
+									<Image
+										src={form.leadershipSection.image.url}
+										alt={form.leadershipSection.name || "Leadership"}
+										width={320}
+										height={240}
+										unoptimized
+										className="max-h-40 max-w-full object-contain"
+									/>
+								) : (
+									<div className="flex flex-col items-center gap-2 text-text-secondary">
+										<ImageIcon className="h-8 w-8" />
+										<span className="text-xs">
+											{lang === "es" ? "Sin imagen" : "No image"}
+										</span>
+									</div>
+								)}
+							</div>
+						</div>
+
+						<div className="space-y-4">
+							<div className="grid gap-4 md:grid-cols-2">
+								<div>
+									<FieldLabel>URL</FieldLabel>
+									<TextInput value={form.leadershipSection.image.url} readOnly />
+								</div>
+
+								<div>
+									<FieldLabel>
+										{lang === "es" ? "Nombre de archivo" : "File name"}
+									</FieldLabel>
+									<TextInput
+										value={
+											form.leadershipSection.image.fileName ||
+											(lang === "es" ? "Sin archivo" : "No file")
+										}
+										readOnly
+									/>
+								</div>
+
+								<div>
+									<FieldLabel>MIME Type</FieldLabel>
+									<TextInput value={form.leadershipSection.image.mimeType} readOnly />
+								</div>
+
+								<div>
+									<FieldLabel>Storage Key</FieldLabel>
+									<TextInput value={form.leadershipSection.image.storageKey} readOnly />
+								</div>
+
+								<div>
+									<FieldLabel>
+										{lang === "es" ? "Tamaño (bytes)" : "Size (bytes)"}
+									</FieldLabel>
+									<TextInput
+										value={String(form.leadershipSection.image.sizeBytes)}
+										readOnly
+									/>
+								</div>
+							</div>
+
+							<div className="flex flex-wrap gap-2">
+								<ActionButton
+									type="button"
+									disabled={uploadingLeadershipImage}
+									onClick={() => leadershipImageInputRef.current?.click()}
+								>
+									<Upload className="mr-2 h-4 w-4" />
+									{uploadingLeadershipImage
+										? lang === "es"
+											? "Subiendo..."
+											: "Uploading..."
+										: form.leadershipSection.image.url
+											? lang === "es"
+												? "Reemplazar imagen"
+												: "Replace image"
+											: lang === "es"
+												? "Subir imagen"
+												: "Upload image"}
+								</ActionButton>
+
+								{form.leadershipSection.image.url ? (
+									<>
+										<a
+											href={form.leadershipSection.image.url}
+											target="_blank"
+											rel="noreferrer"
+											className="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft"
+										>
+											<Eye className="mr-2 h-4 w-4" />
+											{lang === "es" ? "Ver" : "View"}
+										</a>
+
+										<ActionButton
+											type="button"
+											onClick={removeLeadershipImage}
+											className="text-status-error hover:text-status-error"
+										>
+											<X className="mr-2 h-4 w-4" />
+											{lang === "es" ? "Quitar imagen" : "Remove image"}
+										</ActionButton>
+									</>
+								) : null}
+							</div>
+						</div>
+					</div>
+				</div>
+			</SectionCard>
+
+			<SectionCard
+				icon={<ShieldCheck className="h-5 w-5" />}
+				title={lang === "es" ? "Por qué elegirnos" : "Why choose us"}
+				subtitle={
+					lang === "es"
+						? "Administra las razones clave visibles en la portada."
+						: "Manage the key reasons shown on the landing page."
+				}
+			>
+				<Toggle
+					label={lang === "es" ? "Mostrar sección" : "Show section"}
+					checked={form.whyChooseUs.enabled}
+					onChange={(value) =>
+						setForm((prev) => ({
+							...prev,
+							whyChooseUs: {
+								...prev.whyChooseUs,
+								enabled: value,
+							},
+						}))
+					}
+				/>
+
+				<div className="grid gap-5 md:grid-cols-2">
+					<div>
+						<FieldLabel>{lang === "es" ? "Título ES" : "Title ES"}</FieldLabel>
+						<TextInput
+							value={form.whyChooseUs.title.es}
+							onChange={(e) => updateWhyChooseUsTitle("es", e.target.value)}
+						/>
+					</div>
+
+					<div>
+						<FieldLabel>{lang === "es" ? "Título EN" : "Title EN"}</FieldLabel>
+						<TextInput
+							value={form.whyChooseUs.title.en}
+							onChange={(e) => updateWhyChooseUsTitle("en", e.target.value)}
+						/>
+					</div>
+				</div>
+
+				<div className="rounded-2xl border border-border bg-background p-4">
+					<div className="mb-4 flex items-center justify-between gap-3">
+						<SectionTitle>
+							{lang === "es" ? "Items" : "Items"}
+						</SectionTitle>
+
+						<ActionButton onClick={addWhyChooseUsItem}>
+							<Plus className="mr-2 h-4 w-4" />
+							{lang === "es" ? "Agregar item" : "Add item"}
+						</ActionButton>
+					</div>
+
+					{form.whyChooseUs.items.length === 0 ? (
+						<div className="rounded-xl border border-dashed border-border bg-surface p-4 text-sm text-text-secondary">
+							{lang === "es" ? "No hay items todavía." : "No items yet."}
+						</div>
+					) : (
+						<div className="space-y-4">
+							{form.whyChooseUs.items.map((item, index, list) => (
+								<div
+									key={`why-choose-us-item-${index}`}
+									className="rounded-xl border border-border bg-surface p-4"
+								>
+									<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+										<p className="text-sm font-medium text-text-primary">
+											{lang === "es" ? "Item" : "Item"} #{index + 1}
+										</p>
+
+										<div className="flex flex-wrap items-center gap-2">
+											<ActionButton
+												onClick={() => moveWhyChooseUsItem(index, "up")}
+												disabled={index === 0}
+											>
+												<ArrowUp className="h-4 w-4" />
+											</ActionButton>
+
+											<ActionButton
+												onClick={() => moveWhyChooseUsItem(index, "down")}
+												disabled={index === list.length - 1}
+											>
+												<ArrowDown className="h-4 w-4" />
+											</ActionButton>
+
+											<ActionButton
+												onClick={() => removeWhyChooseUsItem(index)}
+											>
+												<Trash2 className="h-4 w-4" />
+											</ActionButton>
+										</div>
+									</div>
+
+									<div className="grid gap-5 md:grid-cols-2">
+										<div>
+											<FieldLabel>{lang === "es" ? "Título ES" : "Title ES"}</FieldLabel>
+											<TextInput
+												value={item.title.es}
+												onChange={(e) =>
+													updateWhyChooseUsItem(
+														index,
+														"title",
+														"es",
+														e.target.value,
+													)
+												}
+											/>
+										</div>
+
+										<div>
+											<FieldLabel>{lang === "es" ? "Título EN" : "Title EN"}</FieldLabel>
+											<TextInput
+												value={item.title.en}
+												onChange={(e) =>
+													updateWhyChooseUsItem(
+														index,
+														"title",
+														"en",
+														e.target.value,
+													)
+												}
+											/>
+										</div>
+									</div>
+
+									<div className="mt-4 grid gap-5 md:grid-cols-2">
+										<div>
+											<FieldLabel>
+												{lang === "es" ? "Descripción ES" : "Description ES"}
+											</FieldLabel>
+											<TextArea
+												value={item.description.es}
+												onChange={(e) =>
+													updateWhyChooseUsItem(
+														index,
+														"description",
+														"es",
+														e.target.value,
+													)
+												}
+											/>
+										</div>
+
+										<div>
+											<FieldLabel>
+												{lang === "es" ? "Descripción EN" : "Description EN"}
+											</FieldLabel>
+											<TextArea
+												value={item.description.en}
+												onChange={(e) =>
+													updateWhyChooseUsItem(
+														index,
+														"description",
+														"en",
+														e.target.value,
+													)
+												}
+											/>
+										</div>
+									</div>
+								</div>
+							))}
+						</div>
+					)}
 				</div>
 			</SectionCard>
 

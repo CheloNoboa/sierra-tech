@@ -24,6 +24,11 @@
  * - El frontend persiste `fileKey`
  * - La vista previa se resuelve por `/api/admin/uploads/view?key=<fileKey>`
  *
+ * Reglas del módulo Home:
+ * - todos los assets del Home deben terminar persistidos como metadata estable
+ * - partners, leadership y documentos usan el mismo patrón de asset en DB
+ * - este endpoint solo recibe el binario y devuelve metadata persistible
+ *
  * EN:
  * Unified admin upload endpoint with validation and secure storage in R2.
  * =============================================================================
@@ -41,6 +46,8 @@ const ALLOWED_SCOPES = [
 	"site-settings/seo",
 	"home/hero",
 	"home/sections",
+	"home/partners/logos",
+	"home/partners/documents",
 	"home/leadership",
 	"services/covers",
 	"services/gallery",

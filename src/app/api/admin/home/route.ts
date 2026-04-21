@@ -18,13 +18,15 @@
  *   Reglas:
  *   - Se maneja una sola entidad global de Home.
  *   - GET garantiza existencia de documento global.
- *   - PUT normaliza estructura y persiste el payload completo.
- *   - La respuesta siempre mantiene contrato estable para la UI admin.
+ *   - PUT normaliza la estructura y persiste el payload completo.
+ *   - La respuesta siempre mantiene un contrato estable para la UI admin.
  *   - El botón de ubicación del bloque de cobertura se controla mediante una
  *     bandera explícita independiente del mapa embebido.
  *   - Los bloques institucionales adicionales del Home también se administran
  *     desde esta misma entidad global.
  *   - Partner Section soporta múltiples partners.
+ *   - Leadership Section mantiene la misma estructura de asset persistido
+ *     usada por el resto del módulo Home.
  *
  * EN:
  *   Administrative endpoint for reading and updating the structured public
@@ -61,6 +63,13 @@ function isAllowedRole(role: unknown): role is AllowedRole {
 	return role === "admin" || role === "superadmin";
 }
 
+/**
+ * Convierte el documento persistido en un payload estable para la capa admin.
+ *
+ * Regla:
+ * - nunca devuelve datos crudos del modelo sin pasar por normalización
+ * - garantiza que la UI reciba siempre el contrato oficial del Home
+ */
 function toResponsePayload(
 	doc: {
 		hero?: unknown;
@@ -203,6 +212,11 @@ export async function PUT(request: Request) {
 			);
 		}
 
+		/**
+		 * Regla:
+		 * - toda escritura pasa primero por la normalización centralizada
+		 * - esto evita persistir estructuras incompletas o legacy sin control
+		 */
 		const normalized = normalizeHomePayload(body);
 
 		const update = {

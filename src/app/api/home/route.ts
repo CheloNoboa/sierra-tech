@@ -1,11 +1,3 @@
-import { NextResponse } from "next/server";
-
-import { connectToDB } from "@/lib/connectToDB";
-import { HOME_DEFAULTS } from "@/lib/home/home.defaults";
-import { normalizeHomePayload } from "@/lib/home/home.normalize";
-import HomeSettings from "@/models/HomeSettings";
-import type { HomePayload } from "@/types/home";
-
 /**
  * =============================================================================
  * 📡 API Route: Public Home
@@ -16,27 +8,44 @@ import type { HomePayload } from "@/types/home";
  *   Endpoint público para exponer el contenido visible de la portada.
  *
  *   Responsabilidad:
- *   - Entregar únicamente contenido del módulo Home.
- *   - Reflejar lo persistido en HomeSettings.
- *   - No inventar contenido visible cuando la base aún no tiene datos.
+ *   - entregar únicamente contenido del módulo Home
+ *   - reflejar lo persistido en HomeSettings
+ *   - no inventar contenido visible cuando la base aún no tiene datos
  *
  *   Reglas:
- *   - Solo lectura pública.
- *   - No usa contratos duplicados locales.
- *   - Reutiliza el contrato compartido del Home.
- *   - Reutiliza la normalización centralizada del módulo Home.
- *   - Si no existe configuración, devuelve estructura vacía estable.
- *   - No modifica datos.
+ *   - solo lectura pública
+ *   - no usa contratos duplicados locales
+ *   - reutiliza el contrato compartido del Home
+ *   - reutiliza la normalización centralizada del módulo Home
+ *   - si no existe configuración, devuelve estructura vacía estable
+ *   - no modifica datos
+ *   - Leadership Section mantiene el mismo patrón de asset estructurado que
+ *     el resto de imágenes del Home
  *
  * EN:
  *   Public endpoint used to expose visible home-page content.
  * =============================================================================
  */
 
+import { NextResponse } from "next/server";
+
+import { connectToDB } from "@/lib/connectToDB";
+import { HOME_DEFAULTS } from "@/lib/home/home.defaults";
+import { normalizeHomePayload } from "@/lib/home/home.normalize";
+import HomeSettings from "@/models/HomeSettings";
+import type { HomePayload } from "@/types/home";
+
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Convierte el documento persistido en un payload público estable.
+ *
+ * Regla:
+ * - nunca expone datos crudos del modelo sin normalización
+ * - garantiza que el frontend público consuma siempre el contrato oficial
+ */
 function toPublicPayload(
 	doc: {
 		hero?: unknown;

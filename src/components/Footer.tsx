@@ -77,6 +77,7 @@ interface FooterSiteSettings {
 	identity: {
 		siteName: string;
 		siteNameShort: string;
+		tagline: LocalizedText;
 		logoLight: string;
 		logoDark: string;
 	};
@@ -118,6 +119,10 @@ const FOOTER_SITE_SETTINGS_DEFAULTS: FooterSiteSettings = {
 	identity: {
 		siteName: "",
 		siteNameShort: "",
+		tagline: {
+			es: "",
+			en: "",
+		},
 		logoLight: "",
 		logoDark: "",
 	},
@@ -205,6 +210,7 @@ function normalizeSiteSettings(payload: unknown): FooterSiteSettings {
 		identity: {
 			siteName: normalizeString(identity.siteName),
 			siteNameShort: normalizeString(identity.siteNameShort),
+			tagline: normalizeLocalizedText(identity.tagline),
 			logoLight: normalizeString(identity.logoLight),
 			logoDark: normalizeString(identity.logoDark),
 		},
@@ -329,6 +335,15 @@ export default function Footer() {
 	const businessLogotipo = useMemo(() => {
 		return normalizeImageSrc(siteSettings.identity.logoLight);
 	}, [siteSettings.identity.logoLight]);
+
+	const tagline = useMemo(() => {
+		const fromDb =
+			lang === "es"
+				? siteSettings.identity.tagline.es
+				: siteSettings.identity.tagline.en;
+
+		return fromDb.trim();
+	}, [lang, siteSettings.identity.tagline]);
 
 	const aboutText = useMemo(() => {
 		const fromDb =
@@ -475,9 +490,15 @@ export default function Footer() {
 								/>
 							) : null}
 
-							<h3 className="text-lg font-semibold text-text-primary">
+							<h3 className="text-lg font-semibold text-brand-primaryStrong">
 								{businessName}
 							</h3>
+
+							{tagline ? (
+								<p className="mt-2 text-sm font-medium text-text-primary/80">
+									{tagline}
+								</p>
+							) : null}
 						</div>
 
 						<p className="mt-3 text-sm leading-6 text-text-secondary">
@@ -582,11 +603,10 @@ export default function Footer() {
 						<button
 							type="button"
 							onClick={() => handleLocaleChange("es")}
-							className={`rounded px-3 py-1.5 transition ${
-								locale === "es"
-									? "bg-brand-primary text-text-primary"
-									: "text-text-secondary hover:bg-surface-soft hover:text-brand-primaryStrong"
-							}`}
+							className={`rounded px-3 py-1.5 transition ${locale === "es"
+								? "bg-brand-primary text-text-primary"
+								: "text-text-secondary hover:bg-surface-soft hover:text-brand-primaryStrong"
+								}`}
 						>
 							ES
 						</button>
@@ -596,11 +616,10 @@ export default function Footer() {
 						<button
 							type="button"
 							onClick={() => handleLocaleChange("en")}
-							className={`rounded px-3 py-1.5 transition ${
-								locale === "en"
-									? "bg-brand-primary text-text-primary"
-									: "text-text-secondary hover:bg-surface-soft hover:text-brand-primaryStrong"
-							}`}
+							className={`rounded px-3 py-1.5 transition ${locale === "en"
+								? "bg-brand-primary text-text-primary"
+								: "text-text-secondary hover:bg-surface-soft hover:text-brand-primaryStrong"
+								}`}
 						>
 							EN
 						</button>
