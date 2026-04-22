@@ -66,14 +66,16 @@ interface PortalAlertsPageProps {
 function formatDateLabel(value: string | null | undefined): string {
 	if (!value) return "—";
 
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return "—";
+	const safeValue = value.split("T")[0];
+	const parts = safeValue.split("-");
 
-	return new Intl.DateTimeFormat("es-EC", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).format(date);
+	if (parts.length !== 3) return "—";
+
+	const [year, month, day] = parts;
+
+	if (!year || !month || !day) return "—";
+
+	return `${day}/${month}/${year}`;
 }
 
 function normalizeFilterValue(value: string | undefined): string {
@@ -115,12 +117,31 @@ function formatAlertPriority(value: PortalAlertItem["priority"]): string {
 function formatActionLabel(item: PortalAlertItem): string {
 	switch (item.action) {
 		case "view_document":
-			return "Revisar documentos";
+			return "Ver documentos";
 		case "contact_support":
 			return "Ir a soporte";
 		case "view_project":
 		default:
-			return "Revisar proyecto";
+			return "Revisar";
+	}
+}
+
+function getAlertDateTitle(item: PortalAlertItem): string {
+	switch (item.type) {
+		case "maintenance_upcoming":
+			return "Próximo mantenimiento";
+		case "maintenance_overdue":
+			return "Mantenimiento vencido";
+		case "document_expiring":
+			return "Vencimiento documental";
+		case "warranty_expiring":
+			return "Vencimiento de garantía";
+		case "scheduled_review":
+			return "Revisión programada";
+		case "critical":
+			return "Fecha crítica";
+		default:
+			return "Fecha";
 	}
 }
 
@@ -132,9 +153,7 @@ function getActionHref(item: PortalAlertItem): string {
 			return "/portal/support";
 		case "view_project":
 		default:
-			return item.projectId
-				? `/portal/projects/${item.projectId}`
-				: "/portal/projects";
+			return item.projectId ? `/portal/projects/${item.projectId}` : "/portal/projects";
 	}
 }
 
@@ -170,6 +189,7 @@ function getUniqueProjectOptions(items: PortalAlertItem[]): Array<{
 		const projectTitle = item.projectTitle?.trim() ?? "";
 
 		if (!projectId || !projectTitle) continue;
+
 		if (!map.has(projectId)) {
 			map.set(projectId, projectTitle);
 		}
@@ -207,6 +227,20 @@ function getAlertCardClasses(priority: PortalAlertItem["priority"]): string {
 		default:
 			return "border-border bg-white";
 	}
+}
+
+function shouldShowPrimaryActionButton(item: PortalAlertItem): boolean {
+	/**
+	 * Regla:
+	 * - si la alerta trae adjuntos de mantenimiento, el foco principal son esos
+	 *   documentos; no se necesita duplicar el CTA general inmediatamente debajo
+	 * - en alertas documentales o soporte sí se muestra CTA principal
+	 */
+	if (item.attachments.length > 0) {
+		return false;
+	}
+
+	return true;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -373,6 +407,35 @@ function FilterBar({
 	);
 }
 
+function MaintenanceAttachmentsBlock({ item }: { item: PortalAlertItem }) {
+	if (!item.attachments || item.attachments.length === 0) {
+		return null;
+	}
+
+	return (
+		<div className="mt-5 rounded-2xl border border-border bg-surface px-4 py-4">
+			<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+				Documentos del mantenimiento
+			</p>
+
+			<div className="mt-3 flex flex-wrap gap-3">
+				{item.attachments.map((attachment, index) => (
+					<a
+						key={`${item.alertId}-attachment-${index}`}
+						href={attachment.fileUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+					>
+						{attachment.fileName?.trim() || `Ver documento ${index + 1}`}
+						<ArrowRight className="h-4 w-4" />
+					</a>
+				))}
+			</div>
+		</div>
+	);
+}
+
 function AlertCard({ item }: { item: PortalAlertItem }) {
 	const actionHref = getActionHref(item);
 	const actionLabel = formatActionLabel(item);
@@ -432,33 +495,27 @@ function AlertCard({ item }: { item: PortalAlertItem }) {
 
 				<div className="rounded-2xl border border-border bg-surface px-4 py-3">
 					<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-						Fecha relevante
+						{getAlertDateTitle(item)}
 					</p>
 					<p className="mt-2 text-sm font-semibold text-text-primary">
-						{formatDateLabel(item.dueDate ?? item.createdAt)}
+						{formatDateLabel(item.dueDate)}
 					</p>
 				</div>
 			</div>
 
-			<div className="mt-5 flex flex-wrap gap-3">
-				<Link
-					href={actionHref}
-					className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
-				>
-					{actionLabel}
-					<ArrowRight className="h-4 w-4" />
-				</Link>
+			<MaintenanceAttachmentsBlock item={item} />
 
-				{item.projectId && item.action !== "view_project" ? (
+			{shouldShowPrimaryActionButton(item) ? (
+				<div className="mt-5">
 					<Link
-						href={`/portal/projects/${item.projectId}`}
-						className="inline-flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+						href={actionHref}
+						className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
 					>
-						Ver proyecto
+						{actionLabel}
 						<ArrowRight className="h-4 w-4" />
 					</Link>
-				) : null}
-			</div>
+				</div>
+			) : null}
 		</article>
 	);
 }

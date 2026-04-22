@@ -23,6 +23,10 @@
  *   - prioridad
  *   - fecha relevante
  *   - fecha de creación
+ * - este archivo no reinterpreta la lógica de negocio del mapper:
+ *   - consume alertas ya proyectadas
+ *   - no elimina adjuntos
+ *   - no reescribe acciones
  *
  * Reglas:
  * - este archivo no depende de NextAuth
@@ -65,8 +69,34 @@ export interface PortalAlertsData {
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Parsea una fecha ISO de manera segura.
+ *
+ * Regla:
+ * - si la fecha es inválida o vacía, retorna null
+ * - evita NaN propagados en ordenamientos
+ */
+function parseSafeDate(value: string | null | undefined): Date | null {
+	if (!value) return null;
+
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) return null;
+
+	return parsed;
+}
+
+/**
+ * Comparador ascendente defensivo.
+ *
+ * Regla:
+ * - fechas válidas primero
+ * - fechas inválidas o vacías al final
+ */
 function compareIsoAsc(a: string, b: string): number {
-	return new Date(a).getTime() - new Date(b).getTime();
+	const aTime = parseSafeDate(a)?.getTime() ?? Number.POSITIVE_INFINITY;
+	const bTime = parseSafeDate(b)?.getTime() ?? Number.POSITIVE_INFINITY;
+
+	return aTime - bTime;
 }
 
 function getPriorityWeight(priority: PortalAlertItem["priority"]): number {
@@ -82,11 +112,26 @@ function getPriorityWeight(priority: PortalAlertItem["priority"]): number {
 	}
 }
 
+/**
+ * Orden oficial de alertas para el portal.
+ *
+ * Prioridad:
+ * 1. prioridad visible
+ * 2. dueDate / createdAt
+ * 3. título
+ *
+ * Nota:
+ * - este helper no toca attachments ni demás payload
+ * - solo ordena
+ */
 function sortPortalAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
 	return [...items].sort((a, b) => {
 		const byPriority =
 			getPriorityWeight(a.priority) - getPriorityWeight(b.priority);
-		if (byPriority !== 0) return byPriority;
+
+		if (byPriority !== 0) {
+			return byPriority;
+		}
 
 		const aDate = a.dueDate ?? a.createdAt ?? "";
 		const bDate = b.dueDate ?? b.createdAt ?? "";
@@ -98,14 +143,62 @@ function sortPortalAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
 		if (aDate) return -1;
 		if (bDate) return 1;
 
-		return a.title.localeCompare(b.title, "es", { sensitivity: "base" });
+		return a.title.localeCompare(b.title, "es", {
+			sensitivity: "base",
+		});
 	});
+}
+
+/**
+ * Resumen agregado usado por la página /portal/alerts.
+ */
+function buildPortalAlertsSummary(items: PortalAlertItem[]): PortalAlertsSummary {
+	return {
+		totalAlerts: items.length,
+		upcomingMaintenances: items.filter(
+			(item) => item.type === "maintenance_upcoming",
+		).length,
+		expiringDocuments: items.filter(
+			(item) =>
+				item.type === "document_expiring" ||
+				item.type === "warranty_expiring" ||
+				item.type === "scheduled_review",
+		).length,
+		overdueAlerts: items.filter(
+			(item) => item.type === "maintenance_overdue",
+		).length,
+		highPriorityAlerts: items.filter((item) => item.priority === "high").length,
+	};
+}
+
+function getRelatedProjectsCount(items: PortalAlertItem[]): number {
+	return new Set(
+		items
+			.map((item) => item.projectId?.trim() ?? "")
+			.filter((value) => value.length > 0),
+	).size;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Public API                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Obtiene todas las alertas visibles para una organización cliente.
+ *
+ * Flujo:
+ * - conecta a DB
+ * - consulta proyectos por organizationId
+ * - normaliza entidades
+ * - filtra solo proyectos visibles en portal
+ * - extrae alertas desde los mappers del portal
+ * - ordena y resume resultados
+ *
+ * Importante:
+ * - si los adjuntos de mantenimiento fueron correctamente proyectados en
+ *   portalProjectMappers, aquí se conservan tal cual
+ * - este archivo no vacía ni transforma item.attachments
+ */
 export async function getPortalAlertsByOrganization(
 	organizationId: string,
 ): Promise<PortalAlertsData> {
@@ -137,37 +230,19 @@ export async function getPortalAlertsByOrganization(
 		.map((item) => normalizeProjectEntity(item))
 		.filter(isPortalVisibleProject);
 
+	/**
+	 * Las alertas ya salen tipadas y proyectadas desde portalProjectMappers.
+	 * Aquí únicamente se consolidan.
+	 */
 	const alerts = sortPortalAlerts(
 		normalizedProjects.flatMap((project) =>
 			extractPortalAlertsFromProject(project),
 		),
 	);
 
-	const uniqueProjects = new Set(
-		alerts
-			.map((item) => item.projectId?.trim() ?? "")
-			.filter((value) => value.length > 0),
-	);
-
 	return {
 		items: alerts,
-		summary: {
-			totalAlerts: alerts.length,
-			upcomingMaintenances: alerts.filter(
-				(item) => item.type === "maintenance_upcoming",
-			).length,
-			expiringDocuments: alerts.filter(
-				(item) =>
-					item.type === "document_expiring" ||
-					item.type === "warranty_expiring" ||
-					item.type === "scheduled_review",
-			).length,
-			overdueAlerts: alerts.filter(
-				(item) => item.type === "maintenance_overdue",
-			).length,
-			highPriorityAlerts: alerts.filter((item) => item.priority === "high")
-				.length,
-		},
-		relatedProjectsCount: uniqueProjects.size,
+		summary: buildPortalAlertsSummary(alerts),
+		relatedProjectsCount: getRelatedProjectsCount(alerts),
 	};
 }

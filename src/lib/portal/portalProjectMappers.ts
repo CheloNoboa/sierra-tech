@@ -20,15 +20,19 @@
  * - listado de proyectos del portal
  * - detalle de proyecto del portal
  * - filtrado de documentos visibles en portal
- * - proyección básica de mantenimientos y alertas documentales
- * - incorporación de adjuntos de mantenimiento dentro de la biblioteca
- *   documental visible del portal
+ * - proyección de mantenimientos visibles
+ * - generación de alertas derivadas desde mantenimientos y documentos
+ * - incorporación de adjuntos de mantenimiento dentro de:
+ *   - biblioteca documental visible del portal
+ *   - alertas de mantenimiento del portal
  *
  * Decisiones:
  * - el portal no expone estados administrativos complejos
  * - archived no debe llegar al portal
  * - published se proyecta como active
  * - draft se proyecta como follow_up
+ * - si existe mantenimiento vencido, el portal prioriza estado maintenance
+ *   por encima del estado editorial del proyecto
  * - los documentos visibles en portal dependen de:
  *   - visibleInPortal = true
  *   - visibleToInternalOnly = false
@@ -54,6 +58,7 @@
  */
 
 import type {
+	PortalAlertAttachment,
 	PortalAlertItem,
 	PortalDocumentItem,
 	PortalMaintenanceItem,
@@ -61,6 +66,7 @@ import type {
 	PortalProjectDetail,
 	PortalProjectVisibleStatus,
 } from "@/types/portal";
+
 import type {
 	ProjectDocumentLink,
 	ProjectEntity,
@@ -68,44 +74,326 @@ import type {
 } from "@/types/project";
 
 /* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
+/* Local helper types                                                         */
 /* -------------------------------------------------------------------------- */
 
+type LocalizedTextLike =
+	| {
+		es?: string | null;
+		en?: string | null;
+	}
+	| null
+	| undefined;
+
+/* -------------------------------------------------------------------------- */
+/* Primitive helpers                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Normaliza strings opcionales para evitar propagar:
+ * - undefined
+ * - null
+ * - strings vacíos o con espacios
+ */
 function normalizeNonEmptyString(
 	value: string | null | undefined,
 ): string | null {
 	if (typeof value !== "string") return null;
+
 	const trimmed = value.trim();
 	return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * Lee un localized text con fallback defensivo entre ES y EN.
+ *
+ * Regla:
+ * - primero intenta preferredLocale
+ * - si está vacío, usa el idioma alterno
+ * - si ambos están vacíos, retorna ""
+ */
 function safeLocalizedText(
-	value: { es: string; en: string } | null | undefined,
+	value: LocalizedTextLike,
 	preferredLocale: "es" | "en" = "es",
 ): string {
 	if (!value) return "";
 
-	const primary = preferredLocale === "es" ? value.es : value.en;
-	const fallback = preferredLocale === "es" ? value.en : value.es;
+	const primary =
+		preferredLocale === "es"
+			? normalizeNonEmptyString(value.es ?? null)
+			: normalizeNonEmptyString(value.en ?? null);
 
-	return (
-		normalizeNonEmptyString(primary) ?? normalizeNonEmptyString(fallback) ?? ""
-	);
+	const fallback =
+		preferredLocale === "es"
+			? normalizeNonEmptyString(value.en ?? null)
+			: normalizeNonEmptyString(value.es ?? null);
+
+	return primary ?? fallback ?? "";
+}
+
+/**
+ * Parsea una fecha ISO de forma segura.
+ */
+function parseSafeDate(value: string | null | undefined): Date | null {
+	if (!value) return null;
+
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) return null;
+
+	return parsed;
+}
+
+function isPastDate(value: string | null | undefined): boolean {
+	const parsed = parseSafeDate(value);
+	if (!parsed) return false;
+
+	return parsed.getTime() < Date.now();
 }
 
 function isFutureDate(value: string | null | undefined): boolean {
-	if (!value) return false;
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return false;
-	return date.getTime() >= Date.now();
+	const parsed = parseSafeDate(value);
+	if (!parsed) return false;
+
+	return parsed.getTime() >= Date.now();
 }
 
+/**
+ * Comparadores robustos para fechas ISO.
+ *
+ * Regla:
+ * - asc: fechas inválidas van al final
+ * - desc: fechas inválidas van al final
+ */
 function compareIsoAsc(a: string, b: string): number {
-	return new Date(a).getTime() - new Date(b).getTime();
+	const aTime = parseSafeDate(a)?.getTime() ?? Number.POSITIVE_INFINITY;
+	const bTime = parseSafeDate(b)?.getTime() ?? Number.POSITIVE_INFINITY;
+
+	return aTime - bTime;
 }
 
 function compareIsoDesc(a: string, b: string): number {
-	return new Date(b).getTime() - new Date(a).getTime();
+	const aTime = parseSafeDate(a)?.getTime() ?? Number.NEGATIVE_INFINITY;
+	const bTime = parseSafeDate(b)?.getTime() ?? Number.NEGATIVE_INFINITY;
+
+	return bTime - aTime;
+}
+
+/**
+ * Formato corto visual usado por descripciones humanas del portal.
+ */
+function formatPortalShortDate(value: string | null | undefined): string | null {
+	const parsed = parseSafeDate(value);
+	if (!parsed) return null;
+
+	return new Intl.DateTimeFormat("es-EC", {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).format(parsed);
+}
+
+/**
+ * Obtiene la fecha más temprana, si existe al menos una válida.
+ */
+function getEarliestDate(
+	values: Array<string | null | undefined>,
+): string | null {
+	const safeDates = values
+		.filter((value): value is string => !!parseSafeDate(value))
+		.sort(compareIsoAsc);
+
+	return safeDates[0] ?? null;
+}
+
+/**
+ * Obtiene la próxima fecha futura más cercana.
+ */
+function getEarliestFutureDate(
+	values: Array<string | null | undefined>,
+): string | null {
+	const safeDates = values
+		.filter((value): value is string => !!parseSafeDate(value))
+		.filter((value) => isFutureDate(value))
+		.sort(compareIsoAsc);
+
+	return safeDates[0] ?? null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* File / media helpers                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Resuelve URLs consumibles por el portal.
+ *
+ * Casos soportados:
+ * - URL absoluta http/https
+ * - path local "/..."
+ * - storage key bajo prefijo admin/
+ * - fallback directo por storageKey
+ */
+function resolvePortalFileUrl(
+	value: string | null | undefined,
+	storageKey?: string | null,
+): string {
+	const directUrl = normalizeNonEmptyString(value);
+
+	if (directUrl) {
+		if (
+			directUrl.startsWith("http://") ||
+			directUrl.startsWith("https://") ||
+			directUrl.startsWith("/")
+		) {
+			return directUrl;
+		}
+
+		if (directUrl.startsWith("admin/")) {
+			return `/api/admin/uploads/view?key=${encodeURIComponent(directUrl)}`;
+		}
+	}
+
+	const safeStorageKey = normalizeNonEmptyString(storageKey);
+
+	if (safeStorageKey) {
+		return `/api/admin/uploads/view?key=${encodeURIComponent(safeStorageKey)}`;
+	}
+
+	return "";
+}
+
+/**
+ * Resuelve la portada visible del proyecto para portal.
+ */
+function resolveProjectCoverImageUrl(project: ProjectEntity): string | null {
+	const resolved = resolvePortalFileUrl(
+		project.coverImage?.url ?? null,
+		project.coverImage?.storageKey ?? null,
+	);
+
+	return normalizeNonEmptyString(resolved);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Domain helpers                                                             */
+/* -------------------------------------------------------------------------- */
+
+function resolveMaintenanceTypeLabel(
+	value: string | null | undefined,
+): string | null {
+	const safe = normalizeNonEmptyString(value)?.toLowerCase();
+	if (!safe) return null;
+
+	switch (safe) {
+		case "preventive":
+			return "Mantenimiento preventivo";
+		case "corrective":
+			return "Mantenimiento correctivo";
+		case "inspection":
+			return "Inspección";
+		case "cleaning":
+			return "Limpieza técnica";
+		case "replacement":
+			return "Reemplazo";
+		case "other":
+			return "Mantenimiento";
+		default:
+			return normalizeNonEmptyString(value);
+	}
+}
+
+/**
+ * Determina si un mantenimiento debe mostrarse como vencido en portal.
+ *
+ * Regla:
+ * - si el status ya viene overdue, se respeta
+ * - si la fecha nextDueDate ya pasó, también se considera overdue
+ */
+function isMaintenanceEffectivelyOverdue(
+	item: ProjectMaintenanceItem,
+): boolean {
+	if (item.status === "overdue") return true;
+	if (!item.nextDueDate) return false;
+
+	return isPastDate(item.nextDueDate);
+}
+
+function buildMaintenanceAlertDescription(
+	project: ProjectEntity,
+	item: ProjectMaintenanceItem,
+	isOverdue: boolean,
+): string {
+	const projectTitle = safeLocalizedText(project.title) || "este proyecto";
+
+	const maintenanceTitle = normalizeNonEmptyString(item.title);
+	const maintenanceTypeLabel = resolveMaintenanceTypeLabel(item.maintenanceType);
+	const dueDateLabel = formatPortalShortDate(item.nextDueDate);
+
+	const baseDescription =
+		normalizeNonEmptyString(item.description) ??
+		normalizeNonEmptyString(item.instructions);
+
+	if (baseDescription) {
+		return baseDescription;
+	}
+
+	if (maintenanceTitle && dueDateLabel) {
+		return isOverdue
+			? `${maintenanceTitle} vencido desde ${dueDateLabel} en ${projectTitle}.`
+			: `${maintenanceTitle} programado para ${dueDateLabel} en ${projectTitle}.`;
+	}
+
+	if (maintenanceTypeLabel && dueDateLabel) {
+		return isOverdue
+			? `${maintenanceTypeLabel} vencido desde ${dueDateLabel} en ${projectTitle}.`
+			: `${maintenanceTypeLabel} programado para ${dueDateLabel} en ${projectTitle}.`;
+	}
+
+	if (maintenanceTitle) {
+		return isOverdue
+			? `${maintenanceTitle} requiere atención en ${projectTitle}.`
+			: `${maintenanceTitle} tiene seguimiento próximo en ${projectTitle}.`;
+	}
+
+	if (maintenanceTypeLabel) {
+		return isOverdue
+			? `${maintenanceTypeLabel} requiere atención en ${projectTitle}.`
+			: `${maintenanceTypeLabel} próximo para ${projectTitle}.`;
+	}
+
+	return isOverdue
+		? `Existe un mantenimiento vencido que requiere atención en ${projectTitle}.`
+		: `Existe un mantenimiento próximo asociado a ${projectTitle}.`;
+}
+
+function buildDocumentAlertDescription(
+	project: ProjectEntity,
+	document: ProjectDocumentLink,
+): string {
+	const projectTitle = safeLocalizedText(project.title) || "este proyecto";
+
+	const documentTitle = normalizeNonEmptyString(document.title);
+	const dueDate = document.nextDueDate ?? document.alertDate;
+	const dueDateLabel = formatPortalShortDate(dueDate);
+
+	const baseDescription = normalizeNonEmptyString(document.description);
+
+	if (baseDescription) {
+		return baseDescription;
+	}
+
+	if (documentTitle && dueDateLabel) {
+		return `${documentTitle} tiene una fecha relevante el ${dueDateLabel} en ${projectTitle}.`;
+	}
+
+	if (documentTitle) {
+		return `${documentTitle} requiere seguimiento dentro de ${projectTitle}.`;
+	}
+
+	if (dueDateLabel) {
+		return `Existe un documento con fecha relevante el ${dueDateLabel} en ${projectTitle}.`;
+	}
+
+	return `Existe un documento con seguimiento pendiente en ${projectTitle}.`;
 }
 
 /**
@@ -120,23 +408,20 @@ function compareIsoDesc(a: string, b: string): number {
  */
 function resolvePortalProjectCategory(project: ProjectEntity): string | null {
 	const systemType = normalizeNonEmptyString(
-		project.systemType?.es || project.systemType?.en || "",
+		safeLocalizedText(project.systemType),
 	);
 	if (systemType) return systemType;
 
 	const treatedMedium = normalizeNonEmptyString(
-		project.treatedMedium?.es || project.treatedMedium?.en || "",
+		safeLocalizedText(project.treatedMedium),
 	);
 	if (treatedMedium) return treatedMedium;
 
 	const firstTechnology =
 		project.technologyUsed && typeof project.technologyUsed === "object"
-			? [
-					...(project.technologyUsed.es || []),
-					...(project.technologyUsed.en || []),
-				]
-					.map((item) => normalizeNonEmptyString(item))
-					.find((item): item is string => !!item)
+			? [...(project.technologyUsed.es || []), ...(project.technologyUsed.en || [])]
+				.map((item) => normalizeNonEmptyString(item))
+				.find((item): item is string => !!item)
 			: null;
 
 	if (firstTechnology) return firstTechnology;
@@ -144,15 +429,23 @@ function resolvePortalProjectCategory(project: ProjectEntity): string | null {
 	return null;
 }
 
+/**
+ * Estado visible simplificado del proyecto para el portal.
+ *
+ * Regla:
+ * - maintenance tiene prioridad si existe mantenimiento vencido
+ * - active aplica a published sin vencimiento operativo
+ * - follow_up cubre drafts / seguimiento general
+ */
 function buildPortalVisibleStatus(
 	project: ProjectEntity,
 ): PortalProjectVisibleStatus {
-	if (project.status === "published") {
-		return "active";
+	if (project.maintenanceItems.some(isMaintenanceEffectivelyOverdue)) {
+		return "maintenance";
 	}
 
-	if (project.maintenanceItems.some((item) => item.status === "overdue")) {
-		return "maintenance";
+	if (project.status === "published") {
+		return "active";
 	}
 
 	return "follow_up";
@@ -162,9 +455,26 @@ function isPortalVisibleDocument(document: ProjectDocumentLink): boolean {
 	return document.visibleInPortal && !document.visibleToInternalOnly;
 }
 
+function getDocumentRelevantDate(document: ProjectDocumentLink): string | null {
+	return document.nextDueDate ?? document.alertDate ?? document.documentDate ?? null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Document mappers                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Convierte un documento estructurado del proyecto al contrato del portal.
+ *
+ * Nota:
+ * - PortalDocumentItem sí contempla effectiveDate
+ * - ProjectDocumentLink NO lo tiene en el contrato actual
+ * - por eso aquí se proyecta como null
+ */
 function mapProjectDocumentToPortalDocumentItem(
 	project: ProjectEntity,
 	document: ProjectDocumentLink,
+	documentIndex: number,
 ): PortalDocumentItem {
 	const fallbackFileNameFromUrl = normalizeNonEmptyString(document.fileUrl)
 		? decodeURIComponent(document.fileUrl.split("/").pop() ?? "")
@@ -176,7 +486,7 @@ function mapProjectDocumentToPortalDocumentItem(
 	return {
 		documentId:
 			normalizeNonEmptyString(document.documentId) ??
-			`${project._id}-document-${document.sortOrder}`,
+			`${project._id}-document-${documentIndex}`,
 		title: normalizeNonEmptyString(document.title) ?? "Documento sin título",
 		description: normalizeNonEmptyString(document.description),
 		type: document.documentType,
@@ -185,7 +495,7 @@ function mapProjectDocumentToPortalDocumentItem(
 		projectTitle: safeLocalizedText(project.title),
 		maintenanceId: null,
 		maintenanceTitle: null,
-		fileUrl: document.fileUrl,
+		fileUrl: resolvePortalFileUrl(document.fileUrl, document.storageKey ?? null),
 		fileName: resolvedFileName,
 		mimeType: normalizeNonEmptyString(document.mimeType),
 		fileSizeBytes: document.size ?? null,
@@ -219,7 +529,11 @@ function mapMaintenanceAttachmentsToPortalDocuments(
 		normalizeNonEmptyString(maintenance.title) ?? "Mantenimiento";
 
 	return (maintenance.attachments ?? [])
-		.filter((attachment) => normalizeNonEmptyString(attachment.url))
+		.filter(
+			(attachment) =>
+				!!normalizeNonEmptyString(attachment.url) ||
+				!!normalizeNonEmptyString(attachment.storageKey),
+		)
 		.map((attachment, attachmentIndex) => {
 			const fileName =
 				normalizeNonEmptyString(attachment.name) ??
@@ -235,7 +549,7 @@ function mapMaintenanceAttachmentsToPortalDocuments(
 				projectTitle: safeLocalizedText(project.title),
 				maintenanceId,
 				maintenanceTitle,
-				fileUrl: attachment.url,
+				fileUrl: resolvePortalFileUrl(attachment.url, attachment.storageKey),
 				fileName,
 				mimeType: normalizeNonEmptyString(attachment.mimeType),
 				fileSizeBytes: attachment.size ?? null,
@@ -250,127 +564,14 @@ function mapMaintenanceAttachmentsToPortalDocuments(
 		});
 }
 
-function mapProjectMaintenanceToPortalMaintenanceItem(
-	project: ProjectEntity,
-	item: ProjectMaintenanceItem,
-	index: number,
-): PortalMaintenanceItem {
-	const normalizedStatus =
-		item.status === "overdue"
-			? "overdue"
-			: item.status === "completed"
-				? "completed"
-				: item.nextDueDate && isFutureDate(item.nextDueDate)
-					? "upcoming"
-					: "scheduled";
-
-	return {
-		maintenanceId: `${project._id}-maintenance-${index}`,
-		projectId: project._id,
-		projectTitle: safeLocalizedText(project.title),
-		title: normalizeNonEmptyString(item.title) ?? "Mantenimiento",
-		description: normalizeNonEmptyString(item.description),
-		maintenanceType: normalizeNonEmptyString(item.maintenanceType),
-		frequencyValue: item.frequencyValue,
-		frequencyUnit: item.frequencyUnit,
-		lastCompletedDate: item.lastCompletedDate,
-		nextDueDate: item.nextDueDate,
-		status: normalizedStatus,
-		instructions: normalizeNonEmptyString(item.instructions),
-		attachments: item.attachments.map((attachment) => ({
-			fileName: normalizeNonEmptyString(attachment.name),
-			fileUrl: attachment.url,
-			mimeType: normalizeNonEmptyString(attachment.mimeType),
-		})),
-	};
-}
-
-function buildMaintenanceAlerts(project: ProjectEntity): PortalAlertItem[] {
-	return project.maintenanceItems
-		.filter((item) => !!item.nextDueDate)
-		.map((item, index) => {
-			const isOverdue = item.status === "overdue";
-			const title =
-				normalizeNonEmptyString(item.title) ?? "Mantenimiento programado";
-
-			return {
-				alertId: `${project._id}-maintenance-alert-${index}`,
-				type: isOverdue ? "maintenance_overdue" : "maintenance_upcoming",
-				priority: isOverdue ? "high" : "medium",
-				title,
-				description: isOverdue
-					? "Existe un mantenimiento vencido asociado a este proyecto."
-					: "Existe un mantenimiento próximo asociado a este proyecto.",
-				projectId: project._id,
-				projectTitle: safeLocalizedText(project.title),
-				documentId: null,
-				documentTitle: null,
-				dueDate: item.nextDueDate,
-				createdAt: project.updatedAt,
-				action: "view_project",
-			};
-		});
-}
-
-function buildDocumentAlerts(project: ProjectEntity): PortalAlertItem[] {
-	return project.documents
-		.filter(isPortalVisibleDocument)
-		.filter(
-			(document) =>
-				document.requiresAlert &&
-				(!!document.alertDate || !!document.nextDueDate),
-		)
-		.map((document, index) => {
-			const dueDate = document.nextDueDate ?? document.alertDate;
-			const isCritical = document.isCritical;
-
-			return {
-				alertId: `${project._id}-document-alert-${index}`,
-				type:
-					document.documentType === "warranty"
-						? "warranty_expiring"
-						: "document_expiring",
-				priority: isCritical ? "high" : "medium",
-				title:
-					normalizeNonEmptyString(document.title) ??
-					"Documento con fecha relevante",
-				description:
-					"Existe un documento con fecha crítica o seguimiento próximo en este proyecto.",
-				projectId: project._id,
-				projectTitle: safeLocalizedText(project.title),
-				documentId:
-					normalizeNonEmptyString(document.documentId) ??
-					`${project._id}-document-${index}`,
-				documentTitle: normalizeNonEmptyString(document.title),
-				dueDate,
-				createdAt: project.updatedAt,
-				action: "view_document",
-			};
-		});
-}
-
-function buildProjectAlerts(project: ProjectEntity): PortalAlertItem[] {
-	return [
-		...buildMaintenanceAlerts(project),
-		...buildDocumentAlerts(project),
-	].sort((a, b) => {
-		const aDate = a.dueDate ?? a.createdAt ?? "";
-		const bDate = b.dueDate ?? b.createdAt ?? "";
-		if (!aDate && !bDate) return 0;
-		if (!aDate) return 1;
-		if (!bDate) return -1;
-		return compareIsoAsc(aDate, bDate);
-	});
-}
-
 function getVisiblePortalDocuments(
 	project: ProjectEntity,
 ): PortalDocumentItem[] {
 	const structuredDocuments = project.documents
 		.filter(isPortalVisibleDocument)
 		.sort((a, b) => a.sortOrder - b.sortOrder)
-		.map((document) =>
-			mapProjectDocumentToPortalDocumentItem(project, document),
+		.map((document, index) =>
+			mapProjectDocumentToPortalDocumentItem(project, document, index),
 		);
 
 	const maintenanceAttachmentDocuments = project.maintenanceItems.flatMap(
@@ -402,6 +603,53 @@ function getVisiblePortalDocuments(
 	);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Maintenance mappers                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Convierte un mantenimiento del proyecto al contrato visible del portal.
+ */
+function mapProjectMaintenanceToPortalMaintenanceItem(
+	project: ProjectEntity,
+	item: ProjectMaintenanceItem,
+	index: number,
+): PortalMaintenanceItem {
+	const normalizedStatus =
+		item.status === "completed"
+			? "completed"
+			: isMaintenanceEffectivelyOverdue(item)
+				? "overdue"
+				: item.nextDueDate && isFutureDate(item.nextDueDate)
+					? "upcoming"
+					: "scheduled";
+
+	return {
+		maintenanceId: `${project._id}-maintenance-${index}`,
+		projectId: project._id,
+		projectTitle: safeLocalizedText(project.title),
+		title: normalizeNonEmptyString(item.title) ?? "Mantenimiento",
+		description: normalizeNonEmptyString(item.description),
+		maintenanceType: normalizeNonEmptyString(item.maintenanceType),
+		frequencyValue: item.frequencyValue,
+		frequencyUnit: item.frequencyUnit,
+		lastCompletedDate: item.lastCompletedDate,
+		nextDueDate: item.nextDueDate,
+		status: normalizedStatus,
+		instructions: normalizeNonEmptyString(item.instructions),
+		attachments: (item.attachments ?? [])
+			.map((attachment) => ({
+				fileName: normalizeNonEmptyString(attachment.name),
+				fileUrl: resolvePortalFileUrl(
+					attachment.url,
+					attachment.storageKey ?? null,
+				),
+				mimeType: normalizeNonEmptyString(attachment.mimeType),
+			}))
+			.filter((attachment) => !!normalizeNonEmptyString(attachment.fileUrl)),
+	};
+}
+
 function getVisiblePortalMaintenances(
 	project: ProjectEntity,
 ): PortalMaintenanceItem[] {
@@ -412,45 +660,222 @@ function getVisiblePortalMaintenances(
 		.sort((a, b) => {
 			const aDate = a.nextDueDate;
 			const bDate = b.nextDueDate;
+
 			if (!aDate && !bDate) return 0;
 			if (!aDate) return 1;
 			if (!bDate) return -1;
+
 			return compareIsoAsc(aDate, bDate);
 		});
 }
 
-function getNextMaintenanceDate(project: ProjectEntity): string | null {
-	const dates = project.maintenanceItems
-		.map((item) => item.nextDueDate)
-		.filter((value): value is string => !!value)
-		.sort(compareIsoAsc);
+/* -------------------------------------------------------------------------- */
+/* Alert attachment helpers                                                   */
+/* -------------------------------------------------------------------------- */
 
-	return dates[0] ?? null;
+/**
+ * Convierte adjuntos de mantenimiento al contrato de adjuntos visible dentro
+ * de una alerta del portal.
+ *
+ * Esto permite que la página /portal/alerts pueda mostrar enlaces reales a los
+ * documentos asociados al mantenimiento que originó la alerta.
+ */
+function mapMaintenanceAttachmentsToPortalAlertAttachments(
+	maintenance: ProjectMaintenanceItem,
+): PortalAlertAttachment[] {
+	return (maintenance.attachments ?? [])
+		.filter(
+			(attachment) =>
+				!!normalizeNonEmptyString(attachment.url) ||
+				!!normalizeNonEmptyString(attachment.storageKey),
+		)
+		.map((attachment, index) => ({
+			fileName:
+				normalizeNonEmptyString(attachment.name) ?? `Documento ${index + 1}`,
+			fileUrl: resolvePortalFileUrl(
+				attachment.url,
+				attachment.storageKey ?? null,
+			),
+			mimeType: normalizeNonEmptyString(attachment.mimeType),
+		}))
+		.filter((attachment) => !!normalizeNonEmptyString(attachment.fileUrl));
 }
 
-function getNextRelevantDate(project: ProjectEntity): string | null {
-	const maintenanceDate = getNextMaintenanceDate(project);
+/* -------------------------------------------------------------------------- */
+/* Alert builders                                                             */
+/* -------------------------------------------------------------------------- */
 
-	const documentDates = project.documents
+/**
+ * Genera alertas derivadas desde mantenimientos.
+ *
+ * Regla:
+ * - toda alerta de mantenimiento hereda sus adjuntos visibles
+ * - esto alimenta directamente la vista de /portal/alerts
+ */
+function buildMaintenanceAlerts(project: ProjectEntity): PortalAlertItem[] {
+	return project.maintenanceItems
+		.filter((item) => !!item.nextDueDate)
+		.map((item, index) => {
+			const isOverdue = isMaintenanceEffectivelyOverdue(item);
+
+			const resolvedTitle =
+				normalizeNonEmptyString(item.title) ??
+				resolveMaintenanceTypeLabel(item.maintenanceType) ??
+				(isOverdue
+					? "Mantenimiento vencido"
+					: "Mantenimiento programado");
+
+			return {
+				alertId: `${project._id}-maintenance-alert-${index}`,
+				type: isOverdue ? "maintenance_overdue" : "maintenance_upcoming",
+				priority: isOverdue ? "high" : "medium",
+				title: resolvedTitle,
+				description: buildMaintenanceAlertDescription(project, item, isOverdue),
+				projectId: project._id,
+				projectTitle: safeLocalizedText(project.title),
+				documentId: null,
+				documentTitle: null,
+				maintenanceId: `${project._id}-maintenance-${index}`,
+				maintenanceTitle:
+					normalizeNonEmptyString(item.title) ??
+					resolveMaintenanceTypeLabel(item.maintenanceType) ??
+					"Mantenimiento",
+				dueDate: item.nextDueDate,
+				createdAt: project.updatedAt,
+				action: "view_project",
+				attachments: mapMaintenanceAttachmentsToPortalAlertAttachments(item),
+			};
+		});
+}
+
+/**
+ * Genera alertas documentales visibles para portal.
+ *
+ * Nota:
+ * - actualmente no se proyectan adjuntos extras aquí
+ * - la acción principal lleva a documentos
+ */
+function buildDocumentAlerts(project: ProjectEntity): PortalAlertItem[] {
+	return project.documents
 		.filter(isPortalVisibleDocument)
-		.flatMap((document) => [document.nextDueDate, document.alertDate])
-		.filter((value): value is string => !!value);
+		.filter(
+			(document) =>
+				document.requiresAlert &&
+				(!!document.alertDate || !!document.nextDueDate),
+		)
+		.map((document, index) => {
+			const dueDate = document.nextDueDate ?? document.alertDate;
+			const isCritical = document.isCritical;
 
-	const allDates = [maintenanceDate, ...documentDates]
-		.filter((value): value is string => !!value)
-		.sort(compareIsoAsc);
+			return {
+				alertId: `${project._id}-document-alert-${index}`,
+				type:
+					document.documentType === "warranty"
+						? "warranty_expiring"
+						: "document_expiring",
+				priority: isCritical ? "high" : "medium",
+				title:
+					normalizeNonEmptyString(document.title) ??
+					(document.documentType === "warranty"
+						? "Garantía con fecha relevante"
+						: "Documento con fecha relevante"),
+				description: buildDocumentAlertDescription(project, document),
+				projectId: project._id,
+				projectTitle: safeLocalizedText(project.title),
+				documentId:
+					normalizeNonEmptyString(document.documentId) ??
+					`${project._id}-document-${index}`,
+				documentTitle: normalizeNonEmptyString(document.title),
+				maintenanceId: null,
+				maintenanceTitle: null,
+				dueDate,
+				createdAt: project.updatedAt,
+				action: "view_document",
+				attachments: [],
+			};
+		});
+}
 
-	return allDates[0] ?? null;
+/**
+ * Une todas las alertas visibles del proyecto y las ordena por fecha relevante.
+ */
+function buildProjectAlerts(project: ProjectEntity): PortalAlertItem[] {
+	return [...buildMaintenanceAlerts(project), ...buildDocumentAlerts(project)].sort(
+		(a, b) => {
+			const aDate = a.dueDate ?? a.createdAt ?? "";
+			const bDate = b.dueDate ?? b.createdAt ?? "";
+
+			if (!aDate && !bDate) return 0;
+			if (!aDate) return 1;
+			if (!bDate) return -1;
+
+			return compareIsoAsc(aDate, bDate);
+		},
+	);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Aggregate project helpers                                                  */
+/* -------------------------------------------------------------------------- */
+
+function getNextMaintenanceDate(project: ProjectEntity): string | null {
+	const futureDate = getEarliestFutureDate(
+		project.maintenanceItems.map((item) => item.nextDueDate),
+	);
+
+	if (futureDate) return futureDate;
+
+	return getEarliestDate(project.maintenanceItems.map((item) => item.nextDueDate));
+}
+
+function getNextRelevantProjectDate(project: ProjectEntity): string | null {
+	const maintenanceDate = getEarliestFutureDate(
+		project.maintenanceItems.map((item) => item.nextDueDate),
+	);
+
+	const documentDate = getEarliestFutureDate(
+		project.documents
+			.filter(isPortalVisibleDocument)
+			.filter((document) => document.requiresAlert)
+			.map((document) => getDocumentRelevantDate(document)),
+	);
+
+	const nextRelevantFuture = getEarliestDate([maintenanceDate, documentDate]);
+	if (nextRelevantFuture) return nextRelevantFuture;
+
+	const fallbackMaintenanceDate = getEarliestDate(
+		project.maintenanceItems.map((item) => item.nextDueDate),
+	);
+
+	const fallbackDocumentDate = getEarliestDate(
+		project.documents
+			.filter(isPortalVisibleDocument)
+			.filter((document) => document.requiresAlert)
+			.map((document) => getDocumentRelevantDate(document)),
+	);
+
+	return getEarliestDate([fallbackMaintenanceDate, fallbackDocumentDate]);
 }
 
 /* -------------------------------------------------------------------------- */
 /* Public mappers                                                             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Determina si un proyecto puede mostrarse en portal.
+ *
+ * Regla actual:
+ * - archived queda fuera
+ */
 export function isPortalVisibleProject(project: ProjectEntity): boolean {
 	return project.status !== "archived";
 }
 
+/**
+ * Convierte ProjectEntity a card resumida para:
+ * - home portal
+ * - listado de proyectos
+ */
 export function mapProjectEntityToPortalProjectCard(
 	project: ProjectEntity,
 ): PortalProjectCard {
@@ -465,15 +890,18 @@ export function mapProjectEntityToPortalProjectCard(
 			"Proyecto visible para la organización.",
 		category: resolvePortalProjectCategory(project),
 		projectDate: project.contractStartDate,
-		coverImageUrl: project.coverImage?.url ?? null,
+		coverImageUrl: resolveProjectCoverImageUrl(project),
 		visibleStatus: buildPortalVisibleStatus(project),
 		documentsCount: visibleDocuments.length,
 		activeAlertsCount: alerts.length,
 		nextMaintenanceDate: getNextMaintenanceDate(project),
-		nextRelevantDate: getNextRelevantDate(project),
+		nextRelevantDate: getNextRelevantProjectDate(project),
 	};
 }
 
+/**
+ * Convierte ProjectEntity a detalle completo visible en portal.
+ */
 export function mapProjectEntityToPortalProjectDetail(
 	project: ProjectEntity,
 	organizationName?: string | null,
@@ -493,19 +921,32 @@ export function mapProjectEntityToPortalProjectDetail(
 			"Sin descripción visible disponible.",
 		category: resolvePortalProjectCategory(project),
 		projectDate: project.contractStartDate,
-		coverImageUrl: project.coverImage?.url ?? null,
+		coverImageUrl: resolveProjectCoverImageUrl(project),
 		gallery: project.gallery
-			.filter((image) => !!normalizeNonEmptyString(image.url))
 			.map((image) => {
-				const resolvedAlt = normalizeNonEmptyString(
-					safeLocalizedText(image.alt),
+				const resolvedUrl = resolvePortalFileUrl(
+					image.url ?? null,
+					image.storageKey ?? null,
 				);
 
+				const safeUrl = normalizeNonEmptyString(resolvedUrl);
+				if (!safeUrl) return null;
+
+				const resolvedAlt = normalizeNonEmptyString(safeLocalizedText(image.alt));
+
 				return {
-					url: image.url,
+					url: safeUrl,
 					alt: resolvedAlt,
 				};
-			}),
+			})
+			.filter(
+				(
+					image,
+				): image is {
+					url: string;
+					alt: string | null;
+				} => !!image,
+			),
 		visibleStatus: buildPortalVisibleStatus(project),
 		organizationId: project.primaryClientId ?? "",
 		organizationName: normalizeNonEmptyString(organizationName),
@@ -515,18 +956,36 @@ export function mapProjectEntityToPortalProjectDetail(
 	};
 }
 
+/**
+ * Extrae todos los documentos visibles para portal desde un proyecto.
+ *
+ * Incluye:
+ * - documentos estructurados del proyecto
+ * - adjuntos de mantenimiento
+ */
 export function extractPortalDocumentsFromProject(
 	project: ProjectEntity,
 ): PortalDocumentItem[] {
 	return getVisiblePortalDocuments(project);
 }
 
+/**
+ * Extrae todas las alertas visibles del proyecto.
+ */
 export function extractPortalAlertsFromProject(
 	project: ProjectEntity,
 ): PortalAlertItem[] {
 	return buildProjectAlerts(project);
 }
 
+/**
+ * Orden de proyectos visible en portal.
+ *
+ * Prioridad:
+ * 1. featured
+ * 2. sortOrder
+ * 3. updatedAt desc
+ */
 export function sortPortalProjects(projects: ProjectEntity[]): ProjectEntity[] {
 	return [...projects].sort((a, b) => {
 		if (a.featured !== b.featured) {

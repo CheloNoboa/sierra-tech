@@ -87,15 +87,15 @@ type RawOrganization = {
 
 type OrganizationsResponse =
 	| {
-			ok: true;
-			items?: RawOrganization[];
-			organizations?: RawOrganization[];
-			data?: RawOrganization[];
-	  }
+		ok: true;
+		items?: RawOrganization[];
+		organizations?: RawOrganization[];
+		data?: RawOrganization[];
+	}
 	| {
-			ok: false;
-			error: string;
-	  };
+		ok: false;
+		error: string;
+	};
 
 type OrganizationOption = {
 	id: string;
@@ -105,16 +105,16 @@ type OrganizationOption = {
 
 type ProjectUploadResponse =
 	| {
-			ok: true;
-			item: {
-				url: string;
-				storageKey: string;
-			};
-	  }
+		ok: true;
+		item: {
+			url: string;
+			storageKey: string;
+		};
+	}
 	| {
-			ok: false;
-			error: string;
-	  };
+		ok: false;
+		error: string;
+	};
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -563,17 +563,17 @@ function rebuildMaintenanceItems(
 		const nextSchedule =
 			forceRegenerateSchedule || item.schedule.length === 0
 				? generateSchedulePreview(
-						item,
-						index,
-						formValue.contractStartDate,
-						formValue.contractEndDate,
-						resolvedClientEmail,
-					)
+					item,
+					index,
+					formValue.contractStartDate,
+					formValue.contractEndDate,
+					resolvedClientEmail,
+				)
 				: item.schedule.map((entry) => ({
-						...entry,
-						recipientEmail:
-							normalizeString(entry.recipientEmail) || resolvedClientEmail,
-					}));
+					...entry,
+					recipientEmail:
+						normalizeString(entry.recipientEmail) || resolvedClientEmail,
+				}));
 
 		return {
 			...item,
@@ -641,11 +641,11 @@ function generateSchedulePreview(
 		const alertDate =
 			item.alertDaysBefore && item.alertDaysBefore > 0
 				? (() => {
-						const date = parseDateOnly(maintenanceDate);
-						if (!date) return null;
-						date.setDate(date.getDate() - item.alertDaysBefore);
-						return formatDateOnly(date);
-					})()
+					const date = parseDateOnly(maintenanceDate);
+					if (!date) return null;
+					date.setDate(date.getDate() - item.alertDaysBefore);
+					return formatDateOnly(date);
+				})()
 				: null;
 
 		return {
@@ -655,15 +655,15 @@ function generateSchedulePreview(
 			alertDate,
 			alertStatus:
 				alertDate &&
-				(() => {
-					const alert = parseDateOnly(alertDate);
-					if (!alert) return false;
+					(() => {
+						const alert = parseDateOnly(alertDate);
+						if (!alert) return false;
 
-					const today = new Date();
-					today.setHours(0, 0, 0, 0);
+						const today = new Date();
+						today.setHours(0, 0, 0, 0);
 
-					return alert.getTime() <= today.getTime();
-				})()
+						return alert.getTime() <= today.getTime();
+					})()
 					? "emitted"
 					: "pending",
 			maintenanceStatus:
@@ -672,16 +672,16 @@ function generateSchedulePreview(
 					: item.status === "cancelled"
 						? "cancelled"
 						: (() => {
-								const maintenance = parseDateOnly(maintenanceDate);
-								if (!maintenance) return "pending";
+							const maintenance = parseDateOnly(maintenanceDate);
+							if (!maintenance) return "pending";
 
-								const today = new Date();
-								today.setHours(0, 0, 0, 0);
+							const today = new Date();
+							today.setHours(0, 0, 0, 0);
 
-								return maintenance.getTime() < today.getTime()
-									? "overdue"
-									: "pending";
-							})(),
+							return maintenance.getTime() < today.getTime()
+								? "overdue"
+								: "pending";
+						})(),
 			channels,
 			recipients,
 			recipientEmail: item.notifyClient ? clientEmail.trim() : "",
@@ -773,6 +773,51 @@ function inferMaintenanceCardTitle(
 	}
 
 	return baseType;
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * Resuelve una URL consumible a partir de storageKey o url legacy.
+ *
+ * REGLA SIERRA TECH:
+ * - storageKey = fuente de verdad (R2)
+ * - url = opcional / legacy / externa
+ *
+ * Este helper garantiza que:
+ * - SIEMPRE exista una forma válida de acceder al archivo
+ * - NO se trate storageKey como URL directa
+ * -----------------------------------------------------------------------------
+ */
+function resolveStoredFileUrl(
+	value: string | null | undefined,
+	storageKey?: string | null,
+): string {
+	const directUrl = normalizeString(value);
+
+	// Caso 1: URL real válida (externa o interna)
+	if (directUrl) {
+		if (
+			directUrl.startsWith("http://") ||
+			directUrl.startsWith("https://") ||
+			directUrl.startsWith("/")
+		) {
+			return directUrl;
+		}
+
+		// Caso legacy: key guardada en url
+		if (directUrl.startsWith("admin/") || directUrl.includes("/")) {
+			return `/api/admin/uploads/view?key=${encodeURIComponent(directUrl)}`;
+		}
+	}
+
+	// Caso 2: usar storageKey (FUENTE REAL)
+	const safeStorageKey = normalizeString(storageKey);
+
+	if (safeStorageKey) {
+		return `/api/admin/uploads/view?key=${encodeURIComponent(safeStorageKey)}`;
+	}
+
+	return "";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1073,12 +1118,12 @@ export default function ProjectModal({
 					key === "maintenanceItems"
 						? (value as ProjectPayload["maintenanceItems"])
 						: rebuildMaintenanceItems(
-								nextForm,
-								selectedOrganization?.email ?? "",
-								{
-									forceRegenerateSchedule: mustRegenerateSchedule,
-								},
-							),
+							nextForm,
+							selectedOrganization?.email ?? "",
+							{
+								forceRegenerateSchedule: mustRegenerateSchedule,
+							},
+						),
 			};
 		});
 	}
@@ -1347,9 +1392,9 @@ export default function ProjectModal({
 			if (!response.ok || !json || !json.ok) {
 				const detailText =
 					json &&
-					!json.ok &&
-					Array.isArray(json.details) &&
-					json.details.length > 0
+						!json.ok &&
+						Array.isArray(json.details) &&
+						json.details.length > 0
 						? ` ${json.details.join(" ")}`
 						: "";
 
@@ -1393,7 +1438,8 @@ export default function ProjectModal({
 		}
 
 		return {
-			url: result.file.fileKey,
+			// 🔥 IMPORTANTE: NO asumir que fileKey es URL
+			url: "",
 			storageKey: result.file.fileKey,
 			alt: {
 				es: "",
@@ -1449,8 +1495,13 @@ export default function ProjectModal({
 
 				return {
 					name: result.file.originalName || result.file.fileName,
-					url: result.file.fileKey,
+
+					// 🔥 NO usar url como verdad
+					url: "",
+
+					// 🔥 FUENTE REAL
 					storageKey: result.file.fileKey,
+
 					mimeType: result.file.mimeType,
 					size: result.file.sizeBytes,
 				} satisfies ProjectFileAttachment;
@@ -1571,9 +1622,9 @@ export default function ProjectModal({
 				(item, itemIndex) =>
 					itemIndex === index
 						? ({
-								...item,
-								[key]: value,
-							} as ProjectPayload["maintenanceItems"][number])
+							...item,
+							[key]: value,
+						} as ProjectPayload["maintenanceItems"][number])
 						: item,
 			);
 
@@ -1652,12 +1703,12 @@ export default function ProjectModal({
 				item.schedule.length > 0
 					? item.schedule
 					: generateSchedulePreview(
-							item,
-							maintenanceIndex,
-							current.contractStartDate,
-							current.contractEndDate,
-							resolvedClientEmail,
-						);
+						item,
+						maintenanceIndex,
+						current.contractStartDate,
+						current.contractEndDate,
+						resolvedClientEmail,
+					);
 
 			const nextSchedule = baseSchedule.map((entry, index) => {
 				if (index !== scheduleIndex) return entry;
@@ -1665,11 +1716,11 @@ export default function ProjectModal({
 				const nextAlertDate =
 					item.alertDaysBefore && item.alertDaysBefore > 0
 						? (() => {
-								const date = parseDateOnly(maintenanceDate);
-								if (!date) return null;
-								date.setDate(date.getDate() - item.alertDaysBefore);
-								return formatDateOnly(date);
-							})()
+							const date = parseDateOnly(maintenanceDate);
+							if (!date) return null;
+							date.setDate(date.getDate() - item.alertDaysBefore);
+							return formatDateOnly(date);
+						})()
 						: null;
 
 				return {
@@ -1685,10 +1736,10 @@ export default function ProjectModal({
 				(currentItem, currentIndex) =>
 					currentIndex === maintenanceIndex
 						? {
-								...currentItem,
-								schedule: nextSchedule,
-								nextDueDate: nextSchedule[0]?.maintenanceDate ?? null,
-							}
+							...currentItem,
+							schedule: nextSchedule,
+							nextDueDate: nextSchedule[0]?.maintenanceDate ?? null,
+						}
 						: currentItem,
 			);
 
@@ -2241,8 +2292,8 @@ export default function ProjectModal({
 												))}
 
 												{!form.systemType.es.trim() &&
-												!form.treatedMedium.es.trim() &&
-												form.technologyUsed.es.length === 0 ? (
+													!form.treatedMedium.es.trim() &&
+													form.technologyUsed.es.length === 0 ? (
 													<span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
 														Aún no hay categoría visible definida
 													</span>
@@ -2278,8 +2329,8 @@ export default function ProjectModal({
 												))}
 
 												{!form.systemType.en.trim() &&
-												!form.treatedMedium.en.trim() &&
-												form.technologyUsed.en.length === 0 ? (
+													!form.treatedMedium.en.trim() &&
+													form.technologyUsed.en.length === 0 ? (
 													<span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
 														No visible category defined yet
 													</span>
@@ -2437,6 +2488,11 @@ export default function ProjectModal({
 										const isUploadingThisDocument =
 											uploadingDocumentIndex === index;
 
+										const resolvedDocumentHref = resolveStoredFileUrl(
+											item.fileUrl,
+											item.storageKey,
+										);
+
 										return (
 											<div
 												key={item.documentId}
@@ -2509,9 +2565,9 @@ export default function ProjectModal({
 																			: t.uploadDocument}
 																</label>
 
-																{item.fileUrl || item.storageKey ? (
+																{resolvedDocumentHref ? (
 																	<a
-																		href={item.fileUrl || item.storageKey}
+																		href={resolvedDocumentHref}
 																		target="_blank"
 																		rel="noreferrer"
 																		className="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft"
@@ -2795,11 +2851,10 @@ export default function ProjectModal({
 														</label>
 
 														<label
-															className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
-																form.publicSiteSettings.enabled
-																	? "border-border bg-surface-soft text-text-primary"
-																	: "border-border bg-surface text-text-muted opacity-60"
-															}`}
+															className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${form.publicSiteSettings.enabled
+																? "border-border bg-surface-soft text-text-primary"
+																: "border-border bg-surface text-text-muted opacity-60"
+																}`}
 														>
 															<input
 																type="checkbox"
@@ -2813,10 +2868,10 @@ export default function ProjectModal({
 																		form.documents.map((doc, docIndex) =>
 																			docIndex === index
 																				? {
-																						...doc,
-																						visibleInPublicSite: checked,
-																						isPublic: checked,
-																					}
+																					...doc,
+																					visibleInPublicSite: checked,
+																					isPublic: checked,
+																				}
 																				: doc,
 																		),
 																	);
@@ -2890,13 +2945,13 @@ export default function ProjectModal({
 										const previewSchedule =
 											item.schedule.length > 0
 												? item.schedule.map((entry) => ({
-														...entry,
-														recipientEmail:
-															entry.recipientEmail?.trim() ||
-															form.clientEmail ||
-															selectedOrganization?.email ||
-															"",
-													}))
+													...entry,
+													recipientEmail:
+														entry.recipientEmail?.trim() ||
+														form.clientEmail ||
+														selectedOrganization?.email ||
+														"",
+												}))
 												: generatedSchedule;
 
 										const cardTitle = inferMaintenanceCardTitle(
@@ -2942,9 +2997,9 @@ export default function ProjectModal({
 																<span className="ml-1 font-medium text-text-primary">
 																	{formatHumanDate(
 																		item.nextDueDate ||
-																			(previewSchedule.length > 0
-																				? previewSchedule[0].maintenanceDate
-																				: null),
+																		(previewSchedule.length > 0
+																			? previewSchedule[0].maintenanceDate
+																			: null),
 																		safeLocale,
 																	)}
 																</span>
@@ -3492,12 +3547,12 @@ export default function ProjectModal({
 																					const nextIds = e.currentTarget
 																						.checked
 																						? [
-																								...item.relatedDocumentIds,
-																								doc.documentId,
-																							]
+																							...item.relatedDocumentIds,
+																							doc.documentId,
+																						]
 																						: item.relatedDocumentIds.filter(
-																								(id) => id !== doc.documentId,
-																							);
+																							(id) => id !== doc.documentId,
+																						);
 
 																					setMaintenanceRelatedDocuments(
 																						index,
@@ -3558,10 +3613,15 @@ export default function ProjectModal({
 																</div>
 															) : (
 																<div className="mt-4 space-y-2">
-																	{item.attachments.map(
-																		(attachment, attachmentIndex) => (
+																	{item.attachments.map((attachment, attachmentIndex) => {
+																		const resolvedAttachmentHref = resolveStoredFileUrl(
+																			attachment.url,
+																			attachment.storageKey,
+																		);
+
+																		return (
 																			<div
-																				key={`${attachment.url}-${attachmentIndex}`}
+																				key={`${attachment.storageKey || attachment.url || "attachment"}-${attachmentIndex}`}
 																				className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-soft px-3 py-3"
 																			>
 																				<div className="min-w-0">
@@ -3570,28 +3630,35 @@ export default function ProjectModal({
 																					</p>
 																					<p className="truncate text-xs text-text-muted">
 																						{attachment.mimeType || "file"} ·{" "}
-																						{Math.round(
-																							(attachment.size || 0) / 1024,
-																						)}{" "}
-																						KB
+																						{Math.round((attachment.size || 0) / 1024)} KB
 																					</p>
 																				</div>
 
-																				<button
-																					type="button"
-																					onClick={() =>
-																						removeMaintenanceAttachment(
-																							index,
-																							attachmentIndex,
-																						)
-																					}
-																					className="rounded-xl border border-status-error bg-surface px-3 py-2 text-xs text-status-error hover:bg-surface-soft"
-																				>
-																					{t.remove}
-																				</button>
+																				<div className="flex flex-wrap items-center gap-2">
+																					{resolvedAttachmentHref ? (
+																						<a
+																							href={resolvedAttachmentHref}
+																							target="_blank"
+																							rel="noreferrer"
+																							className="rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text-primary hover:bg-surface-soft"
+																						>
+																							{t.openDocument}
+																						</a>
+																					) : null}
+
+																					<button
+																						type="button"
+																						onClick={() =>
+																							removeMaintenanceAttachment(index, attachmentIndex)
+																						}
+																						className="rounded-xl border border-status-error bg-surface px-3 py-2 text-xs text-status-error hover:bg-surface-soft"
+																					>
+																						{t.remove}
+																					</button>
+																				</div>
 																			</div>
-																		),
-																	)}
+																		);
+																	})}
 																</div>
 															)}
 														</div>

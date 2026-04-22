@@ -60,14 +60,16 @@ import type {
 function formatDateLabel(value: string | null | undefined): string {
 	if (!value) return "—";
 
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return "—";
+	const safeValue = value.split("T")[0];
+	const parts = safeValue.split("-");
 
-	return new Intl.DateTimeFormat("es-EC", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).format(date);
+	if (parts.length !== 3) return "—";
+
+	const [year, month, day] = parts;
+
+	if (!year || !month || !day) return "—";
+
+	return `${day}/${month}/${year}`;
 }
 
 function formatAlertType(value: PortalAlertItem["type"]): string {
@@ -98,6 +100,22 @@ function countUpcomingMaintenancesFromProjects(
 
 function getUrgentAlerts(alerts: PortalAlertItem[]): PortalAlertItem[] {
 	return alerts.slice(0, 3);
+}
+
+function getPortalStatusMessage(data: PortalHomeData): string {
+	if (data.summary.activeAlerts > 0) {
+		return "Tienes alertas activas que requieren revisión.";
+	}
+
+	if (data.summary.activeProjects > 0) {
+		return "Tus proyectos visibles están disponibles para consulta.";
+	}
+
+	if (data.summary.recentDocuments > 0) {
+		return "Tienes documentos autorizados disponibles en el portal.";
+	}
+
+	return "Tu portal está activo y listo para mostrar información autorizada.";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -260,9 +278,9 @@ function ProjectListBlock({ projects }: { projects: PortalProjectCard[] }) {
 									</span>
 								) : null}
 
-								{project.nextRelevantDate ? (
+								{project.nextMaintenanceDate ? (
 									<span className="inline-flex rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-text-secondary">
-										Próxima fecha: {formatDateLabel(project.nextRelevantDate)}
+										Próximo mantenimiento: {formatDateLabel(project.nextMaintenanceDate)}
 									</span>
 								) : null}
 							</div>
@@ -523,12 +541,13 @@ export default async function PortalHomePage() {
 	const upcomingMaintenances = countUpcomingMaintenancesFromProjects(
 		homeData.featuredProjects,
 	);
+	const portalStatusMessage = getPortalStatusMessage(homeData);
 
 	return (
 		<div className="space-y-6">
 			<section className="rounded-[30px] border border-border bg-white p-8 shadow-sm">
 				<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-					<div className="max-w-3xl space-y-4">
+					<div className="max-w-3xl space-y-5">
 						<p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-primaryStrong">
 							Portal cliente Sierra Tech
 						</p>
@@ -538,13 +557,38 @@ export default async function PortalHomePage() {
 						</h1>
 
 						<p className="text-base leading-8 text-text-secondary">
-							Este espacio privado fue preparado para que{" "}
-							<strong>{homeData.organizationName}</strong> pueda consultar la
-							información autorizada relacionada con proyectos, documentos,
-							mantenimientos y alertas relevantes dentro de Sierra Tech.
+							Accede a la información autorizada de{" "}
+							<strong>{homeData.organizationName}</strong> y revisa proyectos,
+							documentos, alertas y próximas actividades desde un solo lugar.
 						</p>
 
 						<div className="flex flex-wrap gap-3">
+							<span className="inline-flex items-center rounded-full border border-brand-primary/20 bg-brand-primary/10 px-3 py-1 text-xs font-medium text-brand-primaryStrong">
+								{portalStatusMessage}
+							</span>
+
+							<span className="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-text-secondary">
+								Proyectos visibles: {homeData.summary.activeProjects}
+							</span>
+
+							<span className="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-text-secondary">
+								Documentos: {homeData.summary.recentDocuments}
+							</span>
+
+							<span className="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-text-secondary">
+								Alertas: {homeData.summary.activeAlerts}
+							</span>
+						</div>
+
+						<div className="flex flex-wrap gap-3">
+							<Link
+								href="/portal/alerts"
+								className="inline-flex items-center gap-2 rounded-2xl bg-brand-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-primaryStrong"
+							>
+								Ver alertas
+								<ArrowRight className="h-4 w-4" />
+							</Link>
+
 							<Link
 								href="/portal/projects"
 								className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
@@ -615,19 +659,7 @@ export default async function PortalHomePage() {
 				/>
 			</section>
 
-			<section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-				<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
-					<SectionHeader
-						eyebrow="Proyectos"
-						title="Proyectos destacados"
-						href="/portal/projects"
-						hrefLabel="Ver todos"
-						icon={<FolderKanban className="h-5 w-5" />}
-					/>
-
-					<ProjectListBlock projects={homeData.featuredProjects} />
-				</section>
-
+			<section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
 				<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
 					<SectionHeader
 						eyebrow="Alertas"
@@ -638,6 +670,18 @@ export default async function PortalHomePage() {
 					/>
 
 					<AlertsListBlock alerts={urgentAlerts} />
+				</section>
+
+				<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
+					<SectionHeader
+						eyebrow="Proyectos"
+						title="Proyectos destacados"
+						href="/portal/projects"
+						hrefLabel="Ver todos"
+						icon={<FolderKanban className="h-5 w-5" />}
+					/>
+
+					<ProjectListBlock projects={homeData.featuredProjects} />
 				</section>
 			</section>
 

@@ -22,9 +22,14 @@
  * - la página usa exclusivamente el contrato PortalProjectDetail
  * - si el proyecto no existe o no pertenece a la organización, responde 404
  * - se corrige la densidad visual de las cards internas para evitar desbordes
- * - se formatean fechas visibles para no mostrar ISO crudo en la UI
+ * - se formatean fechas visibles sin conversión horaria para evitar desfases
  * - se humanizan estados, prioridades, tipos y frecuencias para evitar que el
  *   usuario vea claves técnicas del sistema
+ * - los documentos muestran una etiqueta semántica correcta:
+ *   - Fecha del documento
+ *   - Vence
+ * - las meta cards del bloque de alertas se apilan en una sola columna para
+ *   evitar quiebres agresivos en textos largos dentro de la columna lateral
  *
  * EN:
  * Official project detail page for the client portal.
@@ -196,27 +201,67 @@ function formatFrequency(
 	}
 }
 
+/**
+ * -----------------------------------------------------------------------------
+ * Formatea fechas tipo calendario sin conversión horaria.
+ *
+ * Problema que evita:
+ * - new Date("2026-07-01T00:00:00.000Z") en zona -05 puede mostrarse como
+ *   30/06/2026
+ *
+ * Regla:
+ * - tomar solo YYYY-MM-DD
+ * - renderizar dd/mm/yyyy directamente
+ * -----------------------------------------------------------------------------
+ */
 function formatDateLabel(value: string | null | undefined): string {
 	if (!value) {
 		return "—";
 	}
 
-	const date = new Date(value);
+	const safeValue = value.split("T")[0];
+	const parts = safeValue.split("-");
 
-	if (Number.isNaN(date.getTime())) {
+	if (parts.length !== 3) {
 		return "—";
 	}
 
-	return new Intl.DateTimeFormat("es-EC", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).format(date);
+	const [year, month, day] = parts;
+
+	if (!year || !month || !day) {
+		return "—";
+	}
+
+	return `${day}/${month}/${year}`;
 }
 
 function formatCompactText(value: string | null | undefined): string {
 	const safe = value?.trim() ?? "";
 	return safe.length > 0 ? safe : "—";
+}
+
+function resolveDocumentDateMeta(document: PortalDocumentItem): {
+	label: string;
+	value: string;
+} {
+	if (document.expiresAt) {
+		return {
+			label: "Vence",
+			value: formatDateLabel(document.expiresAt),
+		};
+	}
+
+	if (document.documentDate) {
+		return {
+			label: "Fecha del documento",
+			value: formatDateLabel(document.documentDate),
+		};
+	}
+
+	return {
+		label: "Fecha del documento",
+		value: "—",
+	};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -246,7 +291,7 @@ function MetaTile({ label, value }: { label: string; value: string }) {
 			<p className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
 				{label}
 			</p>
-			<p className="mt-2 whitespace-normal break-all text-sm font-semibold leading-6 text-text-primary">
+			<p className="mt-2 break-words text-sm font-semibold leading-6 text-text-primary">
 				{value}
 			</p>
 		</div>
@@ -265,53 +310,52 @@ function DocumentsBlock({ documents }: { documents: PortalDocumentItem[] }) {
 
 	return (
 		<div className="mt-6 space-y-4">
-			{documents.map((document) => (
-				<article
-					key={document.documentId}
-					className="rounded-2xl border border-border bg-surface px-5 py-5"
-				>
-					<div className="min-w-0 space-y-2">
-						<h3 className="break-words text-lg font-semibold text-text-primary">
-							{document.title}
-						</h3>
+			{documents.map((document) => {
+				const dateMeta = resolveDocumentDateMeta(document);
 
-						<p className="break-words text-sm leading-7 text-text-secondary">
-							{document.description ??
-								"Documento visible asociado a este proyecto."}
-						</p>
-					</div>
+				return (
+					<article
+						key={document.documentId}
+						className="rounded-2xl border border-border bg-surface px-5 py-5"
+					>
+						<div className="min-w-0 space-y-2">
+							<h3 className="break-words text-lg font-semibold text-text-primary">
+								{document.title}
+							</h3>
 
-					<div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-						<MetaTile label="Tipo" value={formatDocumentType(document.type)} />
-
-						<MetaTile
-							label="Fecha relevante"
-							value={formatDateLabel(
-								document.expiresAt ?? document.documentDate,
-							)}
-						/>
-
-						<div className="flex items-end">
-							{document.fileUrl ? (
-								<a
-									href={document.fileUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
-								>
-									<FileText className="h-4 w-4" />
-									Ver documento
-								</a>
-							) : (
-								<MetaTile
-									label="Archivo"
-									value={formatCompactText(document.fileName)}
-								/>
-							)}
+							<p className="break-words text-sm leading-7 text-text-secondary">
+								{document.description ??
+									"Documento visible asociado a este proyecto."}
+							</p>
 						</div>
-					</div>
-				</article>
-			))}
+
+						<div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+							<MetaTile label="Tipo" value={formatDocumentType(document.type)} />
+
+							<MetaTile label={dateMeta.label} value={dateMeta.value} />
+
+							<div className="flex items-end">
+								{document.fileUrl ? (
+									<a
+										href={document.fileUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+									>
+										<FileText className="h-4 w-4" />
+										Ver documento
+									</a>
+								) : (
+									<MetaTile
+										label="Archivo"
+										value={formatCompactText(document.fileName)}
+									/>
+								)}
+							</div>
+						</div>
+					</article>
+				);
+			})}
 		</div>
 	);
 }
@@ -348,7 +392,7 @@ function MaintenanceBlock({
 						</p>
 					</div>
 
-					<div className="mt-4 grid gap-3 sm:grid-cols-2">
+					<div className="mt-4 grid gap-3 md:grid-cols-2">
 						<MetaTile
 							label="Estado"
 							value={formatMaintenanceStatus(item.status)}
@@ -397,7 +441,7 @@ function AlertsBlock({ alerts }: { alerts: PortalAlertItem[] }) {
 						</p>
 					</div>
 
-					<div className="mt-4 grid gap-3 sm:grid-cols-2">
+					<div className="mt-4 grid gap-3">
 						<MetaTile label="Tipo" value={formatAlertType(alert.type)} />
 
 						<MetaTile

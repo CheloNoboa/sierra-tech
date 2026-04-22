@@ -11,8 +11,15 @@
  *
  * Patrón visual y técnico:
  * - Igual al usado en Site Settings / Home
- * - El valor persistido es el fileKey administrativo
+ * - El valor persistido prioriza `storageKey` como fuente de verdad
+ * - `url` se conserva solo si realmente representa una URL navegable
  * - La vista previa se resuelve vía /api/admin/uploads/view?key=...
+ *   cuando existe storageKey o una key legacy
+ *
+ * Decisión importante:
+ * - en Sierra Tech, los archivos viven en R2
+ * - por tanto, `storageKey` es la referencia real del archivo
+ * - este componente no debe asumir que fileKey es una URL pública
  * =============================================================================
  */
 
@@ -47,27 +54,58 @@ function normalizeString(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
-function isAdminFileKey(value: string): boolean {
-	return value.startsWith("admin/");
+/**
+ * -----------------------------------------------------------------------------
+ * Determina si un string ya es una URL navegable real.
+ * -----------------------------------------------------------------------------
+ */
+function isDirectUrl(value: string): boolean {
+	return (
+		value.startsWith("http://") ||
+		value.startsWith("https://") ||
+		value.startsWith("/")
+	);
 }
 
+/**
+ * -----------------------------------------------------------------------------
+ * Resuelve una URL de preview consumible para la UI.
+ *
+ * Regla:
+ * - primero usa storageKey si existe
+ * - si no existe storageKey, intenta url
+ * - si url ya es una URL real, la usa
+ * - si url no es una URL real, la trata como key legacy
+ * -----------------------------------------------------------------------------
+ */
 function resolvePreviewSrc(value: ProjectImage | null): string {
 	if (!value) return "";
 
 	const storageKey = normalizeString(value.storageKey);
 	const url = normalizeString(value.url);
 
-	if (storageKey && isAdminFileKey(storageKey)) {
+	if (storageKey) {
 		return `/api/admin/uploads/view?key=${encodeURIComponent(storageKey)}`;
 	}
 
-	if (url && isAdminFileKey(url)) {
-		return `/api/admin/uploads/view?key=${encodeURIComponent(url)}`;
+	if (!url) return "";
+
+	if (isDirectUrl(url)) {
+		return url;
 	}
 
-	return url;
+	return `/api/admin/uploads/view?key=${encodeURIComponent(url)}`;
 }
 
+/**
+ * -----------------------------------------------------------------------------
+ * Resuelve la etiqueta visible del archivo actual.
+ *
+ * Prioridad:
+ * - storageKey
+ * - url
+ * -----------------------------------------------------------------------------
+ */
 function resolveFileLabel(value: ProjectImage | null): string {
 	if (!value) return "";
 
@@ -92,7 +130,8 @@ export default function ProjectImageUploader({
 	const t = useMemo(
 		() => ({
 			addImage: safeLocale === "es" ? "Subir imagen" : "Upload image",
-			replaceImage: safeLocale === "es" ? "Reemplazar imagen" : "Replace image",
+			replaceImage:
+				safeLocale === "es" ? "Reemplazar imagen" : "Replace image",
 			uploading: safeLocale === "es" ? "Subiendo..." : "Uploading...",
 			altLabel: safeLocale === "es" ? "Texto alternativo" : "Alt text",
 			currentFile: safeLocale === "es" ? "Archivo actual" : "Current file",
@@ -145,8 +184,14 @@ export default function ProjectImageUploader({
 			const storageKey = normalizeString(uploaded.storageKey);
 			const normalizedUrl = normalizeString(uploaded.url);
 
+			/**
+			 * Regla Sierra Tech:
+			 * - storageKey = referencia real del archivo en R2
+			 * - url solo se persiste si es realmente una URL navegable
+			 * - no duplicar fileKey dentro de url
+			 */
 			onChange({
-				url: normalizedUrl || storageKey,
+				url: isDirectUrl(normalizedUrl) ? normalizedUrl : "",
 				alt: {
 					es: normalizeString(uploaded.alt?.es),
 					en: normalizeString(uploaded.alt?.en),

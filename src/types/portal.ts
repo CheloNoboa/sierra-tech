@@ -172,6 +172,12 @@ export interface PortalMaintenanceAttachment {
 	mimeType?: string | null;
 }
 
+export interface PortalAlertAttachment {
+	fileName: string;
+	fileUrl: string;
+	mimeType?: string | null;
+}
+
 /**
  * Mantenimiento visible para el cliente.
  * Vive principalmente dentro del detalle del proyecto, pero también
@@ -230,6 +236,10 @@ export interface PortalAlertItem {
 
 	documentId?: string | null;
 	documentTitle?: string | null;
+
+	maintenanceId?: string | null;
+	maintenanceTitle?: string | null;
+	attachments: PortalAlertAttachment[];
 
 	dueDate?: string | null;
 	createdAt?: string | null;

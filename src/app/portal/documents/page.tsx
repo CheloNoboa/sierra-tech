@@ -26,6 +26,10 @@
  * - la carga se resuelve server-side para una primera versión estable
  * - los filtros viven en la URL para permitir navegación y recarga consistente
  * - no se agregan helpers innecesarios fuera de esta pantalla
+ * - las fechas visibles se formatean sin conversión horaria para evitar desfases
+ * - la metadata documental usa etiquetas semánticas correctas:
+ *   - Fecha del documento
+ *   - Vence
  *
  * EN:
  * Official Documents page for the Sierra Tech client portal.
@@ -64,17 +68,32 @@ interface PortalDocumentsPageProps {
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * -----------------------------------------------------------------------------
+ * Formatea fechas tipo calendario sin conversión horaria.
+ *
+ * Problema que evita:
+ * - new Date("2026-07-01T00:00:00.000Z") en zona -05 puede mostrarse como
+ *   30/06/2026
+ *
+ * Regla:
+ * - tomar solo YYYY-MM-DD
+ * - renderizar dd/mm/yyyy directamente
+ * -----------------------------------------------------------------------------
+ */
 function formatDateLabel(value: string | null | undefined): string {
 	if (!value) return "—";
 
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return "—";
+	const safeValue = value.split("T")[0];
+	const parts = safeValue.split("-");
 
-	return new Intl.DateTimeFormat("es-EC", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).format(date);
+	if (parts.length !== 3) return "—";
+
+	const [year, month, day] = parts;
+
+	if (!year || !month || !day) return "—";
+
+	return `${day}/${month}/${year}`;
 }
 
 function formatCompactText(value: string | null | undefined): string {
@@ -205,6 +224,37 @@ function countMaintenanceAttachments(items: PortalDocumentItem[]): number {
 
 function countProjectDocuments(items: PortalDocumentItem[]): number {
 	return items.filter((item) => item.source === "project_document").length;
+}
+
+function resolveDocumentDateMeta(item: PortalDocumentItem): {
+	label: string;
+	value: string;
+} {
+	if (item.expiresAt) {
+		return {
+			label: "Vence",
+			value: formatDateLabel(item.expiresAt),
+		};
+	}
+
+	if (item.documentDate) {
+		return {
+			label: "Fecha del documento",
+			value: formatDateLabel(item.documentDate),
+		};
+	}
+
+	if (item.uploadedAt) {
+		return {
+			label: "Fecha del documento",
+			value: formatDateLabel(item.uploadedAt),
+		};
+	}
+
+	return {
+		label: "Fecha del documento",
+		value: "—",
+	};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -461,6 +511,7 @@ function ActiveFiltersSummary({
 
 function DocumentCard({ item }: { item: PortalDocumentItem }) {
 	const sourceLabel = getSourceLabel(item);
+	const dateMeta = resolveDocumentDateMeta(item);
 
 	return (
 		<article className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
@@ -514,12 +565,10 @@ function DocumentCard({ item }: { item: PortalDocumentItem }) {
 
 				<div className="rounded-2xl border border-border bg-surface px-4 py-3">
 					<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-						Fecha relevante
+						{dateMeta.label}
 					</p>
 					<p className="mt-2 text-sm font-semibold text-text-primary">
-						{formatDateLabel(
-							item.expiresAt ?? item.documentDate ?? item.uploadedAt,
-						)}
+						{dateMeta.value}
 					</p>
 				</div>
 			</div>
@@ -673,7 +722,7 @@ export default async function PortalDocumentsPage({
 							<p className="text-sm leading-7 text-text-secondary">
 								Aquí se muestran los documentos autorizados para tu
 								organización, con referencia al proyecto relacionado, origen
-								documental y fechas relevantes cuando apliquen.
+								documental y fechas documentales reales cuando apliquen.
 							</p>
 						</div>
 					</div>

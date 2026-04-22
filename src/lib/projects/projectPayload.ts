@@ -22,6 +22,12 @@
  * - todo array debe salir estable, aunque el input venga corrupto
  * - systemType, treatedMedium y technologyUsed deben salir siempre en formato
  *   bilingüe estable
+ *
+ * Decisiones importantes:
+ * - los adjuntos de mantenimiento NO deben descartarse solo porque `url`
+ *   todavía no exista, siempre que exista `storageKey`
+ * - esto permite conservar archivos válidos cargados en storage aunque la URL
+ *   final se resuelva más adelante desde capas de proyección del portal
  * =============================================================================
  */
 
@@ -312,6 +318,22 @@ function normalizeProjectImage(value: unknown): ProjectImage | null {
 	};
 }
 
+/**
+ * ---------------------------------------------------------------------------
+ * Normaliza un adjunto genérico del proyecto o mantenimiento.
+ *
+ * Regla crítica:
+ * - el adjunto debe conservarse si tiene al menos:
+ *   - `url`, o
+ *   - `storageKey`
+ *
+ * Motivo:
+ * - en ciertos flujos, el archivo ya existe en storage pero la URL pública final
+ *   aún no está persistida en el documento
+ * - si aquí se descartara por no tener `url`, el portal perdería el archivo
+ *   aunque el storageKey sí sea válido
+ * ---------------------------------------------------------------------------
+ */
 function normalizeProjectAttachment(
 	value: unknown,
 ): ProjectFileAttachment | null {
@@ -319,12 +341,16 @@ function normalizeProjectAttachment(
 	if (!source) return null;
 
 	const url = normalizeString(source.url);
-	if (!url) return null;
+	const storageKey = normalizeString(source.storageKey);
+
+	if (!url && !storageKey) {
+		return null;
+	}
 
 	return {
 		name: normalizeString(source.name),
 		url,
-		storageKey: normalizeString(source.storageKey),
+		storageKey,
 		mimeType: normalizeString(source.mimeType),
 		size: normalizeNumber(source.size, 0),
 	};

@@ -22,6 +22,12 @@
  * - La referencia técnica del archivo SÍ se mantiene visible para admin.
  * - En galería se presenta como metadata secundaria, pequeña y truncada.
  * - El path completo queda disponible en title para inspección visual rápida.
+ *
+ * Decisión técnica importante:
+ * - en Sierra Tech, los archivos viven en R2
+ * - por tanto, `storageKey` es la referencia real del archivo
+ * - `url` solo se conserva cuando realmente es una URL navegable
+ * - este componente no debe asumir que fileKey es una URL pública
  * =============================================================================
  */
 
@@ -56,25 +62,56 @@ function normalizeString(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
-function isAdminFileKey(value: string): boolean {
-	return value.startsWith("admin/");
+/**
+ * -----------------------------------------------------------------------------
+ * Determina si un string ya es una URL navegable real.
+ * -----------------------------------------------------------------------------
+ */
+function isDirectUrl(value: string): boolean {
+	return (
+		value.startsWith("http://") ||
+		value.startsWith("https://") ||
+		value.startsWith("/")
+	);
 }
 
+/**
+ * -----------------------------------------------------------------------------
+ * Resuelve una URL de preview consumible para la UI.
+ *
+ * Regla:
+ * - primero usa storageKey si existe
+ * - si no existe storageKey, intenta url
+ * - si url ya es una URL real, la usa
+ * - si url no es una URL real, la trata como key legacy
+ * -----------------------------------------------------------------------------
+ */
 function resolvePreviewSrc(value: ProjectImage): string {
 	const storageKey = normalizeString(value.storageKey);
 	const url = normalizeString(value.url);
 
-	if (storageKey && isAdminFileKey(storageKey)) {
+	if (storageKey) {
 		return `/api/admin/uploads/view?key=${encodeURIComponent(storageKey)}`;
 	}
 
-	if (url && isAdminFileKey(url)) {
-		return `/api/admin/uploads/view?key=${encodeURIComponent(url)}`;
+	if (!url) return "";
+
+	if (isDirectUrl(url)) {
+		return url;
 	}
 
-	return url;
+	return `/api/admin/uploads/view?key=${encodeURIComponent(url)}`;
 }
 
+/**
+ * -----------------------------------------------------------------------------
+ * Resuelve la etiqueta visible del archivo actual.
+ *
+ * Prioridad:
+ * - storageKey
+ * - url
+ * -----------------------------------------------------------------------------
+ */
 function resolveFileLabel(value: ProjectImage): string {
 	const storageKey = normalizeString(value.storageKey);
 	const url = normalizeString(value.url);
@@ -153,7 +190,7 @@ export default function ProjectGalleryUploader({
 				const normalizedUrl = normalizeString(uploaded.url);
 
 				uploadedItems.push({
-					url: normalizedUrl || storageKey,
+					url: isDirectUrl(normalizedUrl) ? normalizedUrl : "",
 					alt: {
 						es: normalizeString(uploaded.alt?.es),
 						en: normalizeString(uploaded.alt?.en),
@@ -180,12 +217,12 @@ export default function ProjectGalleryUploader({
 			value.map((item, itemIndex) =>
 				itemIndex === index
 					? {
-							...item,
-							alt: {
-								es: localeKey === "es" ? alt : item.alt?.es || "",
-								en: localeKey === "en" ? alt : item.alt?.en || "",
-							},
-						}
+						...item,
+						alt: {
+							es: localeKey === "es" ? alt : item.alt?.es || "",
+							en: localeKey === "en" ? alt : item.alt?.en || "",
+						},
+					}
 					: item,
 			),
 		);
@@ -240,7 +277,7 @@ export default function ProjectGalleryUploader({
 
 						return (
 							<div
-								key={`${item.storageKey}-${index}`}
+								key={`${item.storageKey || item.url || "gallery-image"}-${index}`}
 								className="rounded-xl border border-border bg-background p-4"
 							>
 								{previewSrc ? (
