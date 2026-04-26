@@ -7,26 +7,16 @@
  * =============================================================================
  *
  * ES:
- * - Encabezado reutilizable para páginas administrativas que no utilizan
- *   `GlobalDataGridShell`.
- * - Mantiene consistencia visual entre módulos del panel Sierra Tech.
- * - Permite mostrar:
- *   - ícono contextual
- *   - título principal
- *   - subtítulo opcional
+ * Encabezado reutilizable estándar para páginas administrativas simples.
  *
  * Responsabilidades:
- * - Unificar la cabecera visual de páginas administrativas simples.
- * - Mantener jerarquía clara entre iconografía, título y texto secundario.
- * - Integrarse con el sistema visual claro y corporativo del panel.
+ * - unificar la cabecera visual del panel admin
+ * - mostrar ícono contextual, eyebrow, título, subtítulo y acciones opcionales
+ * - mantener separación correcta respecto al sidebar/flecha del layout
  *
  * Reglas:
- * - Debe usarse en páginas administrativas sin shell de grid.
- * - Si una página ya usa `GlobalDataGridShell`, no debe duplicar este header.
- *
- * EN:
- * - Reusable header for admin pages that do not use `GlobalDataGridShell`.
- * - Keeps visual consistency across Sierra Tech admin modules.
+ * - usar en páginas admin que no usan GlobalDataGridShell
+ * - no duplicar cabeceras manuales por módulo
  * =============================================================================
  */
 
@@ -34,36 +24,52 @@ import type { ReactNode } from "react";
 
 interface AdminPageHeaderProps {
 	icon: ReactNode;
+	eyebrow?: string;
 	title: string;
 	subtitle?: string;
+	actions?: ReactNode;
 }
 
 export function AdminPageHeader({
 	icon,
+	eyebrow,
 	title,
 	subtitle,
+	actions,
 }: AdminPageHeaderProps) {
 	return (
-		<div className="mb-6 rounded-2xl border border-border bg-surface p-5 shadow-sm">
-			<div className="flex items-start gap-4">
-				{/* Icon */}
-				<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-soft text-brand-primaryStrong">
-					{icon}
+		<section className="rounded-[30px] border border-border bg-white p-6 shadow-sm">
+			<div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+				<div className="flex items-center gap-5">
+					<div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-brand-primary/20 bg-brand-primary/10 text-brand-primaryStrong">
+						{icon}
+					</div>
+
+					<div className="min-w-0 space-y-2">
+						{eyebrow ? (
+							<p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-primaryStrong">
+								{eyebrow}
+							</p>
+						) : null}
+
+						<h1 className="text-3xl font-bold tracking-tight text-text-primary">
+							{title}
+						</h1>
+
+						{subtitle ? (
+							<p className="max-w-5xl text-base leading-7 text-text-secondary">
+								{subtitle}
+							</p>
+						) : null}
+					</div>
 				</div>
 
-				{/* Texts */}
-				<div className="min-w-0">
-					<h1 className="text-xl font-semibold text-text-primary md:text-2xl">
-						{title}
-					</h1>
-
-					{subtitle ? (
-						<p className="mt-1 max-w-3xl text-sm leading-relaxed text-text-secondary">
-							{subtitle}
-						</p>
-					) : null}
-				</div>
+				{actions ? (
+					<div className="flex shrink-0 flex-wrap items-center gap-3">
+						{actions}
+					</div>
+				) : null}
 			</div>
-		</div>
+		</section>
 	);
 }

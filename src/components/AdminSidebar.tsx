@@ -34,6 +34,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 
 import {
 	Building2,
+	CalendarClock,
 	Clock,
 	Cookie,
 	DatabaseBackup,
@@ -119,6 +120,7 @@ export default function AdminSidebar() {
 		home: locale === "es" ? "Página de inicio" : "Home",
 		services: locale === "es" ? "Servicios" : "Services",
 		projects: locale === "es" ? "Proyectos" : "Projects",
+		maintenance: locale === "es" ? "Mantenimientos" : "Maintenance",
 		blog: locale === "es" ? "Blog" : "Blog",
 		serviceClasses: locale === "es" ? "Clases de servicio" : "Service classes",
 		contactRequests:
@@ -155,6 +157,9 @@ export default function AdminSidebar() {
 	const isHomeActive = pathname.startsWith("/admin/dashboard/home");
 	const isServicesActive = pathname.startsWith("/admin/dashboard/services");
 	const isProjectsActive = pathname.startsWith("/admin/dashboard/projects");
+	const isMaintenanceActive = pathname.startsWith(
+		"/admin/dashboard/maintenance",
+	);
 	const isBlogActive = pathname.startsWith("/admin/dashboard/blog");
 	const isServiceClassesActive = pathname.startsWith(
 		"/admin/dashboard/service-classes",
@@ -190,6 +195,7 @@ export default function AdminSidebar() {
 		canAccessModule(permissions, "site-settings") ||
 		canAccessModule(permissions, "services") ||
 		canAccessModule(permissions, "projects") ||
+		canAccessModule(permissions, "maintenance") ||
 		canAccessModule(permissions, "blog") ||
 		canAccessModule(permissions, "service-classes") ||
 		canAccessModule(permissions, "contact-requests") ||
@@ -250,101 +256,116 @@ export default function AdminSidebar() {
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "site-settings") ||
 								canAccessModule(permissions, "cms")) && (
-								<Link
-									href="/admin/dashboard/site-settings"
-									className={linkClass(isSiteSettingsActive)}
-								>
-									<Settings
-										size={18}
-										className={iconClass(isSiteSettingsActive)}
-									/>
-									<span className={textVisibility}>{t.siteSettings}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/site-settings"
+										className={linkClass(isSiteSettingsActive)}
+									>
+										<Settings
+											size={18}
+											className={iconClass(isSiteSettingsActive)}
+										/>
+										<span className={textVisibility}>{t.siteSettings}</span>
+									</Link>
+								)}
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "home") ||
 								canAccessModule(permissions, "cms")) && (
-								<Link
-									href="/admin/dashboard/home"
-									className={linkClass(isHomeActive)}
-								>
-									<MonitorSmartphone
-										size={18}
-										className={iconClass(isHomeActive)}
-									/>
-									<span className={textVisibility}>{t.home}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/home"
+										className={linkClass(isHomeActive)}
+									>
+										<MonitorSmartphone
+											size={18}
+											className={iconClass(isHomeActive)}
+										/>
+										<span className={textVisibility}>{t.home}</span>
+									</Link>
+								)}
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "services") ||
 								canAccessModule(permissions, "cms")) && (
-								<Link
-									href="/admin/dashboard/services"
-									className={linkClass(isServicesActive)}
-								>
-									<Wrench size={18} className={iconClass(isServicesActive)} />
-									<span className={textVisibility}>{t.services}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/services"
+										className={linkClass(isServicesActive)}
+									>
+										<Wrench size={18} className={iconClass(isServicesActive)} />
+										<span className={textVisibility}>{t.services}</span>
+									</Link>
+								)}
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "projects") ||
 								canAccessModule(permissions, "cms")) && (
-								<Link
-									href="/admin/dashboard/projects"
-									className={linkClass(isProjectsActive)}
-								>
-									<FolderKanban
-										size={18}
-										className={iconClass(isProjectsActive)}
-									/>
-									<span className={textVisibility}>{t.projects}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/projects"
+										className={linkClass(isProjectsActive)}
+									>
+										<FolderKanban
+											size={18}
+											className={iconClass(isProjectsActive)}
+										/>
+										<span className={textVisibility}>{t.projects}</span>
+									</Link>
+								)}
+
+							{(isSuperAdmin ||
+								canAccessModule(permissions, "maintenance") ||
+								canAccessModule(permissions, "cms")) && (
+									<Link
+										href="/admin/dashboard/maintenance"
+										className={linkClass(isMaintenanceActive)}
+									>
+										<CalendarClock
+											size={18}
+											className={iconClass(isMaintenanceActive)}
+										/>
+										<span className={textVisibility}>{t.maintenance}</span>
+									</Link>
+								)}
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "blog") ||
 								canAccessModule(permissions, "cms")) && (
-								<Link
-									href="/admin/dashboard/blog"
-									className={linkClass(isBlogActive)}
-								>
-									<NotebookPen size={18} className={iconClass(isBlogActive)} />
-									<span className={textVisibility}>{t.blog}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/blog"
+										className={linkClass(isBlogActive)}
+									>
+										<NotebookPen size={18} className={iconClass(isBlogActive)} />
+										<span className={textVisibility}>{t.blog}</span>
+									</Link>
+								)}
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "service-classes") ||
 								canAccessModule(permissions, "cms")) && (
-								<Link
-									href="/admin/dashboard/service-classes"
-									className={linkClass(isServiceClassesActive)}
-								>
-									<ListOrdered
-										size={18}
-										className={iconClass(isServiceClassesActive)}
-									/>
-									<span className={textVisibility}>{t.serviceClasses}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/service-classes"
+										className={linkClass(isServiceClassesActive)}
+									>
+										<ListOrdered
+											size={18}
+											className={iconClass(isServiceClassesActive)}
+										/>
+										<span className={textVisibility}>{t.serviceClasses}</span>
+									</Link>
+								)}
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "contact-requests") ||
 								canAccessModule(permissions, "cms")) && (
-								<Link
-									href="/admin/dashboard/contact-requests"
-									className={linkClass(isContactRequestsActive)}
-								>
-									<Mail
-										size={18}
-										className={iconClass(isContactRequestsActive)}
-									/>
-									<span className={textVisibility}>{t.contactRequests}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/contact-requests"
+										className={linkClass(isContactRequestsActive)}
+									>
+										<Mail
+											size={18}
+											className={iconClass(isContactRequestsActive)}
+										/>
+										<span className={textVisibility}>{t.contactRequests}</span>
+									</Link>
+								)}
 						</div>
 					)}
 
@@ -358,31 +379,31 @@ export default function AdminSidebar() {
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "organizations")) && (
-								<Link
-									href="/admin/dashboard/organizations"
-									className={linkClass(isOrganizationsActive)}
-								>
-									<Building2
-										size={18}
-										className={iconClass(isOrganizationsActive)}
-									/>
-									<span className={textVisibility}>{t.organizations}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/organizations"
+										className={linkClass(isOrganizationsActive)}
+									>
+										<Building2
+											size={18}
+											className={iconClass(isOrganizationsActive)}
+										/>
+										<span className={textVisibility}>{t.organizations}</span>
+									</Link>
+								)}
 
 							{(isSuperAdmin ||
 								canAccessModule(permissions, "organization-users")) && (
-								<Link
-									href="/admin/dashboard/organization-users"
-									className={linkClass(isOrganizationUsersActive)}
-								>
-									<Users
-										size={18}
-										className={iconClass(isOrganizationUsersActive)}
-									/>
-									<span className={textVisibility}>{t.organizationUsers}</span>
-								</Link>
-							)}
+									<Link
+										href="/admin/dashboard/organization-users"
+										className={linkClass(isOrganizationUsersActive)}
+									>
+										<Users
+											size={18}
+											className={iconClass(isOrganizationUsersActive)}
+										/>
+										<span className={textVisibility}>{t.organizationUsers}</span>
+									</Link>
+								)}
 						</div>
 					)}
 

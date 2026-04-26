@@ -7,61 +7,52 @@
  * =============================================================================
  *
  * ES:
- *   Pantalla administrativa para gestionar los servicios públicos del sitio.
+ * Pantalla administrativa principal del módulo Services.
  *
- *   Responsabilidad:
- *   - Listar servicios existentes
- *   - Crear nuevos servicios
- *   - Editar servicios
- *   - Eliminar servicios
+ * Responsabilidades:
+ * - Listar servicios existentes.
+ * - Crear servicios redirigiendo a /admin/dashboard/services/new.
+ * - Editar servicios redirigiendo a /admin/dashboard/services/[id].
+ * - Eliminar servicios existentes.
+ * - Administrar la cabecera global pública de /services.
  *
- *   Alcance actual:
- *   - CRUD funcional
- *   - Formulario estructurado
- *   - Configuración superior de la página pública /services
- *     desde el mismo módulo Services
- *   - Asociación de documentos existentes mediante selector reutilizable
- *   - Gestión visual de galería por servicio
- *
- *   Decisión de estructura:
- *   - La cabecera pública de /services ya no forma parte de cada servicio.
- *   - La cabecera se administra como estado global de esta pantalla.
- *   - El CRUD de servicios permanece aislado de esa configuración global.
+ * Decisiones:
+ * - La creación y edición ya no se realizan en modal.
+ * - La cabecera pública de /services pertenece a esta pantalla.
+ * - El formulario completo de servicio vive en las páginas new/[id].
+ * - Se mantiene el diseño visual previo de tarjetas, badges y acciones.
  *
  * EN:
- *   Administrative page used to manage public website services.
+ * Main administrative page for the Services module.
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+	useEffect,
+	useMemo,
+	useState,
+	type InputHTMLAttributes,
+	type ReactNode,
+	type TextareaHTMLAttributes,
+} from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
-	Plus,
+	ArrowRight,
+	BriefcaseBusiness,
 	Pencil,
-	Trash2,
-	Wrench,
-	X,
+	Plus,
 	Save,
 	Star,
 	StarOff,
-	ArrowUp,
-	ArrowDown,
-	Image as ImageIcon,
+	Trash2,
 } from "lucide-react";
 
-import { useTranslation } from "@/hooks/useTranslation";
 import { AdminPageHeader } from "@/components/ui/AdminPageHeader";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useToast } from "@/components/ui/GlobalToastProvider";
-import DocumentAttachmentSelector, {
-	type ServiceAttachmentItem,
-} from "@/components/admin/documents/DocumentAttachmentSelector";
-
-import Image from "next/image";
-import {
-	uploadAdminFile,
-	type UploadedAdminFile,
-} from "@/lib/adminUploadsClient";
-import { resolveAssetUrl } from "@/lib/resolveAssetUrl";
+import { useTranslation } from "@/hooks/useTranslation";
+import GlobalConfirm from "@/components/ui/GlobalConfirm";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -96,15 +87,11 @@ interface ServiceTechnicalSpecs {
 	technology: LocalizedText;
 }
 
-type ServiceAttachmentRef = ServiceAttachmentItem;
+interface ServiceAttachmentRef {
+	documentId: string;
+	title: string;
+}
 
-/**
- * Cabecera global de la página pública /services.
- *
- * NOTA:
- * - No pertenece a un servicio individual.
- * - Se administra a nivel de pantalla.
- */
 interface ServicePageHeader {
 	eyebrow: LocalizedText;
 	title: LocalizedText;
@@ -185,16 +172,8 @@ const SERVICE_DEFAULTS: ServicePayload = {
 	updatedByEmail: "",
 };
 
-const SERVICE_CATEGORIES = [
-	"tratamiento-agua",
-	"control-olores",
-	"biorremediacion",
-	"energia-solar",
-	"procesos-microbiologicos",
-];
-
 /* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
+/* Normalizers                                                                */
 /* -------------------------------------------------------------------------- */
 
 function isAllowedRole(role: unknown): role is AllowedRole {
@@ -313,63 +292,29 @@ function normalizeService(value: unknown): ServicePayload {
 	};
 }
 
-function slugify(value: string): string {
-	return value
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9\s-]/g, "")
-		.replace(/\s+/g, "-")
-		.replace(/-+/g, "-")
-		.replace(/^-|-$/g, "");
-}
-
-function reorderGallery(items: ServiceGalleryItem[]): ServiceGalleryItem[] {
-	return items.map((item, index) => ({
-		...item,
-		order: index + 1,
-	}));
-}
-
-function moveGalleryItem(
-	items: ServiceGalleryItem[],
-	fromIndex: number,
-	toIndex: number,
-): ServiceGalleryItem[] {
-	if (
-		fromIndex < 0 ||
-		toIndex < 0 ||
-		fromIndex >= items.length ||
-		toIndex >= items.length
-	) {
-		return items;
-	}
-
-	const clone = [...items];
-	const [moved] = clone.splice(fromIndex, 1);
-	clone.splice(toIndex, 0, moved);
-	return reorderGallery(clone);
-}
-
 /* -------------------------------------------------------------------------- */
-/* Small UI helpers                                                           */
+/* Small UI                                                                   */
 /* -------------------------------------------------------------------------- */
 
-function SectionCard(props: {
+function SectionCard({
+	title,
+	subtitle,
+	children,
+}: {
 	title: string;
 	subtitle?: string;
 	children: ReactNode;
 }) {
 	return (
-		<section className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
+		<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
 			<div className="mb-5">
-				<h3 className="text-lg font-semibold text-text-primary">
-					{props.title}
-				</h3>
-				{props.subtitle ? (
-					<p className="mt-1 text-sm text-text-secondary">{props.subtitle}</p>
+				<h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+				{subtitle ? (
+					<p className="mt-1 text-sm text-text-secondary">{subtitle}</p>
 				) : null}
 			</div>
-			<div className="space-y-5">{props.children}</div>
+
+			<div className="space-y-5">{children}</div>
 		</section>
 	);
 }
@@ -382,96 +327,23 @@ function FieldLabel({ children }: { children: ReactNode }) {
 	);
 }
 
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 	return (
 		<input
 			{...props}
-			className={`w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${
-				props.className ?? ""
-			}`}
+			className={`w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${props.className ?? ""
+				}`}
 		/>
 	);
 }
 
-function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 	return (
 		<textarea
 			{...props}
-			className={`min-h-[96px] w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${
-				props.className ?? ""
-			}`}
+			className={`min-h-[96px] w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${props.className ?? ""
+				}`}
 		/>
-	);
-}
-
-function Toggle(props: {
-	label: string;
-	checked: boolean;
-	onChange: (value: boolean) => void;
-}) {
-	return (
-		<label className="inline-flex cursor-pointer items-center gap-3 text-sm text-text-primary">
-			<input
-				type="checkbox"
-				checked={props.checked}
-				onChange={(e) => props.onChange(e.target.checked)}
-				className="h-4 w-4 rounded border-border"
-			/>
-			<span>{props.label}</span>
-		</label>
-	);
-}
-
-function ActionButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-	return (
-		<button
-			{...props}
-			className={`inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50 ${
-				props.className ?? ""
-			}`}
-		/>
-	);
-}
-
-function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-	return (
-		<button
-			{...props}
-			className={`inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white disabled:cursor-not-allowed disabled:opacity-50 ${
-				props.className ?? ""
-			}`}
-		/>
-	);
-}
-
-function ServiceModal(props: {
-	open: boolean;
-	title: string;
-	children: ReactNode;
-	onClose: () => void;
-}) {
-	if (!props.open) return null;
-
-	return (
-		<div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/40 px-4 py-6 backdrop-blur-sm">
-			<div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-border bg-surface shadow-xl">
-				<div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-6 py-4">
-					<h2 className="text-lg font-semibold text-text-primary">
-						{props.title}
-					</h2>
-
-					<button
-						type="button"
-						onClick={props.onClose}
-						className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-text-secondary transition hover:bg-surface-soft hover:text-text-primary"
-					>
-						<X size={20} />
-					</button>
-				</div>
-
-				<div className="p-6">{props.children}</div>
-			</div>
-		</div>
 	);
 }
 
@@ -480,6 +352,7 @@ function ServiceModal(props: {
 /* -------------------------------------------------------------------------- */
 
 export default function ServicesPage() {
+	const router = useRouter();
 	const { locale } = useTranslation();
 	const lang: Locale = locale === "es" ? "es" : "en";
 
@@ -490,15 +363,9 @@ export default function ServicesPage() {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 
-	const [uploadingCoverImage, setUploadingCoverImage] = useState(false);
-	const [uploadingSeoImage, setUploadingSeoImage] = useState(false);
-	const [uploadingGalleryIndex, setUploadingGalleryIndex] = useState<
-		number | null
-	>(null);
-
-	const [modalOpen, setModalOpen] = useState(false);
-	const [editingId, setEditingId] = useState<string | null>(null);
-	const [form, setForm] = useState<ServicePayload>(SERVICE_DEFAULTS);
+	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+	const [deletingId, setDeletingId] = useState<string | null>(null);
+	const [deleting, setDeleting] = useState(false);
 
 	const [servicesHeader, setServicesHeader] = useState<ServicePageHeader>(
 		structuredClone(EMPTY_PAGE_HEADER),
@@ -506,14 +373,6 @@ export default function ServicesPage() {
 
 	const role = session?.user?.role;
 	const hasAccess = isAllowedRole(role);
-
-	const modalTitle = editingId
-		? lang === "es"
-			? "Editar servicio"
-			: "Edit service"
-		: lang === "es"
-			? "Crear servicio"
-			: "Create service";
 
 	const sortedServices = useMemo(() => {
 		return [...services].sort((a, b) => a.order - b.order);
@@ -554,22 +413,22 @@ export default function ServicesPage() {
 
 				const headerRecord =
 					pageRecord.header && typeof pageRecord.header === "object"
-						? pageRecord.header
+						? (pageRecord.header as Record<string, unknown>)
 						: null;
 
 				if (headerRecord) {
-					const safeHeader = headerRecord as Record<string, unknown>;
-
 					setServicesHeader({
-						eyebrow: normalizeLocalizedText(safeHeader.eyebrow),
-						title: normalizeLocalizedText(safeHeader.title),
-						subtitle: normalizeLocalizedText(safeHeader.subtitle),
-						primaryCtaLabel: normalizeLocalizedText(safeHeader.primaryCtaLabel),
-						primaryCtaHref: normalizeString(safeHeader.primaryCtaHref),
-						secondaryCtaLabel: normalizeLocalizedText(
-							safeHeader.secondaryCtaLabel,
+						eyebrow: normalizeLocalizedText(headerRecord.eyebrow),
+						title: normalizeLocalizedText(headerRecord.title),
+						subtitle: normalizeLocalizedText(headerRecord.subtitle),
+						primaryCtaLabel: normalizeLocalizedText(
+							headerRecord.primaryCtaLabel,
 						),
-						secondaryCtaHref: normalizeString(safeHeader.secondaryCtaHref),
+						primaryCtaHref: normalizeString(headerRecord.primaryCtaHref),
+						secondaryCtaLabel: normalizeLocalizedText(
+							headerRecord.secondaryCtaLabel,
+						),
+						secondaryCtaHref: normalizeString(headerRecord.secondaryCtaHref),
 					});
 				} else {
 					setServicesHeader(structuredClone(EMPTY_PAGE_HEADER));
@@ -608,43 +467,22 @@ export default function ServicesPage() {
 		void loadServices();
 	}, [status, hasAccess, toast, lang]);
 
-	function openCreateModal(): void {
-		const nextOrder = services.length + 1;
-
-		setEditingId(null);
-		setForm({
-			...structuredClone(SERVICE_DEFAULTS),
-			order: nextOrder,
-			attachments: [],
-			gallery: [],
-		});
-		setModalOpen(true);
+	function goToCreatePage(): void {
+		router.push("/admin/dashboard/services/new");
 	}
 
-	function openEditModal(item: ServiceListItem): void {
-		setEditingId(item._id ?? null);
-		setForm(normalizeService(item));
-		setModalOpen(true);
+	function requestDelete(id: string): void {
+		setDeletingId(id);
+		setDeleteConfirmOpen(true);
 	}
 
-	function closeModal(): void {
-		if (saving) return;
-		setModalOpen(false);
-		setEditingId(null);
-		setForm(structuredClone(SERVICE_DEFAULTS));
-	}
-
-	async function handleDelete(id: string): Promise<void> {
-		const confirmed = window.confirm(
-			lang === "es"
-				? "¿Deseas eliminar este servicio?"
-				: "Do you want to delete this service?",
-		);
-
-		if (!confirmed) return;
+	async function confirmDelete(): Promise<void> {
+		if (!deletingId) return;
 
 		try {
-			const response = await fetch(`/api/admin/services/${id}`, {
+			setDeleting(true);
+
+			const response = await fetch(`/api/admin/services/${deletingId}`, {
 				method: "DELETE",
 			});
 
@@ -652,13 +490,16 @@ export default function ServicesPage() {
 				throw new Error(`HTTP_${response.status}`);
 			}
 
-			setServices((prev) => prev.filter((item) => item._id !== id));
+			setServices((prev) => prev.filter((item) => item._id !== deletingId));
 
 			toast.success(
 				lang === "es"
 					? "Servicio eliminado correctamente."
 					: "Service deleted successfully.",
 			);
+
+			setDeleteConfirmOpen(false);
+			setDeletingId(null);
 		} catch (error) {
 			console.error("[ServicesPage] Error deleting service:", error);
 			toast.error(
@@ -666,140 +507,9 @@ export default function ServicesPage() {
 					? "No se pudo eliminar el servicio."
 					: "Could not delete service.",
 			);
-		}
-	}
-
-	async function handleSave(): Promise<void> {
-		try {
-			setSaving(true);
-
-			const payload: ServicePayload = {
-				...form,
-				slug: slugify(form.slug || form.title.es || form.title.en),
-				gallery: reorderGallery(
-					form.gallery
-						.filter((item) => item.url.trim().length > 0)
-						.map((item) => ({
-							url: item.url.trim(),
-							alt: {
-								es: item.alt.es.trim(),
-								en: item.alt.en.trim(),
-							},
-							order: item.order,
-						})),
-				),
-				attachments: form.attachments
-					.filter((item) => item.documentId.trim().length > 0)
-					.map((item) => ({
-						documentId: item.documentId.trim(),
-						title: item.title.trim(),
-					})),
-			};
-
-			const isEditing = Boolean(editingId);
-			const url = isEditing
-				? `/api/admin/services/${editingId}`
-				: "/api/admin/services";
-			const method = isEditing ? "PUT" : "POST";
-
-			const response = await fetch(url, {
-				method,
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(payload),
-			});
-
-			if (!response.ok) {
-				const errorBody: unknown = await response.json().catch(() => null);
-				console.error("[ServicesPage] Save error response:", errorBody);
-				throw new Error(`HTTP_${response.status}`);
-			}
-
-			const saved: unknown = await response.json().catch(() => null);
-			const savedRecord =
-				saved && typeof saved === "object"
-					? (saved as Record<string, unknown>)
-					: {};
-
-			const normalized: ServiceListItem = {
-				...normalizeService(saved),
-				_id: normalizeString(savedRecord._id, editingId ?? ""),
-			};
-
-			setServices((prev) => {
-				if (isEditing) {
-					return prev.map((item) =>
-						item._id === editingId ? normalized : item,
-					);
-				}
-
-				return [...prev, normalized];
-			});
-
-			toast.success(
-				lang === "es"
-					? "Servicio guardado correctamente."
-					: "Service saved successfully.",
-			);
-
-			closeModal();
-		} catch (error) {
-			console.error("[ServicesPage] Error saving service:", error);
-			toast.error(
-				lang === "es"
-					? "No se pudo guardar el servicio."
-					: "Could not save service.",
-			);
 		} finally {
-			setSaving(false);
+			setDeleting(false);
 		}
-	}
-
-	function updateLocalizedField(
-		field: "title" | "summary" | "description",
-		localeKey: Locale,
-		value: string,
-	): void {
-		setForm((prev) => ({
-			...prev,
-			[field]: {
-				...prev[field],
-				[localeKey]: value,
-			},
-		}));
-	}
-
-	function updateTechnicalSpecField(
-		field: keyof ServiceTechnicalSpecs,
-		localeKey: Locale,
-		value: string,
-	): void {
-		setForm((prev) => ({
-			...prev,
-			technicalSpecs: {
-				...prev.technicalSpecs,
-				[field]: {
-					...prev.technicalSpecs[field],
-					[localeKey]: value,
-				},
-			},
-		}));
-	}
-
-	function updateSeoField(
-		field: "metaTitle" | "metaDescription",
-		localeKey: Locale,
-		value: string,
-	): void {
-		setForm((prev) => ({
-			...prev,
-			seo: {
-				...prev.seo,
-				[field]: {
-					...prev.seo[field],
-					[localeKey]: value,
-				},
-			},
-		}));
 	}
 
 	function updateServicesHeaderField(
@@ -818,71 +528,6 @@ export default function ServicesPage() {
 				...prev[field],
 				[localeKey]: value,
 			},
-		}));
-	}
-
-	function addGalleryItem(): void {
-		setForm((prev) => ({
-			...prev,
-			gallery: [
-				...prev.gallery,
-				{
-					url: "",
-					alt: { es: "", en: "" },
-					order: prev.gallery.length + 1,
-				},
-			],
-		}));
-	}
-
-	function removeGalleryItem(index: number): void {
-		setForm((prev) => ({
-			...prev,
-			gallery: reorderGallery(prev.gallery.filter((_, i) => i !== index)),
-		}));
-	}
-
-	function moveGalleryUp(index: number): void {
-		setForm((prev) => ({
-			...prev,
-			gallery: moveGalleryItem(prev.gallery, index, index - 1),
-		}));
-	}
-
-	function moveGalleryDown(index: number): void {
-		setForm((prev) => ({
-			...prev,
-			gallery: moveGalleryItem(prev.gallery, index, index + 1),
-		}));
-	}
-
-	function updateGalleryUrl(index: number, value: string): void {
-		setForm((prev) => ({
-			...prev,
-			gallery: prev.gallery.map((item, i) =>
-				i === index ? { ...item, url: value } : item,
-			),
-		}));
-	}
-
-	function updateGalleryAlt(
-		index: number,
-		localeKey: Locale,
-		value: string,
-	): void {
-		setForm((prev) => ({
-			...prev,
-			gallery: prev.gallery.map((item, i) =>
-				i === index
-					? {
-							...item,
-							alt: {
-								...item.alt,
-								[localeKey]: value,
-							},
-						}
-					: item,
-			),
 		}));
 	}
 
@@ -955,29 +600,27 @@ export default function ServicesPage() {
 	}
 
 	return (
-		<main className="space-y-6">
+		<main className="space-y-6 px-6 pb-6">
 			<AdminPageHeader
-				icon={<Wrench className="h-6 w-6 text-brand-primaryStrong" />}
+				icon={<BriefcaseBusiness className="h-7 w-7" />}
+				eyebrow={lang === "es" ? "Sitio web / Servicios" : "Website / Services"}
 				title={lang === "es" ? "Servicios" : "Services"}
 				subtitle={
 					lang === "es"
 						? "Administra los servicios públicos del sitio."
 						: "Manage the public website services."
 				}
+				actions={
+					<PrimaryButton
+						type="button"
+						onClick={goToCreatePage}
+						className="rounded-2xl px-5 py-3 text-white hover:text-white"
+					>
+						<span>{lang === "es" ? "Nuevo servicio" : "New service"}</span>
+						<ArrowRight className="h-4 w-4" />
+					</PrimaryButton>
+				}
 			/>
-
-			<div className="flex items-center justify-between gap-4">
-				<div className="text-sm text-text-secondary">
-					{lang === "es"
-						? `${sortedServices.length} servicio(s) registrados`
-						: `${sortedServices.length} service(s) registered`}
-				</div>
-
-				<PrimaryButton onClick={openCreateModal}>
-					<Plus size={18} />
-					<span>{lang === "es" ? "Nuevo servicio" : "New service"}</span>
-				</PrimaryButton>
-			</div>
 
 			<SectionCard
 				title={
@@ -996,8 +639,12 @@ export default function ServicesPage() {
 						<FieldLabel>Eyebrow ES</FieldLabel>
 						<TextInput
 							value={servicesHeader.eyebrow.es}
-							onChange={(e) =>
-								updateServicesHeaderField("eyebrow", "es", e.target.value)
+							onChange={(event) =>
+								updateServicesHeaderField(
+									"eyebrow",
+									"es",
+									event.currentTarget.value,
+								)
 							}
 						/>
 					</div>
@@ -1006,8 +653,12 @@ export default function ServicesPage() {
 						<FieldLabel>Eyebrow EN</FieldLabel>
 						<TextInput
 							value={servicesHeader.eyebrow.en}
-							onChange={(e) =>
-								updateServicesHeaderField("eyebrow", "en", e.target.value)
+							onChange={(event) =>
+								updateServicesHeaderField(
+									"eyebrow",
+									"en",
+									event.currentTarget.value,
+								)
 							}
 						/>
 					</div>
@@ -1018,8 +669,12 @@ export default function ServicesPage() {
 						<FieldLabel>Título superior ES</FieldLabel>
 						<TextInput
 							value={servicesHeader.title.es}
-							onChange={(e) =>
-								updateServicesHeaderField("title", "es", e.target.value)
+							onChange={(event) =>
+								updateServicesHeaderField(
+									"title",
+									"es",
+									event.currentTarget.value,
+								)
 							}
 						/>
 					</div>
@@ -1028,8 +683,12 @@ export default function ServicesPage() {
 						<FieldLabel>Top title EN</FieldLabel>
 						<TextInput
 							value={servicesHeader.title.en}
-							onChange={(e) =>
-								updateServicesHeaderField("title", "en", e.target.value)
+							onChange={(event) =>
+								updateServicesHeaderField(
+									"title",
+									"en",
+									event.currentTarget.value,
+								)
 							}
 						/>
 					</div>
@@ -1040,8 +699,12 @@ export default function ServicesPage() {
 						<FieldLabel>Subtítulo ES</FieldLabel>
 						<TextArea
 							value={servicesHeader.subtitle.es}
-							onChange={(e) =>
-								updateServicesHeaderField("subtitle", "es", e.target.value)
+							onChange={(event) =>
+								updateServicesHeaderField(
+									"subtitle",
+									"es",
+									event.currentTarget.value,
+								)
 							}
 						/>
 					</div>
@@ -1050,8 +713,12 @@ export default function ServicesPage() {
 						<FieldLabel>Subtitle EN</FieldLabel>
 						<TextArea
 							value={servicesHeader.subtitle.en}
-							onChange={(e) =>
-								updateServicesHeaderField("subtitle", "en", e.target.value)
+							onChange={(event) =>
+								updateServicesHeaderField(
+									"subtitle",
+									"en",
+									event.currentTarget.value,
+								)
 							}
 						/>
 					</div>
@@ -1062,11 +729,11 @@ export default function ServicesPage() {
 						<FieldLabel>CTA principal ES</FieldLabel>
 						<TextInput
 							value={servicesHeader.primaryCtaLabel.es}
-							onChange={(e) =>
+							onChange={(event) =>
 								updateServicesHeaderField(
 									"primaryCtaLabel",
 									"es",
-									e.target.value,
+									event.currentTarget.value,
 								)
 							}
 						/>
@@ -1076,11 +743,11 @@ export default function ServicesPage() {
 						<FieldLabel>Primary CTA EN</FieldLabel>
 						<TextInput
 							value={servicesHeader.primaryCtaLabel.en}
-							onChange={(e) =>
+							onChange={(event) =>
 								updateServicesHeaderField(
 									"primaryCtaLabel",
 									"en",
-									e.target.value,
+									event.currentTarget.value,
 								)
 							}
 						/>
@@ -1093,12 +760,14 @@ export default function ServicesPage() {
 					</FieldLabel>
 					<TextInput
 						value={servicesHeader.primaryCtaHref}
-						onChange={(e) =>
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+
 							setServicesHeader((prev) => ({
 								...prev,
-								primaryCtaHref: e.target.value,
-							}))
-						}
+								primaryCtaHref: value,
+							}));
+						}}
 						placeholder="/contact"
 					/>
 				</div>
@@ -1108,11 +777,11 @@ export default function ServicesPage() {
 						<FieldLabel>CTA secundario ES</FieldLabel>
 						<TextInput
 							value={servicesHeader.secondaryCtaLabel.es}
-							onChange={(e) =>
+							onChange={(event) =>
 								updateServicesHeaderField(
 									"secondaryCtaLabel",
 									"es",
-									e.target.value,
+									event.currentTarget.value,
 								)
 							}
 						/>
@@ -1122,11 +791,11 @@ export default function ServicesPage() {
 						<FieldLabel>Secondary CTA EN</FieldLabel>
 						<TextInput
 							value={servicesHeader.secondaryCtaLabel.en}
-							onChange={(e) =>
+							onChange={(event) =>
 								updateServicesHeaderField(
 									"secondaryCtaLabel",
 									"en",
-									e.target.value,
+									event.currentTarget.value,
 								)
 							}
 						/>
@@ -1139,18 +808,21 @@ export default function ServicesPage() {
 					</FieldLabel>
 					<TextInput
 						value={servicesHeader.secondaryCtaHref}
-						onChange={(e) =>
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+
 							setServicesHeader((prev) => ({
 								...prev,
-								secondaryCtaHref: e.target.value,
-							}))
-						}
+								secondaryCtaHref: value,
+							}));
+						}}
 						placeholder="/projects"
 					/>
 				</div>
 
 				<div className="flex flex-wrap items-center gap-3">
 					<PrimaryButton
+						type="button"
 						disabled={saving}
 						onClick={() => void handleSaveServicesHeader()}
 					>
@@ -1178,10 +850,14 @@ export default function ServicesPage() {
 					}
 				>
 					<div className="flex justify-start">
-						<ActionButton onClick={openCreateModal}>
+						<button
+							type="button"
+							onClick={goToCreatePage}
+							className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold text-text-primary shadow-sm transition hover:border-brand-secondary hover:bg-surface-soft"
+						>
 							<Plus size={18} />
 							<span>{lang === "es" ? "Crear primero" : "Create first"}</span>
-						</ActionButton>
+						</button>
 					</div>
 				</SectionCard>
 			) : (
@@ -1201,11 +877,10 @@ export default function ServicesPage() {
 										</h3>
 
 										<span
-											className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-												item.status === "published"
-													? "bg-green-100 text-green-700"
-													: "bg-amber-100 text-amber-700"
-											}`}
+											className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.status === "published"
+												? "bg-green-100 text-green-700"
+												: "bg-amber-100 text-amber-700"
+												}`}
 										>
 											{item.status === "published"
 												? lang === "es"
@@ -1245,862 +920,61 @@ export default function ServicesPage() {
 										{lang === "es"
 											? item.summary.es || item.description.es || "-"
 											: item.summary.en ||
-												item.summary.es ||
-												item.description.en ||
-												item.description.es ||
-												"-"}
+											item.summary.es ||
+											item.description.en ||
+											item.description.es ||
+											"-"}
 									</p>
 								</div>
 
 								<div className="flex flex-wrap gap-2">
-									<ActionButton onClick={() => openEditModal(item)}>
-										<Pencil size={16} />
-										<span>{lang === "es" ? "Editar" : "Edit"}</span>
-									</ActionButton>
-
-									<ActionButton
+									<button
+										type="button"
 										onClick={() => {
 											if (!item._id) return;
-											void handleDelete(item._id);
+											router.push(`/admin/dashboard/services/${item._id}`);
 										}}
-										className="hover:border-status-error hover:text-status-error"
+										className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold text-text-primary shadow-sm transition hover:border-brand-secondary hover:bg-surface-soft"
+									>
+										<Pencil size={16} />
+										<span>{lang === "es" ? "Editar" : "Edit"}</span>
+									</button>
+
+									<button
+										type="button"
+										onClick={() => {
+											if (!item._id) return;
+											requestDelete(item._id);
+										}}
+										className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50"
 									>
 										<Trash2 size={16} />
 										<span>{lang === "es" ? "Eliminar" : "Delete"}</span>
-									</ActionButton>
+									</button>
 								</div>
 							</div>
 						</div>
 					))}
 				</div>
 			)}
-
-			<ServiceModal open={modalOpen} title={modalTitle} onClose={closeModal}>
-				<div className="space-y-6">
-					<SectionCard
-						title={
-							lang === "es" ? "Identidad del servicio" : "Service identity"
-						}
-						subtitle={
-							lang === "es"
-								? "Define título, slug, categoría, orden y visibilidad."
-								: "Define title, slug, category, order and visibility."
-						}
-					>
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Título ES</FieldLabel>
-								<TextInput
-									value={form.title.es}
-									onChange={(e) =>
-										updateLocalizedField("title", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Title EN</FieldLabel>
-								<TextInput
-									value={form.title.en}
-									onChange={(e) =>
-										updateLocalizedField("title", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-5 md:grid-cols-3">
-							<div>
-								<FieldLabel>Slug</FieldLabel>
-								<TextInput
-									value={form.slug}
-									onChange={(e) =>
-										setForm((prev) => ({ ...prev, slug: e.target.value }))
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>
-									{lang === "es" ? "Categoría" : "Category"}
-								</FieldLabel>
-								<select
-									value={form.category}
-									onChange={(e) =>
-										setForm((prev) => ({ ...prev, category: e.target.value }))
-									}
-									className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
-								>
-									<option value="">
-										{lang === "es"
-											? "Selecciona una categoría"
-											: "Select category"}
-									</option>
-									{SERVICE_CATEGORIES.map((category) => (
-										<option key={category} value={category}>
-											{category}
-										</option>
-									))}
-								</select>
-							</div>
-
-							<div>
-								<FieldLabel>{lang === "es" ? "Orden" : "Order"}</FieldLabel>
-								<TextInput
-									type="number"
-									min={1}
-									value={form.order}
-									onChange={(e) =>
-										setForm((prev) => ({
-											...prev,
-											order: Math.max(1, Number(e.target.value) || 1),
-										}))
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="flex flex-wrap gap-6">
-							<Toggle
-								label={lang === "es" ? "Destacado" : "Featured"}
-								checked={form.featured}
-								onChange={(value) =>
-									setForm((prev) => ({ ...prev, featured: value }))
-								}
-							/>
-
-							<div className="flex items-center gap-3">
-								<FieldLabel>{lang === "es" ? "Estado" : "Status"}</FieldLabel>
-								<select
-									value={form.status}
-									onChange={(e) =>
-										setForm((prev) => ({
-											...prev,
-											status:
-												e.target.value === "published" ? "published" : "draft",
-										}))
-									}
-									className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
-								>
-									<option value="draft">
-										{lang === "es" ? "Borrador" : "Draft"}
-									</option>
-									<option value="published">
-										{lang === "es" ? "Publicado" : "Published"}
-									</option>
-								</select>
-							</div>
-						</div>
-					</SectionCard>
-
-					<SectionCard
-						title={lang === "es" ? "Contenido principal" : "Main content"}
-						subtitle={
-							lang === "es"
-								? "Resumen, descripción e imagen principal."
-								: "Summary, description and main image."
-						}
-					>
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Resumen ES</FieldLabel>
-								<TextArea
-									value={form.summary.es}
-									onChange={(e) =>
-										updateLocalizedField("summary", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Summary EN</FieldLabel>
-								<TextArea
-									value={form.summary.en}
-									onChange={(e) =>
-										updateLocalizedField("summary", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Descripción ES</FieldLabel>
-								<TextArea
-									value={form.description.es}
-									onChange={(e) =>
-										updateLocalizedField("description", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Description EN</FieldLabel>
-								<TextArea
-									value={form.description.en}
-									onChange={(e) =>
-										updateLocalizedField("description", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div>
-							<FieldLabel>Cover Image</FieldLabel>
-
-							<div className="space-y-3">
-								<TextInput
-									value={form.coverImage}
-									onChange={(e) =>
-										setForm((prev) => ({ ...prev, coverImage: e.target.value }))
-									}
-									placeholder="admin/services/covers/..."
-								/>
-
-								<div className="flex flex-wrap items-center gap-3">
-									<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
-										<input
-											type="file"
-											accept=".png,.jpg,.jpeg,.webp,.svg"
-											className="hidden"
-											onChange={async (e) => {
-												const file = e.target.files?.[0] ?? null;
-												if (!file) return;
-
-												try {
-													setUploadingCoverImage(true);
-
-													const result = await uploadAdminFile(
-														file,
-														"services/covers",
-													);
-
-													if (!result.ok || !result.file) {
-														toast.error(
-															lang === "es"
-																? result.message ||
-																		"No se pudo subir la imagen principal."
-																: result.message ||
-																		"Could not upload the cover image.",
-														);
-														return;
-													}
-
-													const uploadedFile: UploadedAdminFile = result.file;
-
-													setForm((prev) => ({
-														...prev,
-														coverImage: uploadedFile.fileKey,
-													}));
-
-													toast.success(
-														lang === "es"
-															? "Imagen principal subida correctamente."
-															: "Cover image uploaded successfully.",
-													);
-												} catch (error) {
-													console.error(
-														"[ServicesPage] Cover image upload error:",
-														error,
-													);
-
-													toast.error(
-														lang === "es"
-															? "Ocurrió un error al subir la imagen principal."
-															: "An error occurred while uploading the cover image.",
-													);
-												} finally {
-													setUploadingCoverImage(false);
-													e.target.value = "";
-												}
-											}}
-											disabled={uploadingCoverImage || saving}
-										/>
-										{uploadingCoverImage
-											? lang === "es"
-												? "Subiendo..."
-												: "Uploading..."
-											: lang === "es"
-												? "Subir imagen principal"
-												: "Upload cover image"}
-									</label>
-
-									{form.coverImage ? (
-										<span className="text-xs text-text-secondary">
-											{form.coverImage}
-										</span>
-									) : null}
-								</div>
-
-								{form.coverImage ? (
-									<div className="rounded-xl border border-border bg-background p-4">
-										<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
-											{lang === "es" ? "Vista previa" : "Preview"}
-										</div>
-
-										<Image
-											src={resolveAssetUrl(form.coverImage)}
-											alt="Service cover preview"
-											width={480}
-											height={280}
-											unoptimized
-											className="max-h-56 w-auto rounded-lg object-contain"
-										/>
-									</div>
-								) : null}
-							</div>
-						</div>
-					</SectionCard>
-
-					<SectionCard
-						title={lang === "es" ? "Galería del servicio" : "Service gallery"}
-						subtitle={
-							lang === "es"
-								? "Agrega imágenes adicionales para el detalle público del servicio."
-								: "Add extra images for the public service detail page."
-						}
-					>
-						<div className="flex flex-wrap items-center gap-3">
-							<PrimaryButton type="button" onClick={addGalleryItem}>
-								<Plus size={18} />
-								<span>{lang === "es" ? "Agregar imagen" : "Add image"}</span>
-							</PrimaryButton>
-						</div>
-
-						{form.gallery.length === 0 ? (
-							<div className="rounded-2xl border border-border bg-background px-4 py-6 text-center text-sm text-text-secondary">
-								{lang === "es"
-									? "No hay imágenes en la galería."
-									: "There are no gallery images."}
-							</div>
-						) : (
-							<div className="space-y-4">
-								{form.gallery.map((item, index) => (
-									<div
-										key={`gallery-item-${index}`}
-										className="rounded-2xl border border-border bg-background p-4"
-									>
-										<div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-											<div className="flex items-center gap-3">
-												<div className="rounded-2xl bg-surface-soft p-3 text-text-secondary">
-													<ImageIcon className="h-5 w-5" />
-												</div>
-
-												<div>
-													<p className="text-sm font-semibold text-text-primary">
-														{lang === "es"
-															? `Imagen ${index + 1}`
-															: `Image ${index + 1}`}
-													</p>
-													<p className="text-xs text-text-secondary">
-														{lang === "es"
-															? `Orden: ${item.order}`
-															: `Order: ${item.order}`}
-													</p>
-												</div>
-											</div>
-
-											<div className="flex flex-wrap gap-2">
-												<ActionButton
-													type="button"
-													onClick={() => moveGalleryUp(index)}
-													disabled={index === 0}
-												>
-													<ArrowUp size={16} />
-												</ActionButton>
-
-												<ActionButton
-													type="button"
-													onClick={() => moveGalleryDown(index)}
-													disabled={index === form.gallery.length - 1}
-												>
-													<ArrowDown size={16} />
-												</ActionButton>
-
-												<ActionButton
-													type="button"
-													onClick={() => removeGalleryItem(index)}
-													className="hover:border-status-error hover:text-status-error"
-												>
-													<Trash2 size={16} />
-												</ActionButton>
-											</div>
-										</div>
-
-										<div className="space-y-4">
-											<div>
-												<FieldLabel>
-													{lang === "es"
-														? "URL / ruta de imagen"
-														: "Image URL / path"}
-												</FieldLabel>
-												<TextInput
-													value={item.url}
-													onChange={(e) =>
-														updateGalleryUrl(index, e.target.value)
-													}
-													placeholder="admin/services/gallery/..."
-												/>
-
-												<div className="mt-3 flex flex-wrap items-center gap-3">
-													<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
-														<input
-															type="file"
-															accept=".png,.jpg,.jpeg,.webp,.svg"
-															className="hidden"
-															onChange={async (e) => {
-																const file = e.target.files?.[0] ?? null;
-																if (!file) return;
-
-																try {
-																	setUploadingGalleryIndex(index);
-
-																	const result = await uploadAdminFile(
-																		file,
-																		"services/gallery",
-																	);
-
-																	if (!result.ok || !result.file) {
-																		toast.error(
-																			lang === "es"
-																				? result.message ||
-																						"No se pudo subir la imagen de galería."
-																				: result.message ||
-																						"Could not upload the gallery image.",
-																		);
-																		return;
-																	}
-
-																	const uploadedFile: UploadedAdminFile =
-																		result.file;
-																	updateGalleryUrl(index, uploadedFile.fileKey);
-
-																	toast.success(
-																		lang === "es"
-																			? "Imagen de galería subida correctamente."
-																			: "Gallery image uploaded successfully.",
-																	);
-																} catch (error) {
-																	console.error(
-																		"[ServicesPage] Gallery image upload error:",
-																		error,
-																	);
-
-																	toast.error(
-																		lang === "es"
-																			? "Ocurrió un error al subir la imagen de galería."
-																			: "An error occurred while uploading the gallery image.",
-																	);
-																} finally {
-																	setUploadingGalleryIndex(null);
-																	e.target.value = "";
-																}
-															}}
-															disabled={
-																uploadingGalleryIndex === index || saving
-															}
-														/>
-														{uploadingGalleryIndex === index
-															? lang === "es"
-																? "Subiendo..."
-																: "Uploading..."
-															: lang === "es"
-																? "Subir imagen"
-																: "Upload image"}
-													</label>
-
-													{item.url ? (
-														<span className="text-xs text-text-secondary">
-															{item.url}
-														</span>
-													) : null}
-												</div>
-
-												{item.url ? (
-													<div className="mt-3 rounded-xl border border-border bg-background p-4">
-														<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
-															{lang === "es" ? "Vista previa" : "Preview"}
-														</div>
-
-														<Image
-															src={resolveAssetUrl(item.url)}
-															alt={
-																item.alt[lang] || `Gallery image ${index + 1}`
-															}
-															width={420}
-															height={240}
-															unoptimized
-															className="max-h-48 w-auto rounded-lg object-contain"
-														/>
-													</div>
-												) : null}
-											</div>
-
-											<div className="grid gap-4 md:grid-cols-2">
-												<div>
-													<FieldLabel>Alt ES</FieldLabel>
-													<TextInput
-														value={item.alt.es}
-														onChange={(e) =>
-															updateGalleryAlt(index, "es", e.target.value)
-														}
-													/>
-												</div>
-
-												<div>
-													<FieldLabel>Alt EN</FieldLabel>
-													<TextInput
-														value={item.alt.en}
-														onChange={(e) =>
-															updateGalleryAlt(index, "en", e.target.value)
-														}
-													/>
-												</div>
-											</div>
-										</div>
-									</div>
-								))}
-							</div>
-						)}
-					</SectionCard>
-
-					<SectionCard
-						title={
-							lang === "es"
-								? "Especificaciones técnicas"
-								: "Technical specifications"
-						}
-						subtitle={
-							lang === "es"
-								? "Información técnica estructurada del servicio."
-								: "Structured technical information for the service."
-						}
-					>
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Aplicación ES</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.application.es}
-									onChange={(e) =>
-										updateTechnicalSpecField(
-											"application",
-											"es",
-											e.target.value,
-										)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Application EN</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.application.en}
-									onChange={(e) =>
-										updateTechnicalSpecField(
-											"application",
-											"en",
-											e.target.value,
-										)
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Capacidad ES</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.capacity.es}
-									onChange={(e) =>
-										updateTechnicalSpecField("capacity", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Capacity EN</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.capacity.en}
-									onChange={(e) =>
-										updateTechnicalSpecField("capacity", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Caudal ES</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.flowRate.es}
-									onChange={(e) =>
-										updateTechnicalSpecField("flowRate", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Flow Rate EN</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.flowRate.en}
-									onChange={(e) =>
-										updateTechnicalSpecField("flowRate", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Material ES</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.material.es}
-									onChange={(e) =>
-										updateTechnicalSpecField("material", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Material EN</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.material.en}
-									onChange={(e) =>
-										updateTechnicalSpecField("material", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>Tecnología ES</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.technology.es}
-									onChange={(e) =>
-										updateTechnicalSpecField("technology", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>Technology EN</FieldLabel>
-								<TextInput
-									value={form.technicalSpecs.technology.en}
-									onChange={(e) =>
-										updateTechnicalSpecField("technology", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-					</SectionCard>
-
-					<DocumentAttachmentSelector
-						value={form.attachments}
-						onChange={(nextValue) =>
-							setForm((prev) => ({
-								...prev,
-								attachments: nextValue,
-							}))
-						}
-						locale={lang}
-						relatedModule="services"
-						title={
-							lang === "es" ? "Documentos relacionados" : "Related documents"
-						}
-						description={
-							lang === "es"
-								? "Busca documentos existentes en la biblioteca y asígnalos a este servicio."
-								: "Search existing documents in the library and attach them to this service."
-						}
-					/>
-
-					<SectionCard
-						title="SEO"
-						subtitle={
-							lang === "es"
-								? "Metadatos básicos del servicio."
-								: "Basic service metadata."
-						}
-					>
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>SEO Meta Title ES</FieldLabel>
-								<TextInput
-									value={form.seo.metaTitle.es}
-									onChange={(e) =>
-										updateSeoField("metaTitle", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>SEO Meta Title EN</FieldLabel>
-								<TextInput
-									value={form.seo.metaTitle.en}
-									onChange={(e) =>
-										updateSeoField("metaTitle", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-5 md:grid-cols-2">
-							<div>
-								<FieldLabel>SEO Meta Description ES</FieldLabel>
-								<TextArea
-									value={form.seo.metaDescription.es}
-									onChange={(e) =>
-										updateSeoField("metaDescription", "es", e.target.value)
-									}
-								/>
-							</div>
-
-							<div>
-								<FieldLabel>SEO Meta Description EN</FieldLabel>
-								<TextArea
-									value={form.seo.metaDescription.en}
-									onChange={(e) =>
-										updateSeoField("metaDescription", "en", e.target.value)
-									}
-								/>
-							</div>
-						</div>
-
-						<div>
-							<FieldLabel>SEO Image</FieldLabel>
-
-							<div className="space-y-3">
-								<TextInput
-									value={form.seo.image}
-									onChange={(e) =>
-										setForm((prev) => ({
-											...prev,
-											seo: { ...prev.seo, image: e.target.value },
-										}))
-									}
-									placeholder="admin/services/seo/..."
-								/>
-
-								<div className="flex flex-wrap items-center gap-3">
-									<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
-										<input
-											type="file"
-											accept=".png,.jpg,.jpeg,.webp,.svg"
-											className="hidden"
-											onChange={async (e) => {
-												const file = e.target.files?.[0] ?? null;
-												if (!file) return;
-
-												try {
-													setUploadingSeoImage(true);
-
-													const result = await uploadAdminFile(
-														file,
-														"services/seo",
-													);
-
-													if (!result.ok || !result.file) {
-														toast.error(
-															lang === "es"
-																? result.message ||
-																		"No se pudo subir la imagen SEO."
-																: result.message ||
-																		"Could not upload the SEO image.",
-														);
-														return;
-													}
-
-													const uploadedFile: UploadedAdminFile = result.file;
-
-													setForm((prev) => ({
-														...prev,
-														seo: {
-															...prev.seo,
-															image: uploadedFile.fileKey,
-														},
-													}));
-
-													toast.success(
-														lang === "es"
-															? "Imagen SEO subida correctamente."
-															: "SEO image uploaded successfully.",
-													);
-												} catch (error) {
-													console.error(
-														"[ServicesPage] SEO image upload error:",
-														error,
-													);
-
-													toast.error(
-														lang === "es"
-															? "Ocurrió un error al subir la imagen SEO."
-															: "An error occurred while uploading the SEO image.",
-													);
-												} finally {
-													setUploadingSeoImage(false);
-													e.target.value = "";
-												}
-											}}
-											disabled={uploadingSeoImage || saving}
-										/>
-										{uploadingSeoImage
-											? lang === "es"
-												? "Subiendo..."
-												: "Uploading..."
-											: lang === "es"
-												? "Subir imagen SEO"
-												: "Upload SEO image"}
-									</label>
-
-									{form.seo.image ? (
-										<span className="text-xs text-text-secondary">
-											{form.seo.image}
-										</span>
-									) : null}
-								</div>
-
-								{form.seo.image ? (
-									<div className="rounded-xl border border-border bg-background p-4">
-										<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
-											{lang === "es" ? "Vista previa" : "Preview"}
-										</div>
-
-										<Image
-											src={resolveAssetUrl(form.seo.image)}
-											alt="SEO image preview"
-											width={420}
-											height={240}
-											unoptimized
-											className="max-h-48 w-auto rounded-lg object-contain"
-										/>
-									</div>
-								) : null}
-							</div>
-						</div>
-					</SectionCard>
-
-					<div className="flex flex-wrap items-center gap-3">
-						<PrimaryButton disabled={saving} onClick={() => void handleSave()}>
-							<Save size={18} />
-							<span>
-								{saving
-									? lang === "es"
-										? "Guardando..."
-										: "Saving..."
-									: lang === "es"
-										? "Guardar servicio"
-										: "Save service"}
-							</span>
-						</PrimaryButton>
-
-						<ActionButton disabled={saving} onClick={closeModal}>
-							<X size={18} />
-							<span>{lang === "es" ? "Cancelar" : "Cancel"}</span>
-						</ActionButton>
-					</div>
-				</div>
-			</ServiceModal>
+			<GlobalConfirm
+				open={deleteConfirmOpen}
+				title={lang === "es" ? "Eliminar servicio" : "Delete service"}
+				message={
+					lang === "es"
+						? "Esta acción eliminará el servicio seleccionado. No se puede deshacer."
+						: "This action will delete the selected service. It cannot be undone."
+				}
+				cancelLabel={lang === "es" ? "Cancelar" : "Cancel"}
+				confirmLabel={lang === "es" ? "Eliminar" : "Delete"}
+				loading={deleting}
+				onCancel={() => {
+					if (deleting) return;
+					setDeleteConfirmOpen(false);
+					setDeletingId(null);
+				}}
+				onConfirm={() => void confirmDelete()}
+			/>
 		</main>
 	);
 }

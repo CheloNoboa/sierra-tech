@@ -304,17 +304,25 @@ function normalizeLocalizedStringArray(value: unknown): {
 	};
 }
 
+/**
+ * IMPORTANTE:
+ * - storageKey es la fuente de verdad en Sierra Tech (R2)
+ * - NO descartar imágenes si url está vacío
+ */
+
 function normalizeProjectImage(value: unknown): ProjectImage | null {
 	const source = isRecord(value) ? value : null;
 	if (!source) return null;
 
 	const url = normalizeString(source.url);
-	if (!url) return null;
+	const storageKey = normalizeString(source.storageKey);
+
+	if (!url && !storageKey) return null;
 
 	return {
 		url,
 		alt: normalizeLocalizedTextWithLegacyString(source.alt),
-		storageKey: normalizeString(source.storageKey),
+		storageKey,
 	};
 }
 
