@@ -7,20 +7,43 @@
  * =============================================================================
  *
  * ES:
- * Formulario oficial unificado para crear y editar Maintenance.
+ * Formulario unificado del módulo Maintenance.
+ *
+ * Propósito:
+ * - crear y editar mantenimientos desde una sola pantalla
+ * - gestionar el schedule como fuente de verdad
  *
  * Uso:
- * - mode="create" para /admin/dashboard/maintenance/new
- * - mode="edit"   para /admin/dashboard/maintenance/[id]
+ * - mode="create" → /admin/dashboard/maintenance/new
+ * - mode="edit"   → /admin/dashboard/maintenance/[id]
+ *
+ * Alcance:
+ * - selección de organización y proyecto
+ * - carga de contexto contractual del proyecto
+ * - configuración base del mantenimiento
+ * - generación y edición del schedule
+ * - persistencia:
+ *   - POST → create
+ *   - PUT  → update
+ *
+ * Reglas:
+ * - el schedule define el estado del mantenimiento
+ * - una fila = una ejecución
+ * - la primera fila puede recalcular la secuencia
+ * - las demás filas solo afectan su propia entrada
  *
  * Decisiones:
- * - una sola UI para NEW y EDIT
- * - estructura visual basada en NEW
- * - schedule operativo basado en [id]
- * - create usa POST /api/admin/maintenance
- * - edit usa PUT /api/admin/maintenance/[id]
- * - sin any
+ * - una sola UI para create y edit
+ * - página completa (sin modal)
+ * - tipado estricto (sin any)
  * - sin alert()
+ *
+ * EN:
+ * Unified form for creating and editing Maintenance entities.
+ *
+ * Purpose:
+ * - manage maintenance configuration and schedule in a single UI
+ * - treat schedule as the source of truth
  * =============================================================================
  */
 

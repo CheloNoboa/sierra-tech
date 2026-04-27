@@ -5,26 +5,37 @@
  * =============================================================================
  *
  * ES:
- * Helpers centrales para normalizar el payload del módulo Projects.
+ * Normalización central del payload del módulo Projects.
  *
- * Objetivo:
- * - convertir input desconocido en estructuras estrictas y estables
- * - proteger UI / API / DB contra datos incompletos o inconsistentes
- * - mantener Projects separado del flujo operativo de Maintenance
- * - soportar compatibilidad con datos antiguos monolingües
- * - asegurar fechas como ISO string o null
+ * Propósito:
+ * - convertir input desconocido en un ProjectPayload válido
+ * - garantizar consistencia entre UI, API y DB
+ *
+ * Alcance:
+ * - sanitización de strings, números y booleanos
+ * - normalización de campos bilingües { es, en }
+ * - normalización de arrays (siempre estables)
+ * - normalización de fechas (ISO string | null)
+ * - normalización de documentos y media
  *
  * Reglas:
- * - este archivo es la fuente de verdad para normalización defensiva
- * - no debe inventar shapes distintos a src/types/project.ts
- * - todo array debe salir estable
- * - todo campo bilingüe debe salir con { es, en }
- * - storageKey se considera válido aunque url venga vacío
+ * - el output SIEMPRE respeta src/types/project.ts
+ * - ningún campo sale undefined
+ * - todo array sale como []
+ * - todo campo bilingüe sale como { es, en }
+ * - storageKey es válido aunque url esté vacío
  *
  * Decisiones:
- * - Projects conserva fechas contractuales base
- * - Maintenance usa esas fechas, pero administra su propio schedule
- * - no se usa any
+ * - contractEndDate se deriva desde fechas contractuales
+ * - status y visibility se alinean con publicSiteSettings.enabled
+ * - Projects solo define datos base; no gestiona lógica de Maintenance
+ *
+ * EN:
+ * Central normalization layer for Project payloads.
+ *
+ * Purpose:
+ * - transform unknown input into a valid ProjectPayload
+ * - ensure consistency across UI, API and DB
  * =============================================================================
  */
 
