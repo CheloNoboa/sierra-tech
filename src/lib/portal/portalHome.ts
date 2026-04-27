@@ -19,7 +19,8 @@
  * - alertas recientes
  *
  * Decisiones:
- * - en esta primera versión, la home se alimenta exclusivamente desde Projects
+ * - Projects alimenta proyectos, documentos y alertas documentales
+ * - Maintenance alimenta el conteo real de mantenimientos próximos
  * - no se introduce todavía una fuente documental independiente
  * - los documentos recientes salen de los documentos visibles en portal dentro
  *   de los proyectos
@@ -46,6 +47,7 @@ import type {
 	PortalHomeData,
 	PortalProjectCard,
 } from "@/types/portal";
+import Maintenance from "@/models/Maintenance";
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -136,14 +138,11 @@ export async function getPortalHomeDataByOrganization(params: {
 		extractPortalAlertsFromProject(project),
 	);
 
-	const upcomingMaintenances = visibleProjects.reduce((count, project) => {
-		return (
-			count +
-			project.maintenanceItems.filter((item) => {
-				return item.status === "scheduled" && !!item.nextDueDate;
-			}).length
-		);
-	}, 0);
+	const upcomingMaintenances = await Maintenance.countDocuments({
+		organizationId: normalizedOrganizationId,
+		status: { $in: ["scheduled", "active", "overdue"] },
+		nextDueDate: { $ne: null },
+	});
 
 	return {
 		organizationName,

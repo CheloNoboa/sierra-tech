@@ -5,15 +5,21 @@
  * =============================================================================
  *
  * ES:
- *   Modelo oficial del módulo Projects.
+ * Modelo oficial del módulo Projects.
  *
- *   Decisiones:
- *   - el contrato define la vigencia global del proyecto
- *   - los mantenimientos usan `schedule` como estructura persistida
- *   - si el usuario ya editó manualmente el schedule, el modelo lo respeta
- *   - si no existe schedule, el modelo lo genera automáticamente
- *   - `nextDueDate` se deriva desde el primer evento del schedule o desde la
- *     lógica de frecuencia cuando todavía no existe schedule manual
+ * Objetivo:
+ * - persistir proyectos como entidades documental-operativas
+ * - conservar identidad, cliente, publicación, documentos, media y clasificación
+ * - mantener fechas contractuales base para que Maintenance las use
+ *
+ * Decisiones:
+ * - Projects NO administra mantenimientos embebidos como flujo operativo
+ * - Maintenance vive en su propio módulo/modelo
+ * - serviceClassKey guarda la clave estable de ServiceClass
+ * - serviceClassLabel guarda snapshot bilingüe para lectura rápida
+ * - la publicación pública se controla desde publicSiteSettings.enabled
+ * - el modelo elimina `maintenanceItems` legacy en cada guardado
+ * - no se usa any
  * =============================================================================
  */
 
@@ -42,19 +48,11 @@ const LocalizedStringArraySchema = new Schema(
 const ProjectImageSchema = new Schema(
 	{
 		url: { type: String, trim: true, default: "" },
-		alt: { type: LocalizedTextSchema, default: () => ({ es: "", en: "" }) },
+		alt: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
 		storageKey: { type: String, trim: true, default: "" },
-	},
-	{ _id: false },
-);
-
-const ProjectFileAttachmentSchema = new Schema(
-	{
-		name: { type: String, trim: true, default: "" },
-		url: { type: String, trim: true, default: "" },
-		storageKey: { type: String, trim: true, default: "" },
-		mimeType: { type: String, trim: true, default: "" },
-		size: { type: Number, default: 0 },
 	},
 	{ _id: false },
 );
@@ -74,6 +72,7 @@ const ProjectDocumentLinkSchema = new Schema(
 	{
 		documentId: { type: String, trim: true, default: "" },
 		title: { type: String, trim: true, default: "" },
+
 		documentType: {
 			type: String,
 			enum: [
@@ -98,17 +97,21 @@ const ProjectDocumentLinkSchema = new Schema(
 			],
 			default: "other",
 		},
+
 		description: { type: String, trim: true, default: "" },
+
 		visibility: {
 			type: String,
 			enum: ["public", "private", "internal"],
 			default: "private",
 		},
+
 		language: {
 			type: String,
 			enum: ["none", "es", "en", "both"],
 			default: "none",
 		},
+
 		documentDate: { type: Date, default: null },
 
 		fileName: { type: String, trim: true, default: "" },
@@ -136,151 +139,26 @@ const ProjectDocumentLinkSchema = new Schema(
 	{ _id: false },
 );
 
-const MaintenanceScheduleEntrySchema = new Schema(
-	{
-		eventId: { type: String, trim: true, required: true },
-		cycleIndex: { type: Number, default: 0 },
-
-		maintenanceDate: { type: Date, required: true },
-		alertDate: { type: Date, default: null },
-
-		alertStatus: {
-			type: String,
-			enum: ["pending", "emitted"],
-			default: "pending",
-		},
-
-		maintenanceStatus: {
-			type: String,
-			enum: ["pending", "done", "overdue", "cancelled"],
-			default: "pending",
-		},
-
-		channels: {
-			type: [String],
-			default: [],
-		},
-
-		recipients: {
-			type: [String],
-			default: [],
-		},
-
-		recipientEmail: { type: String, trim: true, default: "" },
-
-		emittedAt: { type: Date, default: null },
-		completedAt: { type: Date, default: null },
-		completedByClient: { type: Boolean, default: false },
-		note: { type: String, trim: true, default: "" },
-	},
-	{ _id: false },
-);
-
-const MaintenanceItemSchema = new Schema(
-	{
-		maintenanceType: {
-			type: String,
-			enum: [
-				"preventive",
-				"corrective",
-				"cleaning",
-				"inspection",
-				"replacement",
-				"other",
-			],
-			default: "preventive",
-		},
-		title: { type: String, trim: true, default: "" },
-		description: { type: String, trim: true, default: "" },
-		frequencyValue: { type: Number, default: null },
-		frequencyUnit: {
-			type: String,
-			enum: ["days", "weeks", "months", "years", null],
-			default: null,
-		},
-		lastCompletedDate: { type: Date, default: null },
-		nextDueDate: { type: Date, default: null },
-		status: {
-			type: String,
-			enum: ["scheduled", "completed", "overdue", "cancelled"],
-			default: "scheduled",
-		},
-		notifyClient: { type: Boolean, default: true },
-		notifyInternal: { type: Boolean, default: true },
-		alertDaysBefore: { type: Number, default: 15 },
-		isRecurring: { type: Boolean, default: true },
-		instructions: { type: String, trim: true, default: "" },
-		relatedDocumentIds: [{ type: String, trim: true }],
-		attachments: { type: [ProjectFileAttachmentSchema], default: [] },
-		notes: { type: String, trim: true, default: "" },
-		schedule: { type: [MaintenanceScheduleEntrySchema], default: [] },
-	},
-	{ _id: false },
-);
-
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export interface MaintenanceScheduleEntryDocument {
-	eventId: string;
-	cycleIndex: number;
-	maintenanceDate: Date;
-	alertDate: Date | null;
-	alertStatus: "pending" | "emitted";
-	maintenanceStatus: "pending" | "done" | "overdue" | "cancelled";
-	channels: Array<"platform" | "email">;
-	recipients: Array<"client" | "internal">;
-	recipientEmail: string;
-	emittedAt: Date | null;
-	completedAt: Date | null;
-	completedByClient: boolean;
-	note: string;
-}
-
-export interface MaintenanceItemDocument {
-	maintenanceType:
-		| "preventive"
-		| "corrective"
-		| "cleaning"
-		| "inspection"
-		| "replacement"
-		| "other";
-	title: string;
-	description: string;
-	frequencyValue: number | null;
-	frequencyUnit: "days" | "weeks" | "months" | "years" | null;
-	lastCompletedDate: Date | null;
-	nextDueDate: Date | null;
-	status: "scheduled" | "completed" | "overdue" | "cancelled";
-	notifyClient: boolean;
-	notifyInternal: boolean;
-	alertDaysBefore: number | null;
-	isRecurring: boolean;
-	instructions: string;
-	relatedDocumentIds: string[];
-	attachments: Array<{
-		name: string;
-		url: string;
-		storageKey: string;
-		mimeType: string;
-		size: number;
-	}>;
-	notes: string;
-	schedule: MaintenanceScheduleEntryDocument[];
-}
-
 export interface ProjectDocument {
 	_id: Types.ObjectId;
+
 	slug: string;
 	status: "draft" | "published" | "archived";
 	visibility: "private" | "public";
+
 	featured: boolean;
 	sortOrder: number;
 
 	title: { es: string; en: string };
 	summary: { es: string; en: string };
 	description: { es: string; en: string };
+
+	serviceClassKey: string;
+	serviceClassLabel: { es: string; en: string };
 
 	primaryClientId: string | null;
 	clientDisplayName: string;
@@ -291,11 +169,12 @@ export interface ProjectDocument {
 		alt: { es: string; en: string };
 		storageKey: string;
 	} | null;
-	gallery: {
+
+	gallery: Array<{
 		url: string;
 		alt: { es: string; en: string };
 		storageKey: string;
-	}[];
+	}>;
 
 	publicSiteSettings: {
 		enabled: boolean;
@@ -309,35 +188,33 @@ export interface ProjectDocument {
 		documentId: string;
 		title: string;
 		documentType:
-			| "contract"
-			| "planning"
-			| "schedule"
-			| "technical_design"
-			| "plan"
-			| "technical_report"
-			| "technical_sheet"
-			| "operation_manual"
-			| "maintenance_manual"
-			| "inspection_report"
-			| "maintenance_report"
-			| "delivery_record"
-			| "certificate"
-			| "warranty"
-			| "invoice"
-			| "permit"
-			| "photo_evidence"
-			| "other";
+		| "contract"
+		| "planning"
+		| "schedule"
+		| "technical_design"
+		| "plan"
+		| "technical_report"
+		| "technical_sheet"
+		| "operation_manual"
+		| "maintenance_manual"
+		| "inspection_report"
+		| "maintenance_report"
+		| "delivery_record"
+		| "certificate"
+		| "warranty"
+		| "invoice"
+		| "permit"
+		| "photo_evidence"
+		| "other";
 		description: string;
 		visibility: "public" | "private" | "internal";
 		language: "none" | "es" | "en" | "both";
 		documentDate: Date | null;
-
 		fileName: string;
 		fileUrl: string;
 		storageKey: string;
 		mimeType: string;
 		size: number | null;
-
 		version: string;
 		isPublic: boolean;
 		visibleInPortal: boolean;
@@ -352,8 +229,6 @@ export interface ProjectDocument {
 		notes: string;
 	}>;
 
-	maintenanceItems: MaintenanceItemDocument[];
-
 	contractStartDate: Date | null;
 	contractDurationMonths: number | null;
 	contractEndDate: Date | null;
@@ -362,8 +237,10 @@ export interface ProjectDocument {
 	systemType: { es: string; en: string };
 	treatedMedium: { es: string; en: string };
 	technologyUsed: { es: string[]; en: string[] };
+
 	operationalNotes: string;
 	internalNotes: string;
+
 	locationLabel: string;
 	isPublicLocationVisible: boolean;
 
@@ -372,16 +249,16 @@ export interface ProjectDocument {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Date helpers                                                               */
+/* Internal legacy shape                                                      */
 /* -------------------------------------------------------------------------- */
 
-function isValidDate(value: unknown): value is Date {
-	return value instanceof Date && !Number.isNaN(value.getTime());
-}
+type ProjectDocumentWithLegacyFields = ProjectDocument & {
+	maintenanceItems?: unknown;
+};
 
-function normalizeDate(value: Date | null | undefined): Date | null {
-	return isValidDate(value) ? new Date(value) : null;
-}
+/* -------------------------------------------------------------------------- */
+/* Date helpers                                                               */
+/* -------------------------------------------------------------------------- */
 
 function calculateContractEndDate(
 	start: Date | null | undefined,
@@ -429,16 +306,60 @@ const ProjectSchema = new Schema<ProjectDocument>(
 		featured: { type: Boolean, default: false, index: true },
 		sortOrder: { type: Number, default: 0, index: true },
 
-		title: { type: LocalizedTextSchema, default: () => ({}) },
-		summary: { type: LocalizedTextSchema, default: () => ({}) },
-		description: { type: LocalizedTextSchema, default: () => ({}) },
+		title: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
 
-		primaryClientId: { type: String, default: null, index: true },
-		clientDisplayName: { type: String, trim: true, default: "" },
-		clientEmail: { type: String, trim: true, default: "" },
+		summary: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
 
-		coverImage: { type: ProjectImageSchema, default: null },
-		gallery: { type: [ProjectImageSchema], default: [] },
+		description: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+
+		serviceClassKey: {
+			type: String,
+			trim: true,
+			default: "",
+			index: true,
+		},
+
+		serviceClassLabel: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+
+		primaryClientId: {
+			type: String,
+			default: null,
+			index: true,
+		},
+
+		clientDisplayName: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+
+		clientEmail: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+
+		coverImage: {
+			type: ProjectImageSchema,
+			default: null,
+		},
+
+		gallery: {
+			type: [ProjectImageSchema],
+			default: [],
+		},
 
 		publicSiteSettings: {
 			type: PublicSiteSettingsSchema,
@@ -451,28 +372,73 @@ const ProjectSchema = new Schema<ProjectDocument>(
 			}),
 		},
 
-		documents: { type: [ProjectDocumentLinkSchema], default: [] },
-		maintenanceItems: { type: [MaintenanceItemSchema], default: [] },
+		documents: {
+			type: [ProjectDocumentLinkSchema],
+			default: [],
+		},
 
-		contractStartDate: { type: Date, default: null },
-		contractDurationMonths: { type: Number, default: null },
-		contractEndDate: { type: Date, default: null },
+		contractStartDate: {
+			type: Date,
+			default: null,
+		},
 
-		technicalOverview: { type: LocalizedTextSchema, default: () => ({}) },
-		systemType: { type: LocalizedTextSchema, default: () => ({}) },
-		treatedMedium: { type: LocalizedTextSchema, default: () => ({}) },
+		contractDurationMonths: {
+			type: Number,
+			default: null,
+		},
+
+		contractEndDate: {
+			type: Date,
+			default: null,
+		},
+
+		technicalOverview: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+
+		systemType: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+
+		treatedMedium: {
+			type: LocalizedTextSchema,
+			default: () => ({ es: "", en: "" }),
+		},
+
 		technologyUsed: {
 			type: LocalizedStringArraySchema,
 			default: () => ({ es: [], en: [] }),
 		},
-		operationalNotes: { type: String, trim: true, default: "" },
-		internalNotes: { type: String, trim: true, default: "" },
-		locationLabel: { type: String, trim: true, default: "" },
-		isPublicLocationVisible: { type: Boolean, default: false },
+
+		operationalNotes: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+
+		internalNotes: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+
+		locationLabel: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+
+		isPublicLocationVisible: {
+			type: Boolean,
+			default: false,
+		},
 	},
 	{
 		timestamps: true,
 		collection: "Projects",
+		strict: true,
 	},
 );
 
@@ -501,27 +467,12 @@ ProjectSchema.pre("validate", function (next) {
 		})) as ProjectDocument["documents"];
 	}
 
-	if (Array.isArray(this.maintenanceItems)) {
-		this.maintenanceItems = this.maintenanceItems.map((rawItem) => {
-			const incomingSchedule = Array.isArray(rawItem.schedule)
-				? rawItem.schedule.map((entry) => ({
-						...entry,
-						maintenanceDate: normalizeDate(entry.maintenanceDate) ?? new Date(),
-						alertDate: normalizeDate(entry.alertDate),
-						emittedAt: normalizeDate(entry.emittedAt),
-						completedAt: normalizeDate(entry.completedAt),
-					}))
-				: [];
+	const legacyDocument = this as ProjectDocumentWithLegacyFields;
 
-			return {
-				...rawItem,
-				nextDueDate:
-					normalizeDate(incomingSchedule[0]?.maintenanceDate) ??
-					normalizeDate(rawItem.nextDueDate) ??
-					null,
-				schedule: incomingSchedule,
-			};
-		}) as ProjectDocument["maintenanceItems"];
+	if ("maintenanceItems" in legacyDocument) {
+		legacyDocument.maintenanceItems = undefined;
+		this.set("maintenanceItems", undefined, { strict: false });
+		this.markModified("maintenanceItems");
 	}
 
 	next();
@@ -534,12 +485,7 @@ ProjectSchema.pre("validate", function (next) {
 ProjectSchema.index({ status: 1, sortOrder: 1, updatedAt: -1 });
 ProjectSchema.index({ primaryClientId: 1, updatedAt: -1 });
 ProjectSchema.index({ contractStartDate: 1, contractEndDate: 1 });
-ProjectSchema.index({ "maintenanceItems.nextDueDate": 1 });
-ProjectSchema.index({ "maintenanceItems.schedule.alertDate": 1 });
-ProjectSchema.index({ "maintenanceItems.schedule.alertStatus": 1 });
-ProjectSchema.index({
-	"maintenanceItems.schedule.maintenanceStatus": 1,
-});
+ProjectSchema.index({ serviceClassKey: 1, status: 1, updatedAt: -1 });
 
 /* -------------------------------------------------------------------------- */
 /* Model                                                                      */

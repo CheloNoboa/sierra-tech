@@ -5,48 +5,37 @@
  * =============================================================================
  *
  * ES:
- *   Helpers centrales para normalizar el payload del módulo Projects.
+ * Helpers centrales para normalizar el payload del módulo Projects.
  *
- *   Objetivo:
- *   - convertir input desconocido en estructuras estrictas y estables
- *   - proteger UI / API / DB contra datos incompletos o inconsistentes
- *   - alinear el payload con el contrato nuevo de mantenimientos basado en
- *     `schedule` como única fuente estructurada de programación
- *   - soportar compatibilidad entre datos viejos monolingües y el nuevo
- *     contrato bilingüe para clasificación visible del portal
+ * Objetivo:
+ * - convertir input desconocido en estructuras estrictas y estables
+ * - proteger UI / API / DB contra datos incompletos o inconsistentes
+ * - mantener Projects separado del flujo operativo de Maintenance
+ * - soportar compatibilidad con datos antiguos monolingües
+ * - asegurar fechas como ISO string o null
  *
  * Reglas:
  * - este archivo es la fuente de verdad para normalización defensiva
- * - no debe inventar shapes distintos a los definidos en src/types/project.ts
- * - todo campo de fecha debe salir como ISO string o null
- * - todo array debe salir estable, aunque el input venga corrupto
- * - systemType, treatedMedium y technologyUsed deben salir siempre en formato
- *   bilingüe estable
+ * - no debe inventar shapes distintos a src/types/project.ts
+ * - todo array debe salir estable
+ * - todo campo bilingüe debe salir con { es, en }
+ * - storageKey se considera válido aunque url venga vacío
  *
- * Decisiones importantes:
- * - los adjuntos de mantenimiento NO deben descartarse solo porque `url`
- *   todavía no exista, siempre que exista `storageKey`
- * - esto permite conservar archivos válidos cargados en storage aunque la URL
- *   final se resuelva más adelante desde capas de proyección del portal
+ * Decisiones:
+ * - Projects conserva fechas contractuales base
+ * - Maintenance usa esas fechas, pero administra su propio schedule
+ * - no se usa any
  * =============================================================================
  */
 
 import type {
 	LocalizedText,
-	MaintenanceAlertStatus,
-	MaintenanceExecutionStatus,
-	MaintenanceFrequencyUnit,
-	MaintenanceScheduleEntry,
-	MaintenanceStatus,
-	MaintenanceType,
 	ProjectDocumentLanguage,
 	ProjectDocumentLink,
 	ProjectDocumentType,
 	ProjectDocumentVisibility,
 	ProjectEntity,
-	ProjectFileAttachment,
 	ProjectImage,
-	ProjectMaintenanceItem,
 	ProjectPayload,
 	ProjectPublicSiteSettings,
 	ProjectStatus,
@@ -84,7 +73,7 @@ function normalizeNullableNumber(value: unknown): number | null {
 	return null;
 }
 
-function safeArray<T>(value: unknown): T[] {
+function safeArray<T = unknown>(value: unknown): T[] {
 	return Array.isArray(value) ? (value as T[]) : [];
 }
 
@@ -108,7 +97,7 @@ function normalizeNullableIsoDate(value: unknown): string | null {
 		}
 	}
 
-	const text = typeof value === "string" ? value.trim() : "";
+	const text = normalizeString(value);
 	if (!text) return null;
 
 	const date = new Date(text);
@@ -139,7 +128,8 @@ function calculateContractEndDate(
 /* -------------------------------------------------------------------------- */
 
 function normalizeProjectStatus(value: unknown): ProjectStatus {
-	return value === "published" || value === "archived" ? value : "draft";
+	if (value === "published" || value === "archived") return value;
+	return "draft";
 }
 
 function normalizeProjectVisibility(value: unknown): ProjectVisibility {
@@ -185,55 +175,6 @@ function normalizeDocumentLanguage(value: unknown): ProjectDocumentLanguage {
 	return "none";
 }
 
-function normalizeMaintenanceType(value: unknown): MaintenanceType {
-	if (
-		value === "preventive" ||
-		value === "corrective" ||
-		value === "cleaning" ||
-		value === "inspection" ||
-		value === "replacement"
-	) {
-		return value;
-	}
-
-	return "other";
-}
-
-function normalizeMaintenanceStatus(value: unknown): MaintenanceStatus {
-	if (value === "completed" || value === "overdue" || value === "cancelled") {
-		return value;
-	}
-
-	return "scheduled";
-}
-
-function normalizeFrequencyUnit(
-	value: unknown,
-): MaintenanceFrequencyUnit | null {
-	if (
-		value === "days" ||
-		value === "weeks" ||
-		value === "months" ||
-		value === "years"
-	) {
-		return value;
-	}
-
-	return null;
-}
-
-function normalizeAlertStatus(value: unknown): MaintenanceAlertStatus {
-	return value === "emitted" ? "emitted" : "pending";
-}
-
-function normalizeExecutionStatus(value: unknown): MaintenanceExecutionStatus {
-	if (value === "done" || value === "overdue" || value === "cancelled") {
-		return value;
-	}
-
-	return "pending";
-}
-
 /* -------------------------------------------------------------------------- */
 /* Object normalizers                                                         */
 /* -------------------------------------------------------------------------- */
@@ -247,16 +188,6 @@ function normalizeLocalizedText(value: unknown): LocalizedText {
 	};
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Normaliza clasificación bilingüe con compatibilidad hacia atrás.
- *
- * Casos soportados:
- * - dato nuevo: { es: "...", en: "..." }
- * - dato viejo: "texto único"
- * - dato faltante: fallback vacío
- * ---------------------------------------------------------------------------
- */
 function normalizeLocalizedTextWithLegacyString(value: unknown): LocalizedText {
 	if (typeof value === "string") {
 		const text = normalizeString(value);
@@ -270,19 +201,6 @@ function normalizeLocalizedTextWithLegacyString(value: unknown): LocalizedText {
 	return normalizeLocalizedText(value);
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Normaliza lista bilingüe con compatibilidad hacia atrás.
- *
- * Casos soportados:
- * - dato nuevo:
- *   { es: ["a", "b"], en: ["a", "b"] }
- * - dato viejo:
- *   ["a", "b"]
- * - dato faltante:
- *   { es: [], en: [] }
- * ---------------------------------------------------------------------------
- */
 function normalizeLocalizedStringArray(value: unknown): {
 	es: string[];
 	en: string[];
@@ -304,12 +222,6 @@ function normalizeLocalizedStringArray(value: unknown): {
 	};
 }
 
-/**
- * IMPORTANTE:
- * - storageKey es la fuente de verdad en Sierra Tech (R2)
- * - NO descartar imágenes si url está vacío
- */
-
 function normalizeProjectImage(value: unknown): ProjectImage | null {
 	const source = isRecord(value) ? value : null;
 	if (!source) return null;
@@ -323,44 +235,6 @@ function normalizeProjectImage(value: unknown): ProjectImage | null {
 		url,
 		alt: normalizeLocalizedTextWithLegacyString(source.alt),
 		storageKey,
-	};
-}
-
-/**
- * ---------------------------------------------------------------------------
- * Normaliza un adjunto genérico del proyecto o mantenimiento.
- *
- * Regla crítica:
- * - el adjunto debe conservarse si tiene al menos:
- *   - `url`, o
- *   - `storageKey`
- *
- * Motivo:
- * - en ciertos flujos, el archivo ya existe en storage pero la URL pública final
- *   aún no está persistida en el documento
- * - si aquí se descartara por no tener `url`, el portal perdería el archivo
- *   aunque el storageKey sí sea válido
- * ---------------------------------------------------------------------------
- */
-function normalizeProjectAttachment(
-	value: unknown,
-): ProjectFileAttachment | null {
-	const source = isRecord(value) ? value : null;
-	if (!source) return null;
-
-	const url = normalizeString(source.url);
-	const storageKey = normalizeString(source.storageKey);
-
-	if (!url && !storageKey) {
-		return null;
-	}
-
-	return {
-		name: normalizeString(source.name),
-		url,
-		storageKey,
-		mimeType: normalizeString(source.mimeType),
-		size: normalizeNumber(source.size, 0),
 	};
 }
 
@@ -386,11 +260,14 @@ function normalizeDocumentLink(
 
 	return {
 		documentId: normalizeString(source.documentId),
+
 		title: normalizeString(source.title),
 		documentType: normalizeDocumentType(source.documentType),
 		description: normalizeString(source.description),
+
 		visibility: normalizeDocumentVisibility(source.visibility),
 		language: normalizeDocumentLanguage(source.language),
+
 		documentDate: normalizeNullableIsoDate(source.documentDate),
 
 		fileName: normalizeString(source.fileName),
@@ -400,6 +277,7 @@ function normalizeDocumentLink(
 		size: normalizeNullableNumber(source.size),
 
 		version: normalizeString(source.version),
+
 		isPublic: normalizeBoolean(source.isPublic, false),
 		visibleInPortal: normalizeBoolean(source.visibleInPortal, true),
 		visibleInPublicSite: normalizeBoolean(source.visibleInPublicSite, false),
@@ -419,69 +297,6 @@ function normalizeDocumentLink(
 	};
 }
 
-function normalizeMaintenanceScheduleEntry(
-	value: unknown,
-	index: number,
-): MaintenanceScheduleEntry {
-	const source = isRecord(value) ? value : {};
-
-	const channels = safeArray<unknown>(source.channels).filter(
-		(item): item is "platform" | "email" =>
-			item === "platform" || item === "email",
-	);
-
-	const recipients = safeArray<unknown>(source.recipients).filter(
-		(item): item is "client" | "internal" =>
-			item === "client" || item === "internal",
-	);
-
-	return {
-		eventId: normalizeString(source.eventId) || `event-${index}`,
-		cycleIndex: normalizeNumber(source.cycleIndex, index),
-		maintenanceDate:
-			normalizeNullableIsoDate(source.maintenanceDate) ??
-			new Date().toISOString(),
-		alertDate: normalizeNullableIsoDate(source.alertDate),
-		alertStatus: normalizeAlertStatus(source.alertStatus),
-		maintenanceStatus: normalizeExecutionStatus(source.maintenanceStatus),
-		channels,
-		recipients,
-		recipientEmail: normalizeString(source.recipientEmail),
-		emittedAt: normalizeNullableIsoDate(source.emittedAt),
-		completedAt: normalizeNullableIsoDate(source.completedAt),
-		completedByClient: normalizeBoolean(source.completedByClient, false),
-		note: normalizeString(source.note),
-	};
-}
-
-function normalizeMaintenanceItem(value: unknown): ProjectMaintenanceItem {
-	const source = isRecord(value) ? value : {};
-
-	return {
-		maintenanceType: normalizeMaintenanceType(source.maintenanceType),
-		title: normalizeString(source.title),
-		description: normalizeString(source.description),
-		frequencyValue: normalizeNullableNumber(source.frequencyValue),
-		frequencyUnit: normalizeFrequencyUnit(source.frequencyUnit),
-		lastCompletedDate: normalizeNullableIsoDate(source.lastCompletedDate),
-		nextDueDate: normalizeNullableIsoDate(source.nextDueDate),
-		status: normalizeMaintenanceStatus(source.status),
-		notifyClient: normalizeBoolean(source.notifyClient, true),
-		notifyInternal: normalizeBoolean(source.notifyInternal, true),
-		alertDaysBefore: normalizeNullableNumber(source.alertDaysBefore),
-		isRecurring: normalizeBoolean(source.isRecurring, true),
-		instructions: normalizeString(source.instructions),
-		relatedDocumentIds: safeArray(source.relatedDocumentIds)
-			.map(normalizeString)
-			.filter(Boolean),
-		attachments: safeArray(source.attachments)
-			.map(normalizeProjectAttachment)
-			.filter((item): item is ProjectFileAttachment => item !== null),
-		notes: normalizeString(source.notes),
-		schedule: safeArray(source.schedule).map(normalizeMaintenanceScheduleEntry),
-	};
-}
-
 /* -------------------------------------------------------------------------- */
 /* Public helpers                                                             */
 /* -------------------------------------------------------------------------- */
@@ -489,14 +304,19 @@ function normalizeMaintenanceItem(value: unknown): ProjectMaintenanceItem {
 export function createEmptyProjectPayload(): ProjectPayload {
 	return {
 		slug: "",
+
 		status: "draft",
 		visibility: "private",
+
 		featured: false,
 		sortOrder: 0,
 
 		title: { es: "", en: "" },
 		summary: { es: "", en: "" },
 		description: { es: "", en: "" },
+
+		serviceClassKey: "",
+		serviceClassLabel: { es: "", en: "" },
 
 		primaryClientId: null,
 		clientDisplayName: "",
@@ -514,7 +334,6 @@ export function createEmptyProjectPayload(): ProjectPayload {
 		},
 
 		documents: [],
-		maintenanceItems: [],
 
 		contractStartDate: null,
 		contractDurationMonths: null,
@@ -524,8 +343,10 @@ export function createEmptyProjectPayload(): ProjectPayload {
 		systemType: { es: "", en: "" },
 		treatedMedium: { es: "", en: "" },
 		technologyUsed: { es: [], en: [] },
+
 		operationalNotes: "",
 		internalNotes: "",
+
 		locationLabel: "",
 		isPublicLocationVisible: false,
 	};
@@ -546,16 +367,23 @@ export function normalizeProjectWritePayload(value: unknown): ProjectPayload {
 
 	return {
 		slug: normalizeString(source.slug),
+
 		status: normalizeProjectStatus(source.status),
 		visibility: publicSiteSettings.enabled
 			? "public"
 			: normalizeProjectVisibility(source.visibility),
+
 		featured: normalizeBoolean(source.featured, false),
 		sortOrder: normalizeNumber(source.sortOrder, 0),
 
 		title: normalizeLocalizedText(source.title),
 		summary: normalizeLocalizedText(source.summary),
 		description: normalizeLocalizedText(source.description),
+
+		serviceClassKey: normalizeString(source.serviceClassKey),
+		serviceClassLabel: normalizeLocalizedTextWithLegacyString(
+			source.serviceClassLabel,
+		),
 
 		primaryClientId: normalizeString(source.primaryClientId) || null,
 		clientDisplayName: normalizeString(source.clientDisplayName),
@@ -572,10 +400,6 @@ export function normalizeProjectWritePayload(value: unknown): ProjectPayload {
 			normalizeDocumentLink(item, index),
 		),
 
-		maintenanceItems: safeArray(source.maintenanceItems).map(
-			normalizeMaintenanceItem,
-		),
-
 		contractStartDate,
 		contractDurationMonths,
 		contractEndDate:
@@ -586,8 +410,10 @@ export function normalizeProjectWritePayload(value: unknown): ProjectPayload {
 		systemType: normalizeLocalizedTextWithLegacyString(source.systemType),
 		treatedMedium: normalizeLocalizedTextWithLegacyString(source.treatedMedium),
 		technologyUsed: normalizeLocalizedStringArray(source.technologyUsed),
+
 		operationalNotes: normalizeString(source.operationalNotes),
 		internalNotes: normalizeString(source.internalNotes),
+
 		locationLabel: normalizeString(source.locationLabel),
 		isPublicLocationVisible: normalizeBoolean(
 			source.isPublicLocationVisible,
@@ -603,7 +429,7 @@ export function normalizeProjectEntity(value: unknown): ProjectEntity {
 	const rawId = source._id;
 	const normalizedId =
 		normalizeString(rawId) ||
-		(isRecord(rawId) && typeof rawId.toString === "function"
+		(rawId && typeof rawId === "object" && "toString" in rawId
 			? normalizeString(rawId.toString())
 			: "");
 

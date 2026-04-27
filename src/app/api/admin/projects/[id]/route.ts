@@ -5,19 +5,26 @@
  * =============================================================================
  *
  * ES:
- *   Endpoint administrativo para leer, actualizar y eliminar un proyecto.
+ * Endpoint administrativo para leer, actualizar y eliminar un proyecto.
  *
- *   Decisiones:
- *   - la actualización NO usa findByIdAndUpdate
- *   - se usa existing.set + validate + save
- *   - se marcan paths anidados críticos como modificados
- *   - esto garantiza la ejecución de hooks del modelo Project
+ * Responsabilidades:
+ * - leer un proyecto por ID
+ * - actualizar un proyecto existente usando documento Mongoose real
+ * - eliminar un proyecto
+ * - preservar metadata de documentos ya cargados
+ * - limpiar campos legacy que ya no pertenecen a Projects
  *
- *   Regla crítica de estabilidad:
- *   - al editar, NO se deben perder referencias de documentos ya cargados
- *   - si el frontend manda un documento existente con metadata de archivo vacía,
- *     se preserva la metadata persistida previamente en DB
- *   - esto evita romper funcionalidades que ya estaban correctas
+ * Decisiones:
+ * - PUT NO usa findByIdAndUpdate
+ * - se usa existing.set + save()
+ * - save() garantiza la ejecución de hooks del modelo Project
+ * - Projects NO administra maintenanceItems ni schedules
+ * - Maintenance vive en su propio módulo/modelo
+ *
+ * Regla crítica:
+ * - si el frontend manda un documento existente con metadata de archivo vacía,
+ *   se conserva la metadata ya persistida en DB
+ * - si existe `maintenanceItems` legacy en MongoDB, se elimina explícitamente
  * =============================================================================
  */
 
@@ -25,11 +32,11 @@ import mongoose from "mongoose";
 import { NextResponse } from "next/server";
 
 import { connectToDB } from "@/lib/connectToDB";
-import Project from "@/models/Project";
 import {
 	normalizeProjectEntity,
 	normalizeProjectWritePayload,
 } from "@/lib/projects/projectPayload";
+import Project from "@/models/Project";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -45,11 +52,6 @@ type NormalizedPayload = ReturnType<typeof normalizeProjectWritePayload>;
 
 type ExistingProjectDocumentLike = {
 	documentId?: string;
-	title?: string;
-	documentType?: string;
-	description?: string;
-	visibility?: string;
-	language?: string;
 	documentDate?: Date | string | null;
 
 	fileName?: string;
@@ -57,22 +59,6 @@ type ExistingProjectDocumentLike = {
 	storageKey?: string;
 	mimeType?: string;
 	size?: number | null;
-
-	version?: string;
-
-	isPublic?: boolean;
-	visibleInPortal?: boolean;
-	visibleInPublicSite?: boolean;
-	visibleToInternalOnly?: boolean;
-
-	requiresAlert?: boolean;
-	alertDate?: Date | string | null;
-	nextDueDate?: Date | string | null;
-	maintenanceFrequency?: string | null;
-
-	isCritical?: boolean;
-	sortOrder?: number;
-	notes?: string;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -107,12 +93,11 @@ function normalizeNullableDateLike(value: unknown): string | null {
 		return Number.isNaN(value.getTime()) ? null : value.toISOString();
 	}
 
-	if (typeof value === "string" && value.trim()) {
-		const date = new Date(value);
-		return Number.isNaN(date.getTime()) ? null : date.toISOString();
-	}
+	const text = normalizeText(value);
+	if (!text) return null;
 
-	return null;
+	const date = new Date(text);
+	return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function hasFileMetadata(value: {
@@ -137,21 +122,13 @@ function buildExistingDocumentsMap(
 	const map = new Map<string, ExistingProjectDocumentLike>();
 
 	for (const item of existingDocuments) {
-		const keyById = normalizeText(item.documentId);
-		const keyByFileUrl = normalizeText(item.fileUrl);
-		const keyByStorage = normalizeText(item.storageKey);
+		const documentId = normalizeText(item.documentId);
+		const fileUrl = normalizeText(item.fileUrl);
+		const storageKey = normalizeText(item.storageKey);
 
-		if (keyById) {
-			map.set(`id:${keyById}`, item);
-		}
-
-		if (keyByFileUrl) {
-			map.set(`fileUrl:${keyByFileUrl}`, item);
-		}
-
-		if (keyByStorage) {
-			map.set(`storageKey:${keyByStorage}`, item);
-		}
+		if (documentId) map.set(`id:${documentId}`, item);
+		if (fileUrl) map.set(`fileUrl:${fileUrl}`, item);
+		if (storageKey) map.set(`storageKey:${storageKey}`, item);
 	}
 
 	return map;
@@ -161,21 +138,21 @@ function resolveExistingDocumentMatch(
 	item: NormalizedPayload["documents"][number],
 	existingDocumentsMap: Map<string, ExistingProjectDocumentLike>,
 ): ExistingProjectDocumentLike | null {
-	const byId = normalizeText(item.documentId);
-	if (byId) {
-		const found = existingDocumentsMap.get(`id:${byId}`);
+	const documentId = normalizeText(item.documentId);
+	if (documentId) {
+		const found = existingDocumentsMap.get(`id:${documentId}`);
 		if (found) return found;
 	}
 
-	const byFileUrl = normalizeText(item.fileUrl);
-	if (byFileUrl) {
-		const found = existingDocumentsMap.get(`fileUrl:${byFileUrl}`);
+	const fileUrl = normalizeText(item.fileUrl);
+	if (fileUrl) {
+		const found = existingDocumentsMap.get(`fileUrl:${fileUrl}`);
 		if (found) return found;
 	}
 
-	const byStorage = normalizeText(item.storageKey);
-	if (byStorage) {
-		const found = existingDocumentsMap.get(`storageKey:${byStorage}`);
+	const storageKey = normalizeText(item.storageKey);
+	if (storageKey) {
+		const found = existingDocumentsMap.get(`storageKey:${storageKey}`);
 		if (found) return found;
 	}
 
@@ -205,9 +182,11 @@ function mergeDocumentsWithExisting(
 
 		return {
 			...item,
+
 			documentId:
 				normalizeText(item.documentId) ||
 				normalizeText(existingMatch.documentId),
+
 			documentDate:
 				item.documentDate ??
 				normalizeNullableDateLike(existingMatch.documentDate),
@@ -215,15 +194,19 @@ function mergeDocumentsWithExisting(
 			fileName: incomingHasFileData
 				? item.fileName
 				: normalizeText(existingMatch.fileName),
+
 			fileUrl: incomingHasFileData
 				? item.fileUrl
 				: normalizeText(existingMatch.fileUrl),
+
 			storageKey: incomingHasFileData
 				? item.storageKey
 				: normalizeText(existingMatch.storageKey),
+
 			mimeType: incomingHasFileData
 				? item.mimeType
 				: normalizeText(existingMatch.mimeType),
+
 			size: incomingHasFileData
 				? item.size
 				: normalizeNullableNumber(existingMatch.size),
@@ -237,6 +220,7 @@ function buildProjectPersistencePayload(input: unknown): NormalizedPayload {
 	const normalized = normalizeProjectWritePayload(input);
 
 	const publicEnabled = Boolean(normalized.publicSiteSettings.enabled);
+
 	const contractEndDate =
 		normalized.contractEndDate ??
 		calculateContractEndDate(
@@ -246,13 +230,17 @@ function buildProjectPersistencePayload(input: unknown): NormalizedPayload {
 
 	return {
 		...normalized,
+
 		status: publicEnabled
 			? "published"
 			: normalized.status === "archived"
 				? "archived"
 				: "draft",
+
 		visibility: publicEnabled ? "public" : "private",
+
 		contractEndDate,
+
 		documents: normalized.documents.map((item, index) => ({
 			...item,
 			sortOrder: index,
@@ -291,6 +279,17 @@ function buildValidationErrors(payload: NormalizedPayload): string[] {
 	return errors;
 }
 
+async function removeLegacyProjectFields(projectId: string): Promise<void> {
+	await Project.collection.updateOne(
+		{ _id: new mongoose.Types.ObjectId(projectId) },
+		{
+			$unset: {
+				maintenanceItems: "",
+			},
+		},
+	);
+}
+
 /* -------------------------------------------------------------------------- */
 /* GET                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -304,10 +303,7 @@ export async function GET(_: Request, context: RouteContext) {
 
 		if (!mongoose.Types.ObjectId.isValid(normalizedId)) {
 			return NextResponse.json(
-				{
-					ok: false,
-					error: "Invalid project id.",
-				},
+				{ ok: false, error: "Invalid project id." },
 				{ status: 400 },
 			);
 		}
@@ -316,10 +312,7 @@ export async function GET(_: Request, context: RouteContext) {
 
 		if (!item) {
 			return NextResponse.json(
-				{
-					ok: false,
-					error: "Project not found.",
-				},
+				{ ok: false, error: "Project not found." },
 				{ status: 404 },
 			);
 		}
@@ -353,10 +346,7 @@ export async function PUT(req: Request, context: RouteContext) {
 
 		if (!mongoose.Types.ObjectId.isValid(normalizedId)) {
 			return NextResponse.json(
-				{
-					ok: false,
-					error: "Invalid project id.",
-				},
+				{ ok: false, error: "Invalid project id." },
 				{ status: 400 },
 			);
 		}
@@ -365,10 +355,7 @@ export async function PUT(req: Request, context: RouteContext) {
 
 		if (!existing) {
 			return NextResponse.json(
-				{
-					ok: false,
-					error: "Project not found.",
-				},
+				{ ok: false, error: "Project not found." },
 				{ status: 404 },
 			);
 		}
@@ -397,10 +384,7 @@ export async function PUT(req: Request, context: RouteContext) {
 
 		if (duplicateSlug) {
 			return NextResponse.json(
-				{
-					ok: false,
-					error: "Slug already exists.",
-				},
+				{ ok: false, error: "Slug already exists." },
 				{ status: 409 },
 			);
 		}
@@ -416,14 +400,19 @@ export async function PUT(req: Request, context: RouteContext) {
 
 		existing.set({
 			slug: payload.slug,
+
 			status: payload.status,
 			visibility: payload.visibility,
+
 			featured: payload.featured,
 			sortOrder: payload.sortOrder,
 
 			title: payload.title,
 			summary: payload.summary,
 			description: payload.description,
+
+			serviceClassKey: payload.serviceClassKey,
+			serviceClassLabel: payload.serviceClassLabel,
 
 			primaryClientId: payload.primaryClientId,
 			clientDisplayName:
@@ -441,7 +430,6 @@ export async function PUT(req: Request, context: RouteContext) {
 			},
 
 			documents: mergedDocuments,
-			maintenanceItems: payload.maintenanceItems,
 
 			contractStartDate: payload.contractStartDate,
 			contractDurationMonths: payload.contractDurationMonths,
@@ -451,21 +439,25 @@ export async function PUT(req: Request, context: RouteContext) {
 			systemType: payload.systemType,
 			treatedMedium: payload.treatedMedium,
 			technologyUsed: payload.technologyUsed,
+
 			operationalNotes: payload.operationalNotes,
 			internalNotes: payload.internalNotes,
+
 			locationLabel: payload.locationLabel,
 			isPublicLocationVisible: payload.isPublicLocationVisible,
 		});
 
 		existing.markModified("documents");
-		existing.markModified("maintenanceItems");
 		existing.markModified("publicSiteSettings");
 
 		await existing.save({ validateBeforeSave: true });
+		await removeLegacyProjectFields(normalizedId);
+
+		const updated = await Project.findById(normalizedId).lean();
 
 		return NextResponse.json({
 			ok: true,
-			item: normalizeProjectEntity(existing.toObject()),
+			item: normalizeProjectEntity(updated ?? existing.toObject()),
 		});
 	} catch (error) {
 		return NextResponse.json(
@@ -492,10 +484,7 @@ export async function DELETE(_: Request, context: RouteContext) {
 
 		if (!mongoose.Types.ObjectId.isValid(normalizedId)) {
 			return NextResponse.json(
-				{
-					ok: false,
-					error: "Invalid project id.",
-				},
+				{ ok: false, error: "Invalid project id." },
 				{ status: 400 },
 			);
 		}
@@ -504,17 +493,12 @@ export async function DELETE(_: Request, context: RouteContext) {
 
 		if (!deleted) {
 			return NextResponse.json(
-				{
-					ok: false,
-					error: "Project not found.",
-				},
+				{ ok: false, error: "Project not found." },
 				{ status: 404 },
 			);
 		}
 
-		return NextResponse.json({
-			ok: true,
-		});
+		return NextResponse.json({ ok: true });
 	} catch (error) {
 		return NextResponse.json(
 			{

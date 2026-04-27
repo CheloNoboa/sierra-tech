@@ -5,32 +5,44 @@
  * =============================================================================
  *
  * ES:
- *   Endpoint administrativo para listar y crear proyectos.
+ * Endpoint administrativo para listar y crear proyectos.
  *
- *   Decisiones:
- *   - toda escritura pasa por normalizeProjectWritePayload
- *   - la persistencia usa documentos Mongoose reales
- *   - se fuerza validate + save para que corran hooks del modelo
- *   - el modelo Project es la fuente de verdad para:
- *     - contractEndDate
- *     - visibilidad pública
- *     - schedule de mantenimientos
- *     - nextDueDate derivada
+ * Responsabilidades:
+ * - listar proyectos administrativos
+ * - crear nuevos proyectos
+ * - normalizar payload antes de persistir
+ * - validar campos mínimos requeridos
+ * - evitar slugs duplicados
  *
- *   Regla importante:
- *   - POST no intenta reconstruir documentos previos porque el proyecto aún
- *     no existe; simplemente persiste exactamente el payload normalizado
+ * Decisiones:
+ * - toda escritura pasa por normalizeProjectWritePayload
+ * - la persistencia usa documentos Mongoose reales
+ * - se usa save() para ejecutar hooks del modelo
+ * - Project calcula contractEndDate desde fechas contractuales
+ * - Project controla status/visibility según publicSiteSettings.enabled
+ * - Projects NO administra maintenanceItems ni schedules
+ * - Maintenance vive en su propio módulo/modelo
+ *
+ * Regla:
+ * - POST no reconstruye documentos previos porque el proyecto aún no existe
+ * - POST no acepta ni persiste campos legacy de Maintenance
  * =============================================================================
  */
 
 import { NextResponse } from "next/server";
 
 import { connectToDB } from "@/lib/connectToDB";
-import Project from "@/models/Project";
 import {
 	normalizeProjectEntity,
 	normalizeProjectWritePayload,
 } from "@/lib/projects/projectPayload";
+import Project from "@/models/Project";
+
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
+
+type NormalizedPayload = ReturnType<typeof normalizeProjectWritePayload>;
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -51,12 +63,11 @@ function calculateContractEndDate(
 	return next.toISOString();
 }
 
-function buildProjectPersistencePayload(
-	input: unknown,
-): ReturnType<typeof normalizeProjectWritePayload> {
+function buildProjectPersistencePayload(input: unknown): NormalizedPayload {
 	const normalized = normalizeProjectWritePayload(input);
 
 	const publicEnabled = Boolean(normalized.publicSiteSettings.enabled);
+
 	const contractEndDate =
 		normalized.contractEndDate ??
 		calculateContractEndDate(
@@ -66,13 +77,17 @@ function buildProjectPersistencePayload(
 
 	return {
 		...normalized,
+
 		status: publicEnabled
 			? "published"
 			: normalized.status === "archived"
 				? "archived"
 				: "draft",
+
 		visibility: publicEnabled ? "public" : "private",
+
 		contractEndDate,
+
 		documents: normalized.documents.map((item, index) => ({
 			...item,
 			sortOrder: index,
@@ -80,18 +95,20 @@ function buildProjectPersistencePayload(
 	};
 }
 
-function buildValidationErrors(
-	payload: ReturnType<typeof normalizeProjectWritePayload>,
-): string[] {
+function buildValidationErrors(payload: NormalizedPayload): string[] {
 	const errors: string[] = [];
 
 	if (!payload.slug) errors.push("Slug is required.");
+
 	if (!payload.title.es) errors.push("Title ES is required.");
 	if (!payload.title.en) errors.push("Title EN is required.");
+
 	if (!payload.summary.es) errors.push("Summary ES is required.");
 	if (!payload.summary.en) errors.push("Summary EN is required.");
+
 	if (!payload.description.es) errors.push("Description ES is required.");
 	if (!payload.description.en) errors.push("Description EN is required.");
+
 	if (!payload.primaryClientId) errors.push("Organization is required.");
 
 	if (!payload.contractStartDate) {
@@ -180,14 +197,19 @@ export async function POST(req: Request) {
 
 		const project = new Project({
 			slug: payload.slug,
+
 			status: payload.status,
 			visibility: payload.visibility,
+
 			featured: payload.featured,
 			sortOrder: payload.sortOrder,
 
 			title: payload.title,
 			summary: payload.summary,
 			description: payload.description,
+
+			serviceClassKey: payload.serviceClassKey,
+			serviceClassLabel: payload.serviceClassLabel,
 
 			primaryClientId: payload.primaryClientId,
 			clientDisplayName: payload.clientDisplayName,
@@ -199,7 +221,6 @@ export async function POST(req: Request) {
 			publicSiteSettings: payload.publicSiteSettings,
 
 			documents: payload.documents,
-			maintenanceItems: payload.maintenanceItems,
 
 			contractStartDate: payload.contractStartDate,
 			contractDurationMonths: payload.contractDurationMonths,
@@ -209,8 +230,10 @@ export async function POST(req: Request) {
 			systemType: payload.systemType,
 			treatedMedium: payload.treatedMedium,
 			technologyUsed: payload.technologyUsed,
+
 			operationalNotes: payload.operationalNotes,
 			internalNotes: payload.internalNotes,
+
 			locationLabel: payload.locationLabel,
 			isPublicLocationVisible: payload.isPublicLocationVisible,
 		});

@@ -7,27 +7,128 @@
  * =============================================================================
  *
  * ES:
- * Formulario oficial unificado para crear y editar proyectos.
+ * Pantalla administrativa unificada para creación y edición de proyectos.
+ *
+ * Propósito:
+ * - centralizar toda la lógica y UI del módulo Projects en una sola página
+ * - eliminar duplicación entre create y edit
+ * - mantener consistencia con el patrón visual de Maintenance
  *
  * Uso:
- * - mode="create" para /admin/dashboard/projects/new
- * - mode="edit"   para /admin/dashboard/projects/[id]
+ * - mode="create" → /admin/dashboard/projects/new
+ * - mode="edit"   → /admin/dashboard/projects/[id]
  *
- * Decisiones:
- * - una sola UI para NEW y EDIT
- * - misma estructura visual que la pantalla actual de edición
- * - create usa payload vacío y POST
- * - edit carga por id y usa PUT
- * - sin modal
- * - sin any
- * - sin alert()
+ * Responsabilidades:
+ * - inicializar el estado base del formulario (payload completo)
+ * - cargar proyecto existente cuando aplica (edit)
+ * - cargar organizaciones disponibles (selector de cliente)
+ * - manejar estado del formulario (dirty, loading, saving)
+ * - validar datos mínimos requeridos antes de guardar
+ * - construir payload final consistente con el modelo Project
+ * - ejecutar persistencia:
+ *   - POST → creación
+ *   - PUT  → actualización
+ * - manejar subida de archivos:
+ *   - portada
+ *   - galería
+ *   - documentos
+ * - mantener sincronización UI ↔ payload (sin fuentes duplicadas)
+ *
+ * Flujo:
+ * 1. create:
+ *    - usa createEmptyProjectPayload()
+ *    - usuario llena datos
+ *    - guarda → POST /api/admin/projects
+ *
+ * 2. edit:
+ *    - carga GET /api/admin/projects/[id]
+ *    - normaliza con normalizeProjectEntity()
+ *    - usuario edita
+ *    - guarda → PUT /api/admin/projects/[id]
+ *
+ * Estado del formulario:
+ * - initialSnapshot → referencia serializada inicial
+ * - hasChanges → comparación contra snapshot
+ * - canSave → validación + cambios + no loading/saving
+ *
+ * Decisiones clave:
+ * - una sola fuente de verdad → ProjectPayload
+ * - normalización obligatoria antes de usar datos (backend → UI)
+ * - sanitización obligatoria antes de guardar (UI → backend)
+ * - create y edit comparten EXACTAMENTE la misma UI
+ * - sin modales → página completa tipo Maintenance
+ * - sin any → tipado estricto
+ * - sin alert() → uso exclusivo de toast global
+ *
+ * Estructura visual:
+ * - FormActionsHeader (acciones flotantes)
+ * - bloques por secciones:
+ *   - identidad
+ *   - descripción
+ *   - clasificación técnica (portal)
+ *   - media (cover + gallery)
+ *   - publicación
+ *   - documentos
+ *   - notas / ubicación
+ *   - notas / ubicación
+ *
+ * Bilingüismo:
+ * - todo contenido visible ES/EN
+ * - campos duplicados controlados (title, summary, description, etc.)
+ * - textos UI controlados por locale (useTranslation)
+ *
+ * Manejo de archivos:
+ * - imágenes → uploadAdminFile (R2)
+ * - documentos → /api/admin/projects/upload
+ * - siempre guardar:
+ *   - fileUrl
+ *   - storageKey
+ *   - metadata básica
+ *
+ * Reglas:
+ * - 1 proyecto = 1 organización (primaryClientId)
+ * - publicación pública controla:
+ *   - status (draft/published)
+ *   - visibility (private/public)
+ * - documentos NO se embeben → son entidades
+ * - contractEndDate se deriva automáticamente
+ *
+ * UX:
+ * - prevención de salida con cambios sin guardar
+ * - botón back controlado (no navegación directa)
+ * - feedback inmediato con toast
+ * - botones de acción siempre visibles (floating)
+ *
+ * Alcance:
+ * - NO gestiona lógica operativa de mantenimientos
+ * - NO expone lógica de portal cliente
+ * - NO contiene lógica de negocio del backend
+ *
+ * EN:
+ * Unified admin page for creating and editing projects.
+ *
+ * Purpose:
+ * - single source of truth for Project form logic + UI
+ * - consistent UX aligned with Maintenance module
+ *
+ * Behavior:
+ * - create → POST
+ * - edit   → GET + PUT
+ * - strict typed payload
+ * - normalized in/out data
+ *
+ * Design:
+ * - no modals
+ * - no duplicated state
+ * - fully controlled form
+ * - floating action header
  * =============================================================================
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import FormActionsHeader from "@/components/ui/FormActionsHeader";
 
 import GlobalButton from "@/components/ui/GlobalButton";
 import GlobalConfirm from "@/components/ui/GlobalConfirm";
@@ -96,6 +197,32 @@ type OrganizationOption = {
 	label: string;
 	email: string;
 };
+
+type ServiceClassOption = {
+	_id: string;
+	key: string;
+	label: {
+		es: string;
+		en: string;
+	};
+	description: {
+		es: string;
+		en: string;
+	};
+	enabled: boolean;
+	order: number;
+};
+
+type ServiceClassesResponse =
+	| {
+		ok: true;
+		items: ServiceClassOption[];
+	}
+	| {
+		ok: false;
+		message?: string;
+		error?: string;
+	};
 
 type ProjectUploadResponse =
 	| {
@@ -281,14 +408,6 @@ function createEmptyDocumentLink(): ProjectDocumentLink {
 	};
 }
 
-function getProjectStatusTone(
-	status: ProjectStatus,
-): "neutral" | "warning" | "success" {
-	if (status === "published") return "success";
-	if (status === "archived") return "neutral";
-	return "warning";
-}
-
 function getProjectStatusLabel(
 	status: ProjectStatus,
 	locale: "es" | "en",
@@ -302,18 +421,6 @@ function getProjectStatusLabel(
 	if (status === "published") return "Publicado";
 	if (status === "archived") return "Archivado";
 	return "Borrador";
-}
-
-function getBadgeClasses(tone: "neutral" | "warning" | "success"): string {
-	if (tone === "success") {
-		return "border border-emerald-200 bg-emerald-50 text-emerald-700";
-	}
-
-	if (tone === "warning") {
-		return "border border-amber-200 bg-amber-50 text-amber-700";
-	}
-
-	return "border border-border bg-surface text-text-secondary";
 }
 
 function resolveDocumentTypeLabel(
@@ -363,19 +470,6 @@ function resolveDocumentTypeLabel(
 	};
 
 	return locale === "en" ? mapEn[value] : mapEs[value];
-}
-
-function formatHumanDate(value: string | null, locale: "es" | "en"): string {
-	if (!value) return locale === "es" ? "Sin fecha" : "No date";
-
-	const date = parseDateOnly(value);
-	if (!date) return locale === "es" ? "Sin fecha" : "No date";
-
-	return new Intl.DateTimeFormat(locale === "es" ? "es-EC" : "en-US", {
-		year: "numeric",
-		month: "short",
-		day: "2-digit",
-	}).format(date);
 }
 
 function resolveStoredFileUrl(
@@ -496,6 +590,9 @@ export default function ProjectFormPage({
 	const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
 	const [organizationsLoading, setOrganizationsLoading] = useState(false);
 	const [organizationsError, setOrganizationsError] = useState("");
+	const [serviceClasses, setServiceClasses] = useState<ServiceClassOption[]>([]);
+	const [serviceClassesLoading, setServiceClassesLoading] = useState(false);
+	const [serviceClassesError, setServiceClassesError] = useState("");
 	const [uploadingDocumentIndex, setUploadingDocumentIndex] = useState<
 		number | null
 	>(null);
@@ -579,14 +676,6 @@ export default function ProjectFormPage({
 				safeLocale === "es"
 					? "Carga directa de documentos del proyecto con metadata mínima y clara."
 					: "Direct upload of project documents with a minimal and clear metadata set.",
-			legacyMaintenance:
-				safeLocale === "es"
-					? "Mantenimientos heredados"
-					: "Legacy maintenance",
-			legacyMaintenanceNote:
-				safeLocale === "es"
-					? "Solo lectura. El schedule y operación de mantenimientos se gestionan ahora en el módulo Maintenance."
-					: "Read-only. Schedule and maintenance operations now belong to the Maintenance module.",
 			notes: safeLocale === "es" ? "Notas y ubicación" : "Notes and location",
 			notesNote:
 				safeLocale === "es"
@@ -608,10 +697,6 @@ export default function ProjectFormPage({
 				safeLocale === "es"
 					? "No hay documentos asociados."
 					: "There are no linked documents.",
-			noMaintenance:
-				safeLocale === "es"
-					? "No hay mantenimientos heredados en este proyecto."
-					: "There are no legacy maintenance records in this project.",
 			loadError:
 				safeLocale === "es"
 					? "No se pudo cargar el proyecto."
@@ -648,6 +733,20 @@ export default function ProjectFormPage({
 				safeLocale === "es" ? "Duración en meses" : "Duration in months",
 			contractEndDate:
 				safeLocale === "es" ? "Fin calculado" : "Calculated end date",
+			serviceClass:
+				safeLocale === "es" ? "Clase de servicio" : "Service class",
+			serviceClassNote:
+				safeLocale === "es"
+					? "Categoría comercial del proyecto para mantener coherencia con servicios y otras áreas de la plataforma."
+					: "Commercial project category used to keep consistency with services and other platform areas.",
+			selectServiceClass:
+				safeLocale === "es"
+					? "Seleccionar clase de servicio"
+					: "Select service class",
+			serviceClassesLoadError:
+				safeLocale === "es"
+					? "No se pudieron cargar las clases de servicio."
+					: "Could not load service classes.",
 		}),
 		[isCreateMode, safeLocale],
 	);
@@ -706,6 +805,7 @@ export default function ProjectFormPage({
 			form.summary.en.trim().length > 0 &&
 			form.description.es.trim().length > 0 &&
 			form.description.en.trim().length > 0 &&
+			normalizeString(form.serviceClassKey).length > 0 &&
 			form.contractStartDate !== null &&
 			form.contractDurationMonths !== null &&
 			form.contractDurationMonths > 0 &&
@@ -827,6 +927,57 @@ export default function ProjectFormPage({
 	}, [t.organizationsLoadError]);
 
 	useEffect(() => {
+		let cancelled = false;
+
+		async function loadServiceClasses() {
+			try {
+				setServiceClassesLoading(true);
+				setServiceClassesError("");
+
+				const response = await fetch("/api/admin/service-classes", {
+					method: "GET",
+					cache: "no-store",
+				});
+
+				const json = (await response
+					.json()
+					.catch(() => null)) as ServiceClassesResponse | null;
+
+				if (!response.ok || !json || !json.ok) {
+					throw new Error(
+						json && !json.ok
+							? json.message || json.error || t.serviceClassesLoadError
+							: t.serviceClassesLoadError,
+					);
+				}
+
+				if (cancelled) return;
+
+				setServiceClasses(
+					json.items
+						.filter((item) => item.enabled)
+						.sort((a, b) => a.order - b.order),
+				);
+			} catch (error) {
+				if (cancelled) return;
+
+				setServiceClasses([]);
+				setServiceClassesError(
+					error instanceof Error ? error.message : t.serviceClassesLoadError,
+				);
+			} finally {
+				if (!cancelled) setServiceClassesLoading(false);
+			}
+		}
+
+		void loadServiceClasses();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [t.serviceClassesLoadError]);
+
+	useEffect(() => {
 		if (!hasChanges) return;
 
 		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -858,9 +1009,11 @@ export default function ProjectFormPage({
 			throw new Error(result.message || t.uploadError);
 		}
 
+		const fileKey = result.file.fileKey;
+
 		return {
-			url: "",
-			storageKey: result.file.fileKey,
+			url: fileKey,
+			storageKey: fileKey,
 			alt: {
 				es: "",
 				en: "",
@@ -973,6 +1126,10 @@ export default function ProjectFormPage({
 			if (isCreateMode) {
 				router.push("/admin/dashboard/projects");
 			}
+		} catch (error) {
+			toastRef.current.error(
+				error instanceof Error ? error.message : t.genericError,
+			);
 		} finally {
 			setSaving(false);
 		}
@@ -1063,67 +1220,23 @@ export default function ProjectFormPage({
 		}
 	}
 
-	const projectStatusTone = getProjectStatusTone(form.status);
 	const projectStatusLabel = getProjectStatusLabel(form.status, safeLocale);
 
 	return (
-		<div className="space-y-6 pb-24">
-			<section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-				<div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-					<div className="min-w-0">
-						<button
-							type="button"
-							onClick={requestBack}
-							className="mb-4 inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary transition hover:bg-surface-soft"
-						>
-							<ArrowLeft className="h-4 w-4" />
-							{t.back}
-						</button>
-
-						<div className="flex flex-wrap items-center gap-3">
-							<h2 className="text-xl font-semibold text-text-primary">
-								{t.pageTitle}
-							</h2>
-
-							<span
-								className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getBadgeClasses(
-									projectStatusTone,
-								)}`}
-							>
-								{projectStatusLabel}
-							</span>
-						</div>
-
-						<p className="mt-2 max-w-3xl text-sm text-text-secondary">
-							{t.subtitle}
-						</p>
-					</div>
-
-					<div className="flex flex-wrap gap-3 xl:justify-end">
-						<GlobalButton
-							variant="primary"
-							size="sm"
-							className="bg-brand-primary text-text-primary hover:bg-brand-primaryStrong hover:text-white"
-							disabled={!canSave}
-							onClick={() => void handleSave()}
-						>
-							{saving ? t.saving : t.save}
-						</GlobalButton>
-
-						<GlobalButton
-							variant="secondary"
-							size="sm"
-							className="border border-border bg-surface text-text-primary hover:bg-surface-soft"
-							onClick={requestBack}
-						>
-							{t.cancel}
-						</GlobalButton>
-					</div>
-				</div>
-			</section>
+		<div className="space-y-6 px-6 pb-24">
+			<FormActionsHeader
+				backLabel={safeLocale === "es" ? "Atrás" : "Back"}
+				saveLabel={safeLocale === "es" ? "Guardar proyecto" : "Save project"}
+				savingLabel={t.saving}
+				isSaving={saving}
+				canSave={canSave}
+				statusLabel={projectStatusLabel}
+				onBack={requestBack}
+				onSave={handleSave}
+			/>
 
 			{loading ? (
-				<section className="rounded-2xl border border-border bg-surface-soft p-5 shadow-sm">
+				<section className="rounded-[2rem] border border-border bg-surface-soft p-6 shadow-sm">
 					<p className="text-sm text-text-secondary">{t.loadingProject}</p>
 				</section>
 			) : (
@@ -1170,14 +1283,13 @@ export default function ProjectFormPage({
 											const selected =
 												organizations.find((item) => item.id === nextId) ?? null;
 
-											patch("primaryClientId", nextId);
-											patch(
-												"clientDisplayName",
-												selected?.label || form.clientDisplayName || "",
-											);
-											patch(
-												"clientEmail",
-												selected?.email || form.clientEmail || "",
+											setForm((current) =>
+												sanitizeProjectPayload({
+													...current,
+													primaryClientId: nextId || null,
+													clientDisplayName: selected?.label || "",
+													clientEmail: selected?.email || "",
+												}),
 											);
 										}}
 										className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
@@ -1317,6 +1429,57 @@ export default function ProjectFormPage({
 									/>
 								</div>
 							</div>
+						</div>
+					</SectionCard>
+
+					<SectionCard title={t.serviceClass} subtitle={t.serviceClassNote}>
+						<div>
+							<FieldLabel>{t.serviceClass}</FieldLabel>
+
+							<select
+								value={form.serviceClassKey}
+								onChange={(event) => {
+									const key = event.currentTarget.value;
+									const selected =
+										serviceClasses.find((item) => item.key === key) ?? null;
+
+									setForm((current) =>
+										sanitizeProjectPayload({
+											...current,
+											serviceClassKey: key,
+											serviceClassLabel: selected?.label ?? { es: "", en: "" },
+										}),
+									);
+								}}
+								disabled={serviceClassesLoading}
+								className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none focus:border-brand-primaryStrong focus:ring-2 focus:ring-brand-secondary"
+							>
+								<option value="">{t.selectServiceClass}</option>
+
+								{serviceClasses.map((item) => (
+									<option key={item.key} value={item.key}>
+										{safeLocale === "es"
+											? item.label.es || item.label.en
+											: item.label.en || item.label.es}
+									</option>
+								))}
+							</select>
+
+							{serviceClassesError ? (
+								<p className="mt-1.5 text-xs text-status-error">
+									{serviceClassesError}
+								</p>
+							) : null}
+
+							{form.serviceClassLabel.es || form.serviceClassLabel.en ? (
+								<div className="mt-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+									<strong className="text-text-primary">
+										{safeLocale === "es"
+											? form.serviceClassLabel.es || form.serviceClassLabel.en
+											: form.serviceClassLabel.en || form.serviceClassLabel.es}
+									</strong>
+								</div>
+							) : null}
 						</div>
 					</SectionCard>
 
@@ -1968,8 +2131,8 @@ export default function ProjectFormPage({
 
 													<label
 														className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${form.publicSiteSettings.enabled
-																? "border-border bg-surface-soft text-text-primary"
-																: "border-border bg-surface text-text-muted opacity-60"
+															? "border-border bg-surface-soft text-text-primary"
+															: "border-border bg-surface text-text-muted opacity-60"
 															}`}
 													>
 														<input
@@ -2089,77 +2252,8 @@ export default function ProjectFormPage({
 							</div>
 						</div>
 					</SectionCard>
-
-					<SectionCard title={t.legacyMaintenance} subtitle={t.legacyMaintenanceNote}>
-						{form.maintenanceItems.length === 0 ? (
-							<div className="rounded-2xl border border-border bg-surface px-4 py-4 text-sm text-text-muted">
-								{t.noMaintenance}
-							</div>
-						) : (
-							<div className="space-y-3">
-								{form.maintenanceItems.map((item, index) => (
-									<div
-										key={`legacy-maintenance-${index}`}
-										className="rounded-2xl border border-border bg-surface p-4"
-									>
-										<div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-											<div>
-												<p className="text-sm font-semibold text-text-primary">
-													{item.title ||
-														(safeLocale === "es"
-															? `Mantenimiento #${index + 1}`
-															: `Maintenance #${index + 1}`)}
-												</p>
-												<p className="mt-1 text-xs text-text-muted">
-													{item.description}
-												</p>
-											</div>
-
-											<span className="rounded-full border border-border bg-surface-soft px-3 py-1 text-xs text-text-secondary">
-												{item.status}
-											</span>
-										</div>
-
-										<div className="mt-3 flex flex-wrap gap-2 text-xs text-text-secondary">
-											<span className="rounded-full border border-border bg-surface-soft px-3 py-1">
-												{safeLocale === "es" ? "Frecuencia:" : "Frequency:"}{" "}
-												{item.frequencyValue ?? "—"} {item.frequencyUnit}
-											</span>
-											<span className="rounded-full border border-border bg-surface-soft px-3 py-1">
-												{safeLocale === "es" ? "Próximo:" : "Next:"}{" "}
-												{formatHumanDate(item.nextDueDate, safeLocale)}
-											</span>
-											<span className="rounded-full border border-border bg-surface-soft px-3 py-1">
-												Schedule: {item.schedule.length}
-											</span>
-											<span className="rounded-full border border-border bg-surface-soft px-3 py-1">
-												Attachments: {item.attachments.length}
-											</span>
-										</div>
-									</div>
-								))}
-							</div>
-						)}
-					</SectionCard>
 				</>
 			)}
-
-			<div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-xl">
-				<span className="text-xs font-semibold text-text-secondary">
-					{projectStatusLabel}
-				</span>
-
-				<GlobalButton
-					variant="primary"
-					size="sm"
-					className="bg-brand-primary text-text-primary hover:bg-brand-primaryStrong hover:text-white"
-					disabled={!canSave}
-					onClick={() => void handleSave()}
-				>
-					{saving ? t.saving : t.save}
-					<ArrowRight className="h-4 w-4" />
-				</GlobalButton>
-			</div>
 
 			<GlobalConfirm
 				open={showUnsaved}
