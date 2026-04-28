@@ -144,6 +144,18 @@ type MaintenanceContextResponse =
 	}
 	| { ok: false; error: string };
 
+
+type MaintenanceAlertStatus = "pending" | "emitted";
+type MaintenanceEmailStatus = "pending" | "sent" | "failed" | "skipped";
+
+type MaintenanceScheduleEntryAdmin = MaintenanceScheduleEntry & {
+	alertStatus?: MaintenanceAlertStatus;
+	emittedAt?: string | null;
+	emailStatus?: MaintenanceEmailStatus;
+	emailSentAt?: string | null;
+	emailError?: string;
+};
+
 /* -------------------------------------------------------------------------- */
 /* I18N                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -244,6 +256,14 @@ const TEXT: Record<
 		maintenanceTypeLabels: Record<MaintenanceType, string>;
 		generationModeLabels: Record<MaintenanceGenerationMode, string>;
 		frequencyUnitLabels: Record<MaintenanceFrequencyUnit, string>;
+		alertStatus: string;
+		emittedAt: string;
+		emailStatus: string;
+		emailSentAt: string;
+		emailError: string;
+		channels: string;
+		recipients: string;
+		recipientEmail: string;
 	}
 > = {
 	es: {
@@ -379,6 +399,14 @@ const TEXT: Record<
 			months: "Meses",
 			years: "Años",
 		},
+		alertStatus: "Alerta",
+		emittedAt: "Generada",
+		emailStatus: "Correo",
+		emailSentAt: "Enviado",
+		emailError: "Error correo",
+		channels: "Canales",
+		recipients: "Destinatarios",
+		recipientEmail: "Email",
 	},
 	en: {
 		back: "Back",
@@ -512,6 +540,14 @@ const TEXT: Record<
 			months: "Months",
 			years: "Years",
 		},
+		alertStatus: "Alert",
+		emittedAt: "Generated",
+		emailStatus: "Email",
+		emailSentAt: "Sent",
+		emailError: "Email error",
+		channels: "Channels",
+		recipients: "Recipients",
+		recipientEmail: "Email",
 	},
 };
 
@@ -1737,12 +1773,20 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 					</div>
 				) : (
 					<div className="overflow-x-auto rounded-2xl border border-border">
-						<table className="min-w-[1120px] w-full text-sm">
+						<table className="min-w-[1900px] w-full text-sm">
 							<thead className="bg-surface text-left text-xs uppercase text-text-secondary">
 								<tr>
 									<th className="px-3 py-3">{t.number}</th>
 									<th className="px-3 py-3">{t.date}</th>
 									<th className="px-3 py-3">{t.alert}</th>
+									<th className="px-3 py-3">{t.alertStatus}</th>
+									<th className="px-3 py-3">{t.emittedAt}</th>
+									<th className="px-3 py-3">{t.emailStatus}</th>
+									<th className="px-3 py-3">{t.emailSentAt}</th>
+									<th className="px-3 py-3">{t.emailError}</th>
+									<th className="px-3 py-3">{t.channels}</th>
+									<th className="px-3 py-3">{t.recipients}</th>
+									<th className="px-3 py-3">{t.recipientEmail}</th>
 									<th className="px-3 py-3">{t.status}</th>
 									<th className="px-3 py-3">{t.completed}</th>
 									<th className="px-3 py-3">{t.completedBy}</th>
@@ -1752,205 +1796,128 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 							</thead>
 
 							<tbody>
-								{form.schedule.map((row, index) => (
-									<tr key={row.eventId} className="border-t border-border">
-										<td className="px-3 py-3">{index + 1}</td>
+								{form.schedule.map((row, index) => {
+									const adminRow = row as MaintenanceScheduleEntryAdmin;
 
-										<td className="px-3 py-3">
-											<input
-												type="date"
-												value={extractDateOnly(row.maintenanceDate)}
-												onChange={(event) => {
-													const value = event.currentTarget.value;
+									return (
+										<tr key={row.eventId} className="border-t border-border">
+											<td className="px-3 py-3">{index + 1}</td>
 
-													updateForm((current) => {
-														const nextSchedule = current.schedule.map(
-															(item, itemIndex) =>
-																item.eventId === row.eventId
-																	? {
-																		...item,
-																		cycleIndex: itemIndex,
-																		maintenanceDate: value,
-																	}
-																	: {
-																		...item,
-																		cycleIndex: itemIndex,
-																	},
-														);
+											<td className="px-3 py-3">
+												<input
+													type="date"
+													value={extractDateOnly(row.maintenanceDate)}
+													onChange={(event) => {
+														const value = event.currentTarget.value;
 
-														if (
-															current.generationMode === "automatic" &&
-															index === 0
-														) {
-															return {
-																...current,
-																schedule: recalculateScheduleFromFirstRow({
-																	schedule: nextSchedule,
-																	contractEndDate: current.contractEndDate,
-																	frequencyValue: current.frequencyValue,
-																	frequencyUnit: current.frequencyUnit,
-																	alertDaysBefore: current.alertDaysBefore,
-																	isRecurring: current.isRecurring,
-																	notifyClient: current.notifyClient,
-																	notifyInternal: current.notifyInternal,
-																}),
-															};
-														}
-
-														return {
-															...current,
-															generationMode: "manual",
-															schedule: nextSchedule.map((item, itemIndex) =>
-																item.eventId === row.eventId
-																	? recalculateSingleScheduleRow({
-																		entry: {
+														updateForm((current) => {
+															const nextSchedule = current.schedule.map(
+																(item, itemIndex) =>
+																	item.eventId === row.eventId
+																		? {
+																			...item,
+																			cycleIndex: itemIndex,
+																			maintenanceDate: value,
+																		}
+																		: {
 																			...item,
 																			cycleIndex: itemIndex,
 																		},
-																		alertDaysBefore:
-																			current.alertDaysBefore,
+															);
+
+															if (
+																current.generationMode === "automatic" &&
+																index === 0
+															) {
+																return {
+																	...current,
+																	schedule: recalculateScheduleFromFirstRow({
+																		schedule: nextSchedule,
+																		contractEndDate: current.contractEndDate,
+																		frequencyValue: current.frequencyValue,
+																		frequencyUnit: current.frequencyUnit,
+																		alertDaysBefore: current.alertDaysBefore,
+																		isRecurring: current.isRecurring,
 																		notifyClient: current.notifyClient,
 																		notifyInternal: current.notifyInternal,
-																	})
-																	: item,
-															),
-														};
-													});
-												}}
-												className="h-10 rounded-xl border border-border bg-white px-3 text-sm"
-											/>
-										</td>
+																	}),
+																};
+															}
 
-										<td className="px-3 py-3">
-											{formatDate(row.alertDate, dateFormat)}
-										</td>
+															return {
+																...current,
+																generationMode: "manual",
+																schedule: nextSchedule.map((item, itemIndex) =>
+																	item.eventId === row.eventId
+																		? recalculateSingleScheduleRow({
+																			entry: {
+																				...item,
+																				cycleIndex: itemIndex,
+																			},
+																			alertDaysBefore: current.alertDaysBefore,
+																			notifyClient: current.notifyClient,
+																			notifyInternal: current.notifyInternal,
+																		})
+																		: item,
+																),
+															};
+														});
+													}}
+													className="h-10 rounded-xl border border-border bg-white px-3 text-sm"
+												/>
+											</td>
 
-										<td className="px-3 py-3">
-											<select
-												value={row.maintenanceStatus}
-												onChange={(event) => {
-													const value = event.currentTarget
-														.value as MaintenanceExecutionStatus;
+											<td className="px-3 py-3">
+												{formatDate(row.alertDate, dateFormat)}
+											</td>
 
-													updateForm((current) => ({
-														...current,
-														generationMode: "manual",
-														schedule: current.schedule.map((item, itemIndex) =>
-															item.eventId === row.eventId
-																? recalculateSingleScheduleRow({
-																	entry: {
-																		...item,
-																		cycleIndex: itemIndex,
-																		maintenanceStatus: value,
-																		completed: value === "done",
-																		completedAt:
-																			value === "done"
-																				? new Date()
-																					.toISOString()
-																					.split("T")[0] ?? null
-																				: null,
-																		completedByRole:
-																			value === "done" ? "internal" : null,
-																	},
-																	alertDaysBefore:
-																		current.alertDaysBefore,
-																	notifyClient: current.notifyClient,
-																	notifyInternal: current.notifyInternal,
-																})
-																: item,
-														),
-													}));
-												}}
-												className="h-10 rounded-xl border border-border bg-white px-3 text-sm"
-											>
-												<option value="pending">
-													{t.executionStatusLabels.pending}
-												</option>
-												<option value="done">{t.executionStatusLabels.done}</option>
-												<option value="overdue">
-													{t.executionStatusLabels.overdue}
-												</option>
-												<option value="cancelled">
-													{t.executionStatusLabels.cancelled}
-												</option>
-											</select>
-										</td>
+											<td className="px-3 py-3">
+												<span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-text-primary">
+													{adminRow.alertStatus ?? "pending"}
+												</span>
+											</td>
 
-										<td className="px-3 py-3">
-											<input
-												type="checkbox"
-												checked={row.completed}
-												onChange={(event) => {
-													const checked = event.currentTarget.checked;
+											<td className="px-3 py-3">
+												{formatDate(adminRow.emittedAt ?? null, dateFormat)}
+											</td>
 
-													updateForm((current) => ({
-														...current,
-														generationMode: "manual",
-														schedule: current.schedule.map((item, itemIndex) =>
-															item.eventId === row.eventId
-																? recalculateSingleScheduleRow({
-																	entry: {
-																		...item,
-																		cycleIndex: itemIndex,
-																		completed: checked,
-																		completedAt: checked
-																			? new Date()
-																				.toISOString()
-																				.split("T")[0] ?? null
-																			: null,
-																		completedByRole: checked
-																			? "internal"
-																			: null,
-																		maintenanceStatus: checked
-																			? "done"
-																			: "pending",
-																	},
-																	alertDaysBefore:
-																		current.alertDaysBefore,
-																	notifyClient: current.notifyClient,
-																	notifyInternal: current.notifyInternal,
-																})
-																: item,
-														),
-													}));
-												}}
-											/>
-										</td>
+											<td className="px-3 py-3">
+												<span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-text-primary">
+													{adminRow.emailStatus ?? "pending"}
+												</span>
+											</td>
 
-										<td className="px-3 py-3">
-											{row.completedByRole === "client"
-												? t.client
-												: row.completedByRole === "internal"
-													? t.internal
-													: "—"}
-										</td>
+											<td className="px-3 py-3">
+												{formatDate(adminRow.emailSentAt ?? null, dateFormat)}
+											</td>
 
-										<td className="px-3 py-3">
-											<input
-												value={row.note}
-												onChange={(event) => {
-													const value = event.currentTarget.value;
+											<td className="px-3 py-3">
+												<div className="max-w-[260px] truncate text-xs text-rose-700">
+													{adminRow.emailError || "—"}
+												</div>
+											</td>
 
-													updateForm((current) => ({
-														...current,
-														generationMode: "manual",
-														schedule: current.schedule.map((item) =>
-															item.eventId === row.eventId
-																? { ...item, note: value }
-																: item,
-														),
-													}));
-												}}
-												className="h-10 w-64 rounded-xl border border-border bg-white px-3 text-sm"
-											/>
-										</td>
+											<td className="px-3 py-3">
+												{row.channels.length > 0 ? row.channels.join(", ") : "—"}
+											</td>
 
-										<td className="px-3 py-3">
-											<div className="flex gap-2">
-												<button
-													type="button"
-													disabled={row.completed || row.maintenanceStatus === "done"}
-													onClick={() => {
+											<td className="px-3 py-3">
+												{row.recipients.length > 0 ? row.recipients.join(", ") : "—"}
+											</td>
+
+											<td className="px-3 py-3">
+												<div className="max-w-[220px] truncate">
+													{row.recipientEmail || "—"}
+												</div>
+											</td>
+
+											<td className="px-3 py-3">
+												<select
+													value={row.maintenanceStatus}
+													onChange={(event) => {
+														const value = event.currentTarget
+															.value as MaintenanceExecutionStatus;
+
 														updateForm((current) => ({
 															...current,
 															generationMode: "manual",
@@ -1960,17 +1927,16 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 																		entry: {
 																			...item,
 																			cycleIndex: itemIndex,
-																			maintenanceStatus:
-																				item.maintenanceStatus ===
-																					"cancelled"
-																					? "pending"
-																					: "cancelled",
-																			completed: false,
-																			completedAt: null,
-																			completedByRole: null,
+																			maintenanceStatus: value,
+																			completed: value === "done",
+																			completedAt:
+																				value === "done"
+																					? new Date().toISOString().split("T")[0] ?? null
+																					: null,
+																			completedByRole:
+																				value === "done" ? "internal" : null,
 																		},
-																		alertDaysBefore:
-																			current.alertDaysBefore,
+																		alertDaysBefore: current.alertDaysBefore,
 																		notifyClient: current.notifyClient,
 																		notifyInternal: current.notifyInternal,
 																	})
@@ -1978,36 +1944,141 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 															),
 														}));
 													}}
-													className="rounded-xl border border-border px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+													className="h-10 rounded-xl border border-border bg-white px-3 text-sm"
 												>
-													{row.maintenanceStatus === "cancelled"
-														? t.reactivate
-														: t.cancel}
-												</button>
+													<option value="pending">{t.executionStatusLabels.pending}</option>
+													<option value="done">{t.executionStatusLabels.done}</option>
+													<option value="overdue">{t.executionStatusLabels.overdue}</option>
+													<option value="cancelled">
+														{t.executionStatusLabels.cancelled}
+													</option>
+												</select>
+											</td>
 
-												<button
-													type="button"
-													disabled={row.completed || row.maintenanceStatus === "done"}
-													onClick={() => {
+											<td className="px-3 py-3">
+												<input
+													type="checkbox"
+													checked={row.completed}
+													onChange={(event) => {
+														const checked = event.currentTarget.checked;
+
 														updateForm((current) => ({
 															...current,
 															generationMode: "manual",
-															schedule: current.schedule
-																.filter((item) => item.eventId !== row.eventId)
-																.map((item, itemIndex) => ({
-																	...item,
-																	cycleIndex: itemIndex,
-																})),
+															schedule: current.schedule.map((item, itemIndex) =>
+																item.eventId === row.eventId
+																	? recalculateSingleScheduleRow({
+																		entry: {
+																			...item,
+																			cycleIndex: itemIndex,
+																			completed: checked,
+																			completedAt: checked
+																				? new Date().toISOString().split("T")[0] ?? null
+																				: null,
+																			completedByRole: checked ? "internal" : null,
+																			maintenanceStatus: checked ? "done" : "pending",
+																		},
+																		alertDaysBefore: current.alertDaysBefore,
+																		notifyClient: current.notifyClient,
+																		notifyInternal: current.notifyInternal,
+																	})
+																	: item,
+															),
 														}));
 													}}
-													className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-												>
-													{t.delete}
-												</button>
-											</div>
-										</td>
-									</tr>
-								))}
+												/>
+											</td>
+
+											<td className="px-3 py-3">
+												{row.completedByRole === "client"
+													? t.client
+													: row.completedByRole === "internal"
+														? t.internal
+														: "—"}
+											</td>
+
+											<td className="px-3 py-3">
+												<input
+													value={row.note}
+													onChange={(event) => {
+														const value = event.currentTarget.value;
+
+														updateForm((current) => ({
+															...current,
+															generationMode: "manual",
+															schedule: current.schedule.map((item) =>
+																item.eventId === row.eventId
+																	? { ...item, note: value }
+																	: item,
+															),
+														}));
+													}}
+													className="h-10 w-64 rounded-xl border border-border bg-white px-3 text-sm"
+												/>
+											</td>
+
+											<td className="px-3 py-3">
+												<div className="flex gap-2">
+													<button
+														type="button"
+														disabled={row.completed || row.maintenanceStatus === "done"}
+														onClick={() => {
+															updateForm((current) => ({
+																...current,
+																generationMode: "manual",
+																schedule: current.schedule.map((item, itemIndex) =>
+																	item.eventId === row.eventId
+																		? recalculateSingleScheduleRow({
+																			entry: {
+																				...item,
+																				cycleIndex: itemIndex,
+																				maintenanceStatus:
+																					item.maintenanceStatus === "cancelled"
+																						? "pending"
+																						: "cancelled",
+																				completed: false,
+																				completedAt: null,
+																				completedByRole: null,
+																			},
+																			alertDaysBefore: current.alertDaysBefore,
+																			notifyClient: current.notifyClient,
+																			notifyInternal: current.notifyInternal,
+																		})
+																		: item,
+																),
+															}));
+														}}
+														className="rounded-xl border border-border px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+													>
+														{row.maintenanceStatus === "cancelled"
+															? t.reactivate
+															: t.cancel}
+													</button>
+
+													<button
+														type="button"
+														disabled={row.completed || row.maintenanceStatus === "done"}
+														onClick={() => {
+															updateForm((current) => ({
+																...current,
+																generationMode: "manual",
+																schedule: current.schedule
+																	.filter((item) => item.eventId !== row.eventId)
+																	.map((item, itemIndex) => ({
+																		...item,
+																		cycleIndex: itemIndex,
+																	})),
+															}));
+														}}
+														className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+													>
+														{t.delete}
+													</button>
+												</div>
+											</td>
+										</tr>
+									);
+								})}
 							</tbody>
 						</table>
 					</div>

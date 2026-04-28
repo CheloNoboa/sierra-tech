@@ -11,6 +11,7 @@
  * - unificar el shape de datos consumido por las pantallas del portal
  * - separar claramente la vista cliente de los contratos internos admin
  * - exponer tipos estables para UI, API y normalizadores
+ * - soportar vistas ejecutivas, alertas, mantenimientos e historial operativo
  *
  * Alcance:
  * - home del portal
@@ -19,16 +20,17 @@
  * - biblioteca documental
  * - mantenimientos
  * - alertas
+ * - historial de schedule
  * - filtros de búsqueda / navegación
  *
  * Decisiones:
  * - el portal cliente usa contratos propios y simplificados
  * - visibleStatus no expone estados internos complejos
  * - alertas se modelan como una vista funcional del portal
- * - los documentos expuestos aquí representan solo contenido autorizado
- * - los documentos del portal pueden venir tanto de:
- *   - documentos estructurados del proyecto
- *   - adjuntos de mantenimiento visibles para el cliente
+ * - mantenimientos se presentan como historial operativo completo
+ * - una alerta emitida puede estar pendiente o ya realizada
+ * - scheduleIndex identifica la fila real dentro de Maintenance.schedule
+ * - los documentos expuestos representan solo contenido autorizado
  *
  * EN:
  * Official typed contracts for the Sierra Tech client portal.
@@ -39,57 +41,53 @@
 /* 🧱 Estados visibles del portal                                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Estado visible del proyecto para el cliente.
- * Se evita exponer al portal estados internos técnicos o ambiguos.
- */
 export type PortalProjectVisibleStatus =
 	| "active"
 	| "follow_up"
 	| "completed"
 	| "maintenance";
 
-/**
- * Estado operativo simplificado para mantenimientos.
- */
 export type PortalMaintenanceStatus =
 	| "scheduled"
 	| "upcoming"
 	| "overdue"
 	| "completed";
 
-/**
- * Tipos de alerta visibles en el portal.
- */
+export type PortalMaintenanceScheduleStatus =
+	| "pending"
+	| "done"
+	| "overdue"
+	| "cancelled";
+
+export type PortalMaintenanceAlertStatus = "pending" | "emitted";
+
+export type PortalMaintenanceEmailStatus =
+	| "pending"
+	| "sent"
+	| "failed"
+	| "skipped";
+
 export type PortalAlertType =
 	| "maintenance_upcoming"
 	| "maintenance_overdue"
+	| "maintenance_completed"
 	| "document_expiring"
 	| "warranty_expiring"
 	| "scheduled_review"
 	| "critical";
 
-/**
- * Prioridad visible de alerta.
- */
 export type PortalAlertPriority = "high" | "medium" | "low";
 
-/**
- * Acción principal sugerida por una alerta.
- */
 export type PortalAlertAction =
 	| "view_project"
 	| "view_document"
-	| "contact_support";
+	| "contact_support"
+	| "mark_completed";
 
 /* -------------------------------------------------------------------------- */
 /* 📄 Documentos                                                              */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Tipología documental visible al cliente.
- * Basada en el contrato documental-operativo del módulo Projects.
- */
 export type PortalDocumentType =
 	| "contract"
 	| "planning"
@@ -110,25 +108,10 @@ export type PortalDocumentType =
 	| "photo_evidence"
 	| "other";
 
-/**
- * Origen funcional del documento dentro del portal.
- *
- * Decisión:
- * - `project_document` representa documentos estructurados del proyecto
- * - `maintenance_attachment` representa archivos adjuntos que nacen dentro
- *   de un mantenimiento, pero deben quedar disponibles para el cliente
- */
 export type PortalDocumentSource =
 	| "project_document"
 	| "maintenance_attachment";
 
-/**
- * Documento visible dentro del portal cliente.
- * Puede aparecer en:
- * - home
- * - biblioteca documental
- * - detalle de proyecto
- */
 export interface PortalDocumentItem {
 	documentId: string;
 
@@ -141,9 +124,6 @@ export interface PortalDocumentItem {
 	projectId?: string | null;
 	projectTitle?: string | null;
 
-	/**
-	 * Contexto adicional cuando el archivo proviene de un mantenimiento.
-	 */
 	maintenanceId?: string | null;
 	maintenanceTitle?: string | null;
 
@@ -178,11 +158,46 @@ export interface PortalAlertAttachment {
 	mimeType?: string | null;
 }
 
-/**
- * Mantenimiento visible para el cliente.
- * Vive principalmente dentro del detalle del proyecto, pero también
- * alimenta la vista global de alertas.
- */
+export interface PortalMaintenanceScheduleItem {
+	eventId: string;
+	cycleIndex?: number | null;
+
+	maintenanceId: string;
+	maintenanceTitle: string;
+
+	projectId?: string | null;
+	projectTitle?: string | null;
+
+	scheduleIndex: number;
+
+	maintenanceDate: string;
+	alertDate?: string | null;
+
+	alertStatus: PortalMaintenanceAlertStatus;
+	emailStatus?: PortalMaintenanceEmailStatus | null;
+
+	emailSentAt?: string | null;
+	emailError?: string | null;
+
+	maintenanceStatus: PortalMaintenanceScheduleStatus;
+
+	channels: string[];
+	recipients: string[];
+	recipientEmail?: string | null;
+
+	emittedAt?: string | null;
+
+	completed: boolean;
+	completedAt?: string | null;
+	completedByRole?: "client" | "internal" | null;
+
+	note?: string | null;
+
+	attachments: PortalMaintenanceAttachment[];
+
+	canMarkCompleted: boolean;
+}
+
 export interface PortalMaintenanceItem {
 	maintenanceId: string;
 
@@ -205,23 +220,14 @@ export interface PortalMaintenanceItem {
 	instructions?: string | null;
 
 	attachments?: PortalMaintenanceAttachment[];
+
+	schedule?: PortalMaintenanceScheduleItem[];
 }
 
 /* -------------------------------------------------------------------------- */
 /* 🚨 Alertas                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Alerta consolidada visible en:
- * - home del portal
- * - vista global de alertas
- * - detalle de proyecto
- *
- * Importante:
- * Este contrato puede construirse inicialmente desde mantenimientos,
- * vencimientos documentales y fechas críticas sin necesidad de persistir
- * una colección separada desde el día uno.
- */
 export interface PortalAlertItem {
 	alertId: string;
 
@@ -239,6 +245,27 @@ export interface PortalAlertItem {
 
 	maintenanceId?: string | null;
 	maintenanceTitle?: string | null;
+
+	maintenanceEventId?: string | null;
+	scheduleIndex?: number | null;
+
+	maintenanceDate?: string | null;
+	alertDate?: string | null;
+
+	alertStatus?: PortalMaintenanceAlertStatus | null;
+	emailStatus?: PortalMaintenanceEmailStatus | null;
+
+	maintenanceStatus?: PortalMaintenanceScheduleStatus | null;
+
+	emittedAt?: string | null;
+	completedAt?: string | null;
+	completedByRole?: "client" | "internal" | null;
+
+	completed?: boolean | null;
+	canMarkCompleted?: boolean;
+
+	note?: string | null;
+
 	attachments: PortalAlertAttachment[];
 
 	dueDate?: string | null;
@@ -248,14 +275,29 @@ export interface PortalAlertItem {
 }
 
 /* -------------------------------------------------------------------------- */
+/* 📊 Resumen ejecutivo                                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface PortalAlertsSummary {
+	totalProjects: number;
+	totalMaintenances: number;
+	totalScheduleEvents: number;
+
+	emittedAlerts: number;
+	pendingAlerts: number;
+
+	upcomingMaintenances: number;
+	overdueMaintenances: number;
+	completedMaintenances: number;
+
+	expiringDocuments: number;
+	highPriorityAlerts: number;
+}
+
+/* -------------------------------------------------------------------------- */
 /* 📁 Proyectos                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Card de proyecto para:
- * - home
- * - listado de proyectos
- */
 export interface PortalProjectCard {
 	projectId: string;
 
@@ -276,9 +318,6 @@ export interface PortalProjectCard {
 	nextRelevantDate?: string | null;
 }
 
-/**
- * Detalle completo del proyecto visible en portal cliente.
- */
 export interface PortalProjectGalleryItem {
 	url: string;
 	alt?: string | null;
@@ -318,9 +357,6 @@ export interface PortalHomeSummary {
 	upcomingMaintenances: number;
 }
 
-/**
- * Contrato de datos para la home del portal cliente.
- */
 export interface PortalHomeData {
 	organizationName: string;
 	userName: string;

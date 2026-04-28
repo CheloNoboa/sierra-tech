@@ -106,6 +106,27 @@ export type MaintenanceStatus =
 export type MaintenanceAlertStatus = "pending" | "emitted";
 
 /**
+ * Estado del correo asociado a una alerta del schedule.
+ *
+ * - pending:
+ *   todavía no se intentó enviar el correo
+ *
+ * - sent:
+ *   el correo fue enviado correctamente
+ *
+ * - failed:
+ *   se intentó enviar, pero falló
+ *
+ * - skipped:
+ *   no aplicaba envío de correo o no había destinatario válido
+ */
+export type MaintenanceEmailStatus =
+	| "pending"
+	| "sent"
+	| "failed"
+	| "skipped";
+
+/**
  * Estado operativo real de una fila del schedule.
  */
 export type MaintenanceExecutionStatus =
@@ -217,6 +238,25 @@ export type MaintenanceScheduleEntry = {
 	 * Fecha real en la que la alerta fue emitida.
 	 */
 	emittedAt: string | null;
+
+	/**
+	 * Estado del correo asociado a esta alerta.
+	 *
+	 * Importante:
+	 * - alertStatus controla la generación de la alerta
+	 * - emailStatus controla exclusivamente el envío del correo
+	 */
+	emailStatus: MaintenanceEmailStatus;
+
+	/**
+	 * Fecha real en la que el correo fue enviado correctamente.
+	 */
+	emailSentAt: string | null;
+
+	/**
+	 * Último error registrado durante el intento de envío de correo.
+	 */
+	emailError: string;
 
 	/**
 	 * Fecha real en la que el mantenimiento fue marcado como realizado.
@@ -530,4 +570,11 @@ export type MaintenanceScheduleRowUpdate =
 		action: "set_note";
 		eventId: string;
 		note: string;
+	}
+	| {
+		action: "set_email_status";
+		eventId: string;
+		emailStatus: MaintenanceEmailStatus;
+		emailSentAt: string | null;
+		emailError: string;
 	};

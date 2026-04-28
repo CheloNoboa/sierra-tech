@@ -10,20 +10,17 @@
  * Propósito:
  * - centralizar la consulta real de proyectos visibles para una organización
  * - reutilizar esta misma lógica desde páginas server y endpoints API
- * - evitar fetch interno server-to-server dentro de la misma aplicación
- *
- * Alcance:
- * - listado de proyectos del portal
- * - detalle de proyecto del portal
+ * - enriquecer las cards de proyectos con alertas reales del portal
+ * - evitar que Projects calcule alertas desde lógica vieja/incompleta
  *
  * Decisiones:
- * - organizationId es la fuente de verdad del filtro
- * - archived no se expone en portal
- * - toda entidad se normaliza antes de proyectarse al contrato del portal
- * - la validación de sesión NO vive aquí; esta capa solo resuelve lectura
+ * - Projects sigue siendo la fuente de proyectos/documentos
+ * - getPortalAlertsByOrganization es la fuente real de alertas/mantenimientos
+ * - activeAlertsCount se calcula por projectId usando alertas consolidadas
+ * - nextMaintenanceDate se deriva de alertas de Maintenance pendientes
  *
  * Reglas:
- * - este archivo no debe depender de NextAuth
+ * - este archivo no depende de NextAuth
  * - este archivo no construye responses HTTP
  * - este archivo solo consulta, normaliza y proyecta
  *
@@ -32,30 +29,75 @@
  * =============================================================================
  */
 
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 
 import { connectToDB } from "@/lib/connectToDB";
 import Project from "@/models/Project";
 import { normalizeProjectEntity } from "@/lib/projects/projectPayload";
+import { getPortalAlertsByOrganization } from "@/lib/portal/portalAlerts";
 import {
 	isPortalVisibleProject,
 	mapProjectEntityToPortalProjectCard,
 	mapProjectEntityToPortalProjectDetail,
 	sortPortalProjects,
 } from "@/lib/portal/portalProjectMappers";
-import type { PortalProjectCard, PortalProjectDetail } from "@/types/portal";
+import type {
+	PortalAlertItem,
+	PortalProjectCard,
+	PortalProjectDetail,
+} from "@/types/portal";
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function buildOrganizationQueryValues(
+	organizationId: string,
+): Array<string | Types.ObjectId> {
+	return Types.ObjectId.isValid(organizationId)
+		? [organizationId, new Types.ObjectId(organizationId)]
+		: [organizationId];
+}
+
+function getProjectAlerts(
+	alerts: PortalAlertItem[],
+	projectId: string,
+): PortalAlertItem[] {
+	return alerts.filter((alert) => alert.projectId === projectId);
+}
+
+function getNextMaintenanceDate(alerts: PortalAlertItem[]): string | null {
+	const dates = alerts
+		.filter((alert) => alert.maintenanceId)
+		.filter((alert) => alert.completed !== true)
+		.filter((alert) => alert.maintenanceStatus !== "cancelled")
+		.map((alert) => alert.maintenanceDate ?? alert.dueDate ?? null)
+		.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+		.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+	return dates[0] ?? null;
+}
+
+function enrichProjectCardWithAlerts(params: {
+	card: PortalProjectCard;
+	alerts: PortalAlertItem[];
+}): PortalProjectCard {
+	const { card, alerts } = params;
+	const projectAlerts = getProjectAlerts(alerts, card.projectId);
+
+	return {
+		...card,
+		activeAlertsCount: projectAlerts.length,
+		nextMaintenanceDate: getNextMaintenanceDate(projectAlerts),
+		nextRelevantDate:
+			getNextMaintenanceDate(projectAlerts) ?? card.nextRelevantDate ?? null,
+	};
+}
 
 /* -------------------------------------------------------------------------- */
 /* List                                                                       */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Obtiene los proyectos visibles para una organización dentro del portal.
- *
- * Regla:
- * - el filtro base se realiza por primaryClientId
- * - luego se proyecta solo lo visible para portal
- */
 export async function getPortalProjectsByOrganization(
 	organizationId: string,
 ): Promise<PortalProjectCard[]> {
@@ -67,11 +109,18 @@ export async function getPortalProjectsByOrganization(
 
 	await connectToDB();
 
-	const items = await Project.find({
-		primaryClientId: normalizedOrganizationId,
-	})
-		.sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
-		.lean();
+	const organizationQueryValues =
+		buildOrganizationQueryValues(normalizedOrganizationId);
+
+	const [items, alertsData] = await Promise.all([
+		Project.find({
+			primaryClientId: { $in: organizationQueryValues },
+		})
+			.sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
+			.lean(),
+
+		getPortalAlertsByOrganization(normalizedOrganizationId),
+	]);
 
 	const normalizedProjects = items.map((item) => normalizeProjectEntity(item));
 
@@ -80,7 +129,10 @@ export async function getPortalProjectsByOrganization(
 	);
 
 	return visibleProjects.map((project) =>
-		mapProjectEntityToPortalProjectCard(project),
+		enrichProjectCardWithAlerts({
+			card: mapProjectEntityToPortalProjectCard(project),
+			alerts: alertsData.items,
+		}),
 	);
 }
 
@@ -88,15 +140,6 @@ export async function getPortalProjectsByOrganization(
 /* Detail                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Obtiene el detalle visible en portal de un proyecto perteneciente a una
- * organización específica.
- *
- * Reglas:
- * - si el id no es válido, devuelve null
- * - si el proyecto no pertenece a la organización, devuelve null
- * - si el proyecto no es visible en portal, devuelve null
- */
 export async function getPortalProjectDetailByOrganization(params: {
 	organizationId: string;
 	projectId: string;
@@ -117,10 +160,17 @@ export async function getPortalProjectDetailByOrganization(params: {
 
 	await connectToDB();
 
-	const item = await Project.findOne({
-		_id: normalizedProjectId,
-		primaryClientId: normalizedOrganizationId,
-	}).lean();
+	const organizationQueryValues =
+		buildOrganizationQueryValues(normalizedOrganizationId);
+
+	const [item, alertsData] = await Promise.all([
+		Project.findOne({
+			_id: normalizedProjectId,
+			primaryClientId: { $in: organizationQueryValues },
+		}).lean(),
+
+		getPortalAlertsByOrganization(normalizedOrganizationId),
+	]);
 
 	if (!item) {
 		return null;
@@ -132,8 +182,13 @@ export async function getPortalProjectDetailByOrganization(params: {
 		return null;
 	}
 
-	return mapProjectEntityToPortalProjectDetail(
+	const detail = mapProjectEntityToPortalProjectDetail(
 		project,
 		organizationName ?? null,
 	);
+
+	return {
+		...detail,
+		alerts: getProjectAlerts(alertsData.items, detail.projectId),
+	};
 }

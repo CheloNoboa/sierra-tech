@@ -28,18 +28,20 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import nodemailer from "nodemailer";
 
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDB } from "@/lib/connectToDB";
 import OrganizationUser from "@/models/OrganizationUser";
-import SystemSettings from "@/models/SystemSettings";
 import {
 	buildActivationUrl,
 	generateActivationToken,
 	getActivationTokenExpiresAt,
 	hashActivationToken,
 } from "@/lib/auth/organization-user-credentials";
+import {
+	resolveBrandName,
+	sendTransactionalEmail,
+} from "@/lib/email/sendTransactionalEmail";
 
 /* -------------------------------------------------------------------------- */
 /* 🧱 Tipos                                                                   */
@@ -71,8 +73,8 @@ function isAdminSession(session: unknown): boolean {
 
 	return Array.isArray(user.permissions)
 		? user.permissions.includes("organization-users.read") ||
-				user.permissions.includes("organization-users.create") ||
-				user.permissions.includes("organization-users.update")
+		user.permissions.includes("organization-users.create") ||
+		user.permissions.includes("organization-users.update")
 		: false;
 }
 
@@ -80,71 +82,14 @@ function normalizeString(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
-function requireEnv(name: string): string {
-	const value = process.env[name];
-
-	if (!value || !value.trim()) {
-		throw new Error(`Missing required env variable: ${name}`);
-	}
-
-	return value.trim();
-}
-
-function requireEnvInt(name: string): number {
-	const raw = requireEnv(name);
-	const parsed = Number(raw);
-
-	if (!Number.isFinite(parsed)) {
-		throw new Error(`Invalid numeric env variable: ${name}`);
-	}
-
-	return parsed;
-}
-
-async function resolveBrandName(): Promise<string> {
-	try {
-		const setting = await SystemSettings.findOne({ key: "businessName" })
-			.lean()
-			.exec();
-
-		const value =
-			setting && typeof setting === "object" && "value" in setting
-				? (setting as { value?: unknown }).value
-				: null;
-
-		return typeof value === "string" && value.trim()
-			? value.trim()
-			: "Sierra Tech";
-	} catch {
-		return "Sierra Tech";
-	}
-}
-
 async function sendOrganizationUserActivationEmail(params: {
 	email: string;
 	fullName: string;
 	activationUrl: string;
 }) {
-	const smtpHost = requireEnv("SMTP_HOST");
-	const smtpPort = requireEnvInt("SMTP_PORT");
-	const smtpUser = requireEnv("SMTP_USER");
-	const smtpPass = requireEnv("SMTP_PASS");
-	const smtpFrom = requireEnv("SMTP_FROM");
-
 	const brandName = await resolveBrandName();
 
-	const transporter = nodemailer.createTransport({
-		host: smtpHost,
-		port: smtpPort,
-		secure: smtpPort === 465,
-		auth: {
-			user: smtpUser,
-			pass: smtpPass,
-		},
-	});
-
-	await transporter.sendMail({
-		from: smtpFrom,
+	await sendTransactionalEmail({
 		to: params.email,
 		subject: `${brandName} - Activación de acceso`,
 		html: `

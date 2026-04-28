@@ -30,6 +30,8 @@
  * - nextDueDate y status se persisten como snapshot derivado útil
  * - schedule sigue siendo la fuente de verdad real
  * - la tabla puede venir de generación automática o manual
+ * - alertStatus indica si la alerta fue generada por el sistema
+ * - emailStatus indica el resultado del envío de correo asociado a la alerta
  * - completed reemplaza el criterio anterior completedByClient
  * - completedByRole identifica quién marcó la ejecución:
  *   - client
@@ -84,6 +86,13 @@ const MAINTENANCE_FREQUENCY_UNIT_VALUES = [
 const MAINTENANCE_ALERT_STATUS_VALUES = [
 	"pending",
 	"emitted",
+] as const;
+
+const MAINTENANCE_EMAIL_STATUS_VALUES = [
+	"pending",
+	"sent",
+	"failed",
+	"skipped",
 ] as const;
 
 const MAINTENANCE_EXECUTION_STATUS_VALUES = [
@@ -158,6 +167,20 @@ const MaintenanceFileAttachmentSchema = new Schema(
  *
  * Regla clave:
  * - esta estructura es la fuente de verdad operativa
+ *
+ * Alertas:
+ * - alertStatus controla si el sistema ya generó la alerta.
+ * - emittedAt registra cuándo se generó la alerta.
+ *
+ * Correos:
+ * - emailStatus controla el resultado del envío de correo.
+ * - emailSentAt registra cuándo se envió correctamente.
+ * - emailError conserva el último error de envío, si existe.
+ *
+ * Importante:
+ * - alertStatus="emitted" NO significa necesariamente que el correo fue enviado.
+ * - emailStatus="sent" confirma envío real del correo.
+ * - esto permite auditar correctamente alertas generadas y correos fallidos.
  * ---------------------------------------------------------------------------
  */
 const MaintenanceScheduleEntrySchema = new Schema(
@@ -186,6 +209,21 @@ const MaintenanceScheduleEntrySchema = new Schema(
 			type: String,
 			enum: MAINTENANCE_ALERT_STATUS_VALUES,
 			default: "pending",
+		},
+		emailStatus: {
+			type: String,
+			enum: MAINTENANCE_EMAIL_STATUS_VALUES,
+			default: "pending",
+		},
+		emailSentAt: {
+			type: String,
+			default: null,
+			trim: true,
+		},
+		emailError: {
+			type: String,
+			trim: true,
+			default: "",
 		},
 		maintenanceStatus: {
 			type: String,
@@ -474,6 +512,9 @@ export interface MaintenanceScheduleEntryDocument {
 	maintenanceDate: string;
 	alertDate: string | null;
 	alertStatus: "pending" | "emitted";
+	emailStatus: "pending" | "sent" | "failed" | "skipped";
+	emailSentAt: string | null;
+	emailError: string;
 	maintenanceStatus: "pending" | "done" | "overdue" | "cancelled";
 	channels: Array<"platform" | "email">;
 	recipients: Array<"client" | "internal">;

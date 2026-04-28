@@ -91,13 +91,6 @@ function formatAlertType(value: PortalAlertItem["type"]): string {
 	}
 }
 
-function countUpcomingMaintenancesFromProjects(
-	projects: PortalProjectCard[],
-): number {
-	return projects.filter((project) => Boolean(project.nextMaintenanceDate))
-		.length;
-}
-
 function getUrgentAlerts(alerts: PortalAlertItem[]): PortalAlertItem[] {
 	return alerts.slice(0, 3);
 }
@@ -538,9 +531,7 @@ export default async function PortalHomePage() {
 	});
 
 	const urgentAlerts = getUrgentAlerts(homeData.alerts);
-	const upcomingMaintenances = countUpcomingMaintenancesFromProjects(
-		homeData.featuredProjects,
-	);
+	const upcomingMaintenances = homeData.summary.upcomingMaintenances;
 	const portalStatusMessage = getPortalStatusMessage(homeData);
 
 	return (

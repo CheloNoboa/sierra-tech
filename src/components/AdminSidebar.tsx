@@ -121,6 +121,8 @@ export default function AdminSidebar() {
 		services: locale === "es" ? "Servicios" : "Services",
 		projects: locale === "es" ? "Proyectos" : "Projects",
 		maintenance: locale === "es" ? "Mantenimientos" : "Maintenance",
+		maintenanceSettings:
+			locale === "es" ? "Config. Mantenimiento" : "Maintenance settings",
 		blog: locale === "es" ? "Blog" : "Blog",
 		serviceClasses: locale === "es" ? "Clases de servicio" : "Service classes",
 		contactRequests:
@@ -157,8 +159,11 @@ export default function AdminSidebar() {
 	const isHomeActive = pathname.startsWith("/admin/dashboard/home");
 	const isServicesActive = pathname.startsWith("/admin/dashboard/services");
 	const isProjectsActive = pathname.startsWith("/admin/dashboard/projects");
-	const isMaintenanceActive = pathname.startsWith(
-		"/admin/dashboard/maintenance",
+	const isMaintenanceActive =
+		pathname.startsWith("/admin/dashboard/maintenance") &&
+		!pathname.startsWith("/admin/dashboard/maintenance/settings");
+	const isMaintenanceSettingsActive = pathname.startsWith(
+		"/admin/dashboard/maintenance/settings",
 	);
 	const isBlogActive = pathname.startsWith("/admin/dashboard/blog");
 	const isServiceClassesActive = pathname.startsWith(
@@ -322,6 +327,21 @@ export default function AdminSidebar() {
 											className={iconClass(isMaintenanceActive)}
 										/>
 										<span className={textVisibility}>{t.maintenance}</span>
+									</Link>
+								)}
+
+							{(isSuperAdmin ||
+								canAccessModule(permissions, "maintenance") ||
+								canAccessModule(permissions, "cms")) && (
+									<Link
+										href="/admin/dashboard/maintenance/settings"
+										className={linkClass(isMaintenanceSettingsActive)}
+									>
+										<Settings
+											size={18}
+											className={iconClass(isMaintenanceSettingsActive)}
+										/>
+										<span className={textVisibility}>{t.maintenanceSettings}</span>
 									</Link>
 								)}
 

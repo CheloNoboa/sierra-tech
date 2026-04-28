@@ -9,22 +9,24 @@
  *
  * Propósito:
  * - construir el resumen principal de la home del portal
- * - reutilizar proyectos visibles como fuente inicial de verdad
- * - evitar duplicar lógica entre páginas server y futuros endpoints API
+ * - mostrar datos reales visibles para el cliente
+ * - reutilizar Projects como fuente para proyectos y documentos
+ * - reutilizar Maintenance, vía portalAlerts, como fuente real de alertas e
+ *   historial operativo
  *
- * Alcance:
- * - resumen numérico de la home
- * - proyectos destacados
- * - documentos recientes
- * - alertas recientes
+ * Responsabilidades:
+ * - cargar proyectos visibles de la organización
+ * - construir cards de proyectos destacados
+ * - extraer documentos recientes visibles
+ * - consumir la vista consolidada de alertas/mantenimientos del portal
+ * - alimentar los contadores de Inicio con datos reales
  *
  * Decisiones:
- * - Projects alimenta proyectos, documentos y alertas documentales
- * - Maintenance alimenta el conteo real de mantenimientos próximos
- * - no se introduce todavía una fuente documental independiente
- * - los documentos recientes salen de los documentos visibles en portal dentro
- *   de los proyectos
- * - las alertas salen de la proyección derivada ya definida para portal
+ * - Projects alimenta proyectos y documentos
+ * - getPortalAlertsByOrganization alimenta alertas y mantenimientos
+ * - no se vuelve a calcular Maintenance aquí para evitar duplicación
+ * - activeAlerts representa alertas emitidas o registros accionables visibles
+ * - upcomingMaintenances representa eventos pendientes/programados reales
  *
  * EN:
  * Shared read layer for the client portal home.
@@ -33,21 +35,22 @@
 
 import { connectToDB } from "@/lib/connectToDB";
 import Project from "@/models/Project";
+
 import { normalizeProjectEntity } from "@/lib/projects/projectPayload";
+import { getPortalAlertsByOrganization } from "@/lib/portal/portalAlerts";
 import {
-	extractPortalAlertsFromProject,
 	extractPortalDocumentsFromProject,
 	isPortalVisibleProject,
 	mapProjectEntityToPortalProjectCard,
 	sortPortalProjects,
 } from "@/lib/portal/portalProjectMappers";
+
 import type {
 	PortalAlertItem,
 	PortalDocumentItem,
 	PortalHomeData,
 	PortalProjectCard,
 } from "@/types/portal";
-import Maintenance from "@/models/Maintenance";
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -57,9 +60,7 @@ function compareIsoDesc(a: string, b: string): number {
 	return new Date(b).getTime() - new Date(a).getTime();
 }
 
-function sortRecentDocuments(
-	items: PortalDocumentItem[],
-): PortalDocumentItem[] {
+function sortRecentDocuments(items: PortalDocumentItem[]): PortalDocumentItem[] {
 	return [...items].sort((a, b) => {
 		const aDate = a.uploadedAt ?? a.documentDate ?? a.expiresAt ?? "";
 		const bDate = b.uploadedAt ?? b.documentDate ?? b.expiresAt ?? "";
@@ -74,8 +75,21 @@ function sortRecentDocuments(
 
 function sortRecentAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
 	return [...items].sort((a, b) => {
-		const aDate = a.dueDate ?? a.createdAt ?? "";
-		const bDate = b.dueDate ?? b.createdAt ?? "";
+		const aDate =
+			a.emittedAt ??
+			a.completedAt ??
+			a.dueDate ??
+			a.maintenanceDate ??
+			a.createdAt ??
+			"";
+
+		const bDate =
+			b.emittedAt ??
+			b.completedAt ??
+			b.dueDate ??
+			b.maintenanceDate ??
+			b.createdAt ??
+			"";
 
 		if (!aDate && !bDate) return 0;
 		if (!aDate) return 1;
@@ -83,6 +97,20 @@ function sortRecentAlerts(items: PortalAlertItem[]): PortalAlertItem[] {
 
 		return compareIsoDesc(aDate, bDate);
 	});
+}
+
+function countVisibleActiveAlerts(items: PortalAlertItem[]): number {
+	return items.filter((item) => {
+		if (item.alertStatus === "emitted" && item.completed !== true) {
+			return true;
+		}
+
+		if (item.priority === "high" && item.completed !== true) {
+			return true;
+		}
+
+		return false;
+	}).length;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -115,13 +143,20 @@ export async function getPortalHomeDataByOrganization(params: {
 
 	await connectToDB();
 
-	const items = await Project.find({
-		primaryClientId: normalizedOrganizationId,
-	})
-		.sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
-		.lean();
+	const [projectItems, alertsData] = await Promise.all([
+		Project.find({
+			primaryClientId: normalizedOrganizationId,
+		})
+			.sort({ featured: -1, sortOrder: 1, updatedAt: -1 })
+			.lean(),
 
-	const normalizedProjects = items.map((item) => normalizeProjectEntity(item));
+		getPortalAlertsByOrganization(normalizedOrganizationId),
+	]);
+
+	const normalizedProjects = projectItems.map((item) =>
+		normalizeProjectEntity(item),
+	);
+
 	const visibleProjects = sortPortalProjects(
 		normalizedProjects.filter(isPortalVisibleProject),
 	);
@@ -134,15 +169,7 @@ export async function getPortalHomeDataByOrganization(params: {
 		(project) => extractPortalDocumentsFromProject(project),
 	);
 
-	const portalAlerts: PortalAlertItem[] = visibleProjects.flatMap((project) =>
-		extractPortalAlertsFromProject(project),
-	);
-
-	const upcomingMaintenances = await Maintenance.countDocuments({
-		organizationId: normalizedOrganizationId,
-		status: { $in: ["scheduled", "active", "overdue"] },
-		nextDueDate: { $ne: null },
-	});
+	const portalAlerts = alertsData.items;
 
 	return {
 		organizationName,
@@ -150,8 +177,8 @@ export async function getPortalHomeDataByOrganization(params: {
 		summary: {
 			activeProjects: projectCards.length,
 			recentDocuments: portalDocuments.length,
-			activeAlerts: portalAlerts.length,
-			upcomingMaintenances,
+			activeAlerts: countVisibleActiveAlerts(portalAlerts),
+			upcomingMaintenances: alertsData.summary.upcomingMaintenances,
 		},
 		featuredProjects: projectCards.slice(0, 3),
 		recentDocuments: sortRecentDocuments(portalDocuments).slice(0, 5),

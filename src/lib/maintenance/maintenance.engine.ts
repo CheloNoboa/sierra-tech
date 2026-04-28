@@ -366,6 +366,9 @@ export function buildScheduleEntry(params: {
 	completedByRole?: MaintenanceCompletedByRole;
 	note?: string;
 	emittedAt?: string | null;
+	emailStatus?: "pending" | "sent" | "failed" | "skipped";
+	emailSentAt?: string | null;
+	emailError?: string;
 	eventId?: string | null;
 }): MaintenanceScheduleEntry {
 	const today = ensureTodayDate(params.today);
@@ -391,6 +394,10 @@ export function buildScheduleEntry(params: {
 
 	const alertStatus = emittedAt ? "emitted" : "pending";
 
+	const emailSentAtValue = normalizeString(params.emailSentAt);
+	const emailSentAt =
+		emailSentAtValue.length > 0 ? extractDateOnly(emailSentAtValue) : null;
+
 	return {
 		eventId:
 			normalizeString(params.eventId) ||
@@ -406,6 +413,9 @@ export function buildScheduleEntry(params: {
 			? normalizeString(params.clientEmail)
 			: "",
 		emittedAt,
+		emailStatus: params.emailStatus ?? "pending",
+		emailSentAt,
+		emailError: normalizeString(params.emailError),
 		completedAt: completed
 			? extractDateOnly(params.completedAt) || today
 			: null,
@@ -573,6 +583,9 @@ export function recalculateScheduleFromFirstRow(
 					sourceEntry?.alertStatus === "emitted"
 						? sourceEntry.emittedAt
 						: null,
+				emailStatus: sourceEntry?.emailStatus ?? "pending",
+				emailSentAt: sourceEntry?.emailSentAt ?? null,
+				emailError: sourceEntry?.emailError ?? "",
 			}),
 		);
 
@@ -633,6 +646,9 @@ export function recalculateSingleScheduleRow(
 		note: input.entry.note,
 		emittedAt:
 			input.entry.alertStatus === "emitted" ? input.entry.emittedAt : null,
+		emailStatus: input.entry.emailStatus,
+		emailSentAt: input.entry.emailSentAt,
+		emailError: input.entry.emailError,
 	});
 }
 
@@ -670,6 +686,9 @@ export function toggleScheduleCompleted(params: {
 		manualStatus:
 			params.entry.maintenanceStatus === "cancelled" ? "cancelled" : null,
 		emittedAt: params.entry.emittedAt,
+		emailStatus: params.entry.emailStatus,
+		emailSentAt: params.entry.emailSentAt,
+		emailError: params.entry.emailError,
 	});
 }
 
@@ -697,6 +716,9 @@ export function toggleScheduleAlertEmitted(params: {
 		...recalculated,
 		alertStatus: params.emitted ? "emitted" : "pending",
 		emittedAt: params.emitted ? today : null,
+		emailStatus: params.entry.emailStatus,
+		emailSentAt: params.entry.emailSentAt,
+		emailError: params.entry.emailError,
 	};
 }
 
@@ -742,6 +764,9 @@ export function updateScheduleRowStatus(params: {
 			completedByRole: null,
 			note: params.entry.note,
 			emittedAt: null,
+			emailStatus: params.entry.emailStatus,
+			emailSentAt: params.entry.emailSentAt,
+			emailError: params.entry.emailError,
 		});
 	}
 

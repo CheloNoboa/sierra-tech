@@ -5,46 +5,61 @@
  * =============================================================================
  *
  * ES:
- * Página oficial de Alertas para el portal cliente de Sierra Tech.
+ * Página oficial de Alertas y Seguimiento para el portal cliente de Sierra Tech.
  *
  * Propósito:
- * - centralizar la lectura de alertas relevantes para la organización
- * - mostrar mantenimientos próximos, alertas vencidas, documentos por vencer
- *   y otros avisos autorizados
- * - reutilizar la capa compartida de lectura de alertas del portal
+ * - presentar una vista ejecutiva del estado operativo del cliente
+ * - mostrar proyectos relacionados, alertas emitidas e historial de mantenimiento
+ * - permitir que el cliente marque como realizado un mantenimiento pendiente
+ * - conservar Maintenance.schedule como fuente de verdad operativa
  *
- * Alcance de esta versión:
- * - usa sesión autenticada server-side
- * - consume datos reales derivados del módulo Projects
- * - incorpora filtros simples y útiles para lectura consolidada
- * - prioriza claridad, acción y confianza
+ * Responsabilidades:
+ * - validar sesión activa server-side
+ * - restringir acceso a usuarios cliente activos
+ * - cargar datos reales de la organización autenticada
+ * - aplicar filtros por tipo, prioridad y proyecto desde la URL
+ * - mostrar resumen ejecutivo con métricas reales
+ * - renderizar historial completo: programado, emitido, vencido y realizado
+ * - permitir completar una fila específica del schedule cuando corresponda
+ *
+ * Reglas funcionales:
+ * - el cliente NO crea alertas
+ * - el cliente NO edita mantenimientos
+ * - el cliente NO modifica fechas, alertas ni configuración administrativa
+ * - el cliente SOLO puede marcar completed = true sobre una fila existente
+ * - una fila realizada sigue mostrándose como historial
  *
  * Decisiones:
- * - la sección de alertas se concibe como una vista consolidada
- * - los mantenimientos también alimentan esta vista
- * - los filtros viven en la URL para permitir navegación y recarga consistente
- * - no se crean componentes extraídos fuera de esta pantalla si no son
- *   claramente útiles aquí mismo
- * - la experiencia debe ayudar al cliente a decidir qué revisar primero
+ * - esta página permanece como Server Component
+ * - la confirmación usa Server Action local
+ * - no se usan alert(), window.confirm ni any
+ * - después de completar un mantenimiento se revalida /portal/alerts
  *
  * EN:
- * Official Alerts page for the Sierra Tech client portal.
+ * Official Alerts and Tracking page for the Sierra Tech client portal.
  * =============================================================================
  */
 
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import {
 	ArrowRight,
+	CheckCircle2,
+	Clock3,
 	FileWarning,
+	History,
 	ShieldAlert,
 	TriangleAlert,
 	Wrench,
 } from "lucide-react";
 
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { connectToDB } from "@/lib/connectToDB";
 import { getPortalAlertsByOrganization } from "@/lib/portal/portalAlerts";
+import Maintenance from "@/models/Maintenance";
 import type { PortalAlertItem } from "@/types/portal";
 
 /* -------------------------------------------------------------------------- */
@@ -57,6 +72,67 @@ interface PortalAlertsPageProps {
 		priority?: string;
 		projectId?: string;
 	}>;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Server actions                                                             */
+/* -------------------------------------------------------------------------- */
+
+async function completeMaintenanceFromAlert(formData: FormData) {
+	"use server";
+
+	const session = await getServerSession(authOptions);
+	const user = session?.user;
+
+	if (
+		!user ||
+		user.userType !== "client" ||
+		user.status !== "active" ||
+		!user.organizationId
+	) {
+		redirect("/login");
+	}
+
+	const maintenanceId = String(formData.get("maintenanceId") ?? "").trim();
+	const rawScheduleIndex = String(formData.get("scheduleIndex") ?? "").trim();
+	const scheduleIndex = Number(rawScheduleIndex);
+
+	if (
+		!maintenanceId ||
+		!Number.isInteger(scheduleIndex) ||
+		scheduleIndex < 0
+	) {
+		return;
+	}
+
+	await connectToDB();
+
+	const maintenance = await Maintenance.findById(maintenanceId);
+
+	if (!maintenance) return;
+
+	if (String(maintenance.organizationId) !== String(user.organizationId)) {
+		return;
+	}
+
+	if (
+		!Array.isArray(maintenance.schedule) ||
+		scheduleIndex >= maintenance.schedule.length
+	) {
+		return;
+	}
+
+	const completedAt = new Date().toISOString();
+
+	maintenance.set(`schedule.${scheduleIndex}.completed`, true);
+	maintenance.set(`schedule.${scheduleIndex}.completedAt`, completedAt);
+	maintenance.set(`schedule.${scheduleIndex}.completedByRole`, "client");
+	maintenance.set(`schedule.${scheduleIndex}.maintenanceStatus`, "done");
+	maintenance.set("updatedAt", new Date());
+
+	await maintenance.save();
+
+	revalidatePath("/portal/alerts");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -82,25 +158,6 @@ function normalizeFilterValue(value: string | undefined): string {
 	return value?.trim() ?? "";
 }
 
-function formatAlertType(value: PortalAlertItem["type"]): string {
-	switch (value) {
-		case "maintenance_upcoming":
-			return "Mantenimiento próximo";
-		case "maintenance_overdue":
-			return "Mantenimiento vencido";
-		case "document_expiring":
-			return "Documento por vencer";
-		case "warranty_expiring":
-			return "Garantía por vencer";
-		case "scheduled_review":
-			return "Revisión programada";
-		case "critical":
-			return "Crítica";
-		default:
-			return "Alerta";
-	}
-}
-
 function formatAlertPriority(value: PortalAlertItem["priority"]): string {
 	switch (value) {
 		case "high":
@@ -114,34 +171,47 @@ function formatAlertPriority(value: PortalAlertItem["priority"]): string {
 	}
 }
 
-function formatActionLabel(item: PortalAlertItem): string {
-	switch (item.action) {
-		case "view_document":
-			return "Ver documentos";
-		case "contact_support":
-			return "Ir a soporte";
-		case "view_project":
+function formatAlertStatus(value: PortalAlertItem["alertStatus"]): string {
+	switch (value) {
+		case "emitted":
+			return "Emitida";
+		case "pending":
+			return "Pendiente";
 		default:
-			return "Revisar";
+			return "—";
 	}
 }
 
-function getAlertDateTitle(item: PortalAlertItem): string {
-	switch (item.type) {
-		case "maintenance_upcoming":
-			return "Próximo mantenimiento";
-		case "maintenance_overdue":
-			return "Mantenimiento vencido";
-		case "document_expiring":
-			return "Vencimiento documental";
-		case "warranty_expiring":
-			return "Vencimiento de garantía";
-		case "scheduled_review":
-			return "Revisión programada";
-		case "critical":
-			return "Fecha crítica";
+function formatMaintenanceStatus(
+	value: PortalAlertItem["maintenanceStatus"],
+	completed: PortalAlertItem["completed"],
+): string {
+	if (completed) return "Realizado";
+
+	switch (value) {
+		case "done":
+			return "Realizado";
+		case "overdue":
+			return "Vencido";
+		case "cancelled":
+			return "Cancelado";
+		case "pending":
+			return "Pendiente";
 		default:
-			return "Fecha";
+			return "—";
+	}
+}
+
+function formatCompletedByRole(
+	value: PortalAlertItem["completedByRole"],
+): string {
+	switch (value) {
+		case "client":
+			return "Cliente";
+		case "internal":
+			return "Sierra Tech";
+		default:
+			return "—";
 	}
 }
 
@@ -151,6 +221,7 @@ function getActionHref(item: PortalAlertItem): string {
 			return "/portal/documents";
 		case "contact_support":
 			return "/portal/support";
+		case "mark_completed":
 		case "view_project":
 		default:
 			return item.projectId ? `/portal/projects/${item.projectId}` : "/portal/projects";
@@ -170,10 +241,7 @@ function matchesPriorityFilter(
 	return item.priority === priority;
 }
 
-function matchesProjectFilter(
-	item: PortalAlertItem,
-	projectId: string,
-): boolean {
+function matchesProjectFilter(item: PortalAlertItem, projectId: string): boolean {
 	if (!projectId || projectId === "all") return true;
 	return (item.projectId ?? "") === projectId;
 }
@@ -211,36 +279,37 @@ function getPriorityPillClasses(priority: PortalAlertItem["priority"]): string {
 		case "medium":
 			return "border-amber-200 bg-amber-50 text-amber-700";
 		case "low":
-			return "border-slate-200 bg-slate-50 text-slate-700";
 		default:
 			return "border-slate-200 bg-slate-50 text-slate-700";
 	}
 }
 
-function getAlertCardClasses(priority: PortalAlertItem["priority"]): string {
-	switch (priority) {
-		case "high":
-			return "border-red-200 bg-gradient-to-br from-white via-white to-red-50/60";
-		case "medium":
-			return "border-amber-200 bg-gradient-to-br from-white via-white to-amber-50/50";
-		case "low":
-		default:
-			return "border-border bg-white";
+function getStatusPillClasses(item: PortalAlertItem): string {
+	if (item.completed) {
+		return "border-emerald-200 bg-emerald-50 text-emerald-700";
 	}
+
+	if (item.type === "maintenance_overdue") {
+		return "border-red-200 bg-red-50 text-red-700";
+	}
+
+	if (item.alertStatus === "emitted") {
+		return "border-amber-200 bg-amber-50 text-amber-700";
+	}
+
+	return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function shouldShowPrimaryActionButton(item: PortalAlertItem): boolean {
-	/**
-	 * Regla:
-	 * - si la alerta trae adjuntos de mantenimiento, el foco principal son esos
-	 *   documentos; no se necesita duplicar el CTA general inmediatamente debajo
-	 * - en alertas documentales o soporte sí se muestra CTA principal
-	 */
-	if (item.attachments.length > 0) {
-		return false;
-	}
-
-	return true;
+function canCompleteMaintenanceAlert(item: PortalAlertItem): boolean {
+	return (
+		item.canMarkCompleted === true &&
+		item.completed !== true &&
+		typeof item.maintenanceId === "string" &&
+		item.maintenanceId.trim().length > 0 &&
+		typeof item.scheduleIndex === "number" &&
+		Number.isInteger(item.scheduleIndex) &&
+		item.scheduleIndex >= 0
+	);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -256,7 +325,7 @@ function SummaryCard({
 	title: string;
 	value: number;
 	description: string;
-	icon: React.ReactNode;
+	icon: ReactNode;
 }) {
 	return (
 		<div className="rounded-3xl border border-border bg-white p-6 shadow-sm">
@@ -273,16 +342,15 @@ function SummaryCard({
 	);
 }
 
-function EmptyAlertsState() {
+function EmptyState() {
 	return (
 		<div className="mt-6 rounded-2xl border border-dashed border-border bg-surface px-5 py-8 text-center">
 			<p className="text-sm font-medium text-text-primary">
-				Aún no hay alertas disponibles
+				No hay información disponible
 			</p>
 			<p className="mt-2 text-sm leading-7 text-text-secondary">
-				Cuando Sierra Tech publique mantenimientos próximos, vencimientos
-				documentales o avisos relevantes para tu organización, aparecerán aquí
-				de forma consolidada.
+				Cuando existan proyectos, mantenimientos o alertas visibles para tu
+				organización, aparecerán aquí.
 			</p>
 		</div>
 	);
@@ -292,11 +360,10 @@ function EmptyFilterResultsState() {
 	return (
 		<div className="mt-6 rounded-2xl border border-dashed border-border bg-surface px-5 py-8 text-center">
 			<p className="text-sm font-medium text-text-primary">
-				No encontramos alertas con esos filtros
+				No encontramos resultados con esos filtros
 			</p>
 			<p className="mt-2 text-sm leading-7 text-text-secondary">
-				Ajusta el tipo, la prioridad o el proyecto para encontrar más
-				resultados.
+				Ajusta el tipo, la prioridad o el proyecto para encontrar más registros.
 			</p>
 		</div>
 	);
@@ -324,7 +391,7 @@ function FilterBar({
 						htmlFor="portal-alerts-type"
 						className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-brand-primaryStrong"
 					>
-						Tipo de alerta
+						Tipo
 					</label>
 
 					<select
@@ -333,9 +400,10 @@ function FilterBar({
 						defaultValue={type || "all"}
 						className="h-11 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
 					>
-						<option value="all">Todas</option>
-						<option value="maintenance_upcoming">Mantenimiento próximo</option>
+						<option value="all">Todos</option>
+						<option value="maintenance_upcoming">Mantenimiento programado</option>
 						<option value="maintenance_overdue">Mantenimiento vencido</option>
+						<option value="maintenance_completed">Mantenimiento realizado</option>
 						<option value="document_expiring">Documento por vencer</option>
 						<option value="warranty_expiring">Garantía por vencer</option>
 						<option value="scheduled_review">Revisión programada</option>
@@ -407,116 +475,165 @@ function FilterBar({
 	);
 }
 
-function MaintenanceAttachmentsBlock({ item }: { item: PortalAlertItem }) {
-	if (!item.attachments || item.attachments.length === 0) {
-		return null;
-	}
+function CompleteMaintenanceButton({ item }: { item: PortalAlertItem }) {
+	if (!canCompleteMaintenanceAlert(item)) return null;
 
 	return (
-		<div className="mt-5 rounded-2xl border border-border bg-surface px-4 py-4">
-			<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-				Documentos del mantenimiento
-			</p>
+		<form action={completeMaintenanceFromAlert}>
+			<input type="hidden" name="maintenanceId" value={item.maintenanceId ?? ""} />
+			<input
+				type="hidden"
+				name="scheduleIndex"
+				value={String(item.scheduleIndex ?? "")}
+			/>
 
-			<div className="mt-3 flex flex-wrap gap-3">
-				{item.attachments.map((attachment, index) => (
-					<a
-						key={`${item.alertId}-attachment-${index}`}
-						href={attachment.fileUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
-					>
-						{attachment.fileName?.trim() || `Ver documento ${index + 1}`}
-						<ArrowRight className="h-4 w-4" />
-					</a>
-				))}
-			</div>
+			<button
+				type="submit"
+				className="inline-flex items-center gap-2 rounded-2xl bg-brand-primary px-4 py-3 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white"
+			>
+				<CheckCircle2 className="h-4 w-4" />
+				Marcar como realizado
+			</button>
+		</form>
+	);
+}
+
+function AttachmentLinks({ item }: { item: PortalAlertItem }) {
+	if (!item.attachments || item.attachments.length === 0) return null;
+
+	return (
+		<div className="flex flex-wrap gap-2">
+			{item.attachments.map((attachment, index) => (
+				<a
+					key={`${item.alertId}-attachment-${index}`}
+					href={attachment.fileUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+				>
+					{attachment.fileName?.trim() || `Documento ${index + 1}`}
+					<ArrowRight className="h-3.5 w-3.5" />
+				</a>
+			))}
 		</div>
 	);
 }
 
-function AlertCard({ item }: { item: PortalAlertItem }) {
-	const actionHref = getActionHref(item);
-	const actionLabel = formatActionLabel(item);
-
+function HistoryTable({ items }: { items: PortalAlertItem[] }) {
 	return (
-		<article
-			className={`rounded-[28px] border p-6 shadow-sm ${getAlertCardClasses(item.priority)}`}
-		>
-			<div className="flex items-start justify-between gap-4">
-				<div className="min-w-0 space-y-3">
-					<div className="flex flex-wrap gap-2">
-						<span className="inline-flex rounded-full border border-brand-primary/20 bg-brand-primary/10 px-3 py-1 text-xs font-medium text-brand-primaryStrong">
-							{formatAlertType(item.type)}
-						</span>
+		<div className="mt-6 overflow-hidden rounded-3xl border border-border">
+			<div className="overflow-x-auto">
+				<table className="min-w-[1180px] w-full border-collapse bg-white text-sm">
+					<thead className="bg-surface text-left text-xs uppercase tracking-[0.14em] text-text-secondary">
+						<tr>
+							<th className="px-5 py-4 font-semibold">Fecha</th>
+							<th className="px-5 py-4 font-semibold">Proyecto</th>
+							<th className="px-5 py-4 font-semibold">Mantenimiento / alerta</th>
+							<th className="px-5 py-4 font-semibold">Alerta</th>
+							<th className="px-5 py-4 font-semibold">Estado</th>
+							<th className="px-5 py-4 font-semibold">Realizado</th>
+							<th className="px-5 py-4 font-semibold">Realizado por</th>
+							<th className="px-5 py-4 font-semibold">Nota</th>
+							<th className="px-5 py-4 font-semibold">Acciones</th>
+						</tr>
+					</thead>
 
-						<span
-							className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getPriorityPillClasses(
-								item.priority,
-							)}`}
-						>
-							Prioridad {formatAlertPriority(item.priority)}
-						</span>
-					</div>
+					<tbody className="divide-y divide-border">
+						{items.map((item) => (
+							<tr key={item.alertId} className="align-top hover:bg-surface/60">
+								<td className="px-5 py-4 font-medium text-text-primary">
+									{formatDateLabel(item.maintenanceDate ?? item.dueDate)}
+								</td>
 
-					<h2 className="break-words text-xl font-bold tracking-tight text-text-primary">
-						{item.title}
-					</h2>
+								<td className="px-5 py-4">
+									<p className="max-w-[220px] text-sm font-semibold text-text-primary">
+										{item.projectTitle?.trim() || "—"}
+									</p>
+								</td>
 
-					<p className="break-words text-sm leading-7 text-text-secondary">
-						{item.description}
-					</p>
-				</div>
+								<td className="px-5 py-4">
+									<p className="max-w-[280px] text-sm font-semibold text-text-primary">
+										{item.maintenanceTitle ?? item.title}
+									</p>
+									<p className="mt-1 max-w-[320px] text-xs leading-5 text-text-secondary">
+										{item.description}
+									</p>
+									<div className="mt-3">
+										<AttachmentLinks item={item} />
+									</div>
+								</td>
 
-				<div className="rounded-2xl bg-brand-primary/10 p-3 text-brand-primaryStrong">
-					<TriangleAlert className="h-5 w-5" />
-				</div>
+								<td className="px-5 py-4">
+									<div className="space-y-2">
+										<span
+											className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getPriorityPillClasses(
+												item.priority,
+											)}`}
+										>
+											{formatAlertPriority(item.priority)}
+										</span>
+										<p className="text-xs text-text-secondary">
+											{formatAlertStatus(item.alertStatus)}
+										</p>
+										<p className="text-xs text-text-secondary">
+											Alerta: {formatDateLabel(item.alertDate)}
+										</p>
+									</div>
+								</td>
+
+								<td className="px-5 py-4">
+									<span
+										className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusPillClasses(
+											item,
+										)}`}
+									>
+										{formatMaintenanceStatus(
+											item.maintenanceStatus,
+											item.completed,
+										)}
+									</span>
+								</td>
+
+								<td className="px-5 py-4">
+									<div className="space-y-1">
+										<p className="text-sm font-semibold text-text-primary">
+											{item.completed ? "Sí" : "No"}
+										</p>
+										<p className="text-xs text-text-secondary">
+											{formatDateLabel(item.completedAt)}
+										</p>
+									</div>
+								</td>
+
+								<td className="px-5 py-4 text-sm text-text-secondary">
+									{formatCompletedByRole(item.completedByRole)}
+								</td>
+
+								<td className="px-5 py-4">
+									<p className="max-w-[220px] text-sm leading-6 text-text-secondary">
+										{item.note?.trim() || "—"}
+									</p>
+								</td>
+
+								<td className="px-5 py-4">
+									<div className="flex flex-col gap-2">
+										<CompleteMaintenanceButton item={item} />
+
+										<Link
+											href={getActionHref(item)}
+											className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+										>
+											Ver proyecto
+											<ArrowRight className="h-4 w-4" />
+										</Link>
+									</div>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
 			</div>
-
-			<div className="mt-6 grid gap-3 md:grid-cols-3">
-				<div className="rounded-2xl border border-border bg-surface px-4 py-3">
-					<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-						Proyecto
-					</p>
-					<p className="mt-2 break-words text-sm font-semibold text-text-primary">
-						{item.projectTitle?.trim() || "—"}
-					</p>
-				</div>
-
-				<div className="rounded-2xl border border-border bg-surface px-4 py-3">
-					<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-						Tipo
-					</p>
-					<p className="mt-2 break-words text-sm font-semibold text-text-primary">
-						{formatAlertType(item.type)}
-					</p>
-				</div>
-
-				<div className="rounded-2xl border border-border bg-surface px-4 py-3">
-					<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-						{getAlertDateTitle(item)}
-					</p>
-					<p className="mt-2 text-sm font-semibold text-text-primary">
-						{formatDateLabel(item.dueDate)}
-					</p>
-				</div>
-			</div>
-
-			<MaintenanceAttachmentsBlock item={item} />
-
-			{shouldShowPrimaryActionButton(item) ? (
-				<div className="mt-5">
-					<Link
-						href={actionHref}
-						className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
-					>
-						{actionLabel}
-						<ArrowRight className="h-4 w-4" />
-					</Link>
-				</div>
-			) : null}
-		</article>
+		</div>
 	);
 }
 
@@ -530,11 +647,6 @@ export default async function PortalAlertsPage({
 	const session = await getServerSession(authOptions);
 	const user = session?.user;
 
-	/**
-	 * Defensa adicional server-side.
-	 * El middleware ya protege /portal, pero la página no debe continuar si
-	 * la sesión cliente no es válida.
-	 */
 	if (
 		!user ||
 		user.userType !== "client" ||
@@ -547,8 +659,7 @@ export default async function PortalAlertsPage({
 	const resolvedSearchParams = searchParams ? await searchParams : {};
 	const type = normalizeFilterValue(resolvedSearchParams.type) || "all";
 	const priority = normalizeFilterValue(resolvedSearchParams.priority) || "all";
-	const projectId =
-		normalizeFilterValue(resolvedSearchParams.projectId) || "all";
+	const projectId = normalizeFilterValue(resolvedSearchParams.projectId) || "all";
 
 	const alertsData = await getPortalAlertsByOrganization(user.organizationId);
 	const projectOptions = getUniqueProjectOptions(alertsData.items);
@@ -564,41 +675,70 @@ export default async function PortalAlertsPage({
 	return (
 		<div className="space-y-6">
 			<section className="rounded-[30px] border border-border bg-white p-8 shadow-sm">
-				<div className="max-w-3xl space-y-4">
+				<div className="max-w-4xl space-y-4">
 					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-primaryStrong">
-						Alertas y seguimiento
+						Alertas, mantenimientos e historial
 					</p>
 
 					<h1 className="text-3xl font-bold tracking-tight text-text-primary">
-						Alertas de la organización
+						Seguimiento operativo de la organización
 					</h1>
 
 					<p className="text-base leading-8 text-text-secondary">
-						Aquí se concentran los avisos relevantes visibles para tu
-						organización: mantenimientos próximos o vencidos, documentos por
-						vencer, revisiones programadas y cualquier otra alerta autorizada
-						por Sierra Tech para seguimiento privado.
+						Consulta los proyectos asociados, alertas emitidas, mantenimientos
+						programados, eventos vencidos y mantenimientos ya realizados. Esta
+						vista funciona como historial operativo visible para el cliente.
 					</p>
 				</div>
 			</section>
 
 			<section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
 				<SummaryCard
-					title="Alertas activas"
-					value={alertsData.summary.totalAlerts}
-					description="Avisos visibles y pendientes de revisión."
-					icon={<TriangleAlert className="h-5 w-5" />}
+					title="Proyectos vinculados"
+					value={alertsData.summary.totalProjects}
+					description="Proyectos visibles asociados a la organización."
+					icon={<History className="h-5 w-5" />}
 				/>
 
 				<SummaryCard
-					title="Mantenimientos próximos"
-					value={alertsData.summary.upcomingMaintenances}
-					description="Actividades con fecha cercana dentro del portal."
+					title="Eventos de mantenimiento"
+					value={alertsData.summary.totalScheduleEvents}
+					description="Historial completo generado desde el schedule."
 					icon={<Wrench className="h-5 w-5" />}
 				/>
 
 				<SummaryCard
-					title="Documentos con fecha crítica"
+					title="Alertas emitidas"
+					value={alertsData.summary.emittedAlerts}
+					description="Alertas ya generadas para seguimiento."
+					icon={<TriangleAlert className="h-5 w-5" />}
+				/>
+
+				<SummaryCard
+					title="Realizados"
+					value={alertsData.summary.completedMaintenances}
+					description="Mantenimientos marcados como realizados."
+					icon={<CheckCircle2 className="h-5 w-5" />}
+				/>
+			</section>
+
+			<section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+				<SummaryCard
+					title="Próximos"
+					value={alertsData.summary.upcomingMaintenances}
+					description="Mantenimientos pendientes o programados."
+					icon={<Clock3 className="h-5 w-5" />}
+				/>
+
+				<SummaryCard
+					title="Vencidos"
+					value={alertsData.summary.overdueMaintenances}
+					description="Eventos pendientes con atención requerida."
+					icon={<ShieldAlert className="h-5 w-5" />}
+				/>
+
+				<SummaryCard
+					title="Documentos críticos"
 					value={alertsData.summary.expiringDocuments}
 					description="Contratos, garantías u otros archivos con seguimiento."
 					icon={<FileWarning className="h-5 w-5" />}
@@ -607,8 +747,8 @@ export default async function PortalAlertsPage({
 				<SummaryCard
 					title="Prioridad alta"
 					value={alertsData.summary.highPriorityAlerts}
-					description="Alertas que requieren atención más inmediata."
-					icon={<ShieldAlert className="h-5 w-5" />}
+					description="Registros que requieren mayor atención."
+					icon={<TriangleAlert className="h-5 w-5" />}
 				/>
 			</section>
 
@@ -619,109 +759,44 @@ export default async function PortalAlertsPage({
 				projectOptions={projectOptions}
 			/>
 
-			<section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-				<div className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
+			<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
+				<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 					<div className="space-y-3">
 						<p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-primaryStrong">
-							Vista consolidada
+							Historial operativo
 						</p>
 
 						<h2 className="text-xl font-bold tracking-tight text-text-primary">
-							Alertas visibles para la organización
+							Mantenimientos, alertas y seguimiento
 						</h2>
 
 						<p className="max-w-3xl text-sm leading-7 text-text-secondary">
-							Aquí puedes revisar primero lo más urgente y luego el resto de
-							avisos visibles, con acceso directo al proyecto, documentos o
-							soporte según corresponda.
+							Se muestran eventos realizados, pendientes, emitidos, vencidos y
+							programados. Los registros pendientes con alerta emitida pueden ser
+							marcados como realizados por el cliente.
 						</p>
 					</div>
 
-					{alertsData.items.length === 0 ? (
-						<EmptyAlertsState />
-					) : filteredItems.length === 0 ? (
-						<EmptyFilterResultsState />
-					) : (
-						<div className="mt-6 space-y-4">
-							{filteredItems.map((item) => (
-								<AlertCard key={item.alertId} item={item} />
-							))}
-						</div>
-					)}
+					<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+						Mostrando{" "}
+						<span className="font-semibold text-text-primary">
+							{filteredItems.length}
+						</span>{" "}
+						de{" "}
+						<span className="font-semibold text-text-primary">
+							{alertsData.items.length}
+						</span>{" "}
+						registros
+					</div>
 				</div>
 
-				<div className="space-y-6">
-					<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
-						<div className="space-y-3">
-							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-primaryStrong">
-								Lectura rápida
-							</p>
-
-							<h2 className="text-xl font-bold tracking-tight text-text-primary">
-								Cómo interpretar esta vista
-							</h2>
-						</div>
-
-						<div className="mt-5 space-y-3">
-							<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
-								Prioridad alta: conviene revisarla primero.
-							</div>
-
-							<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
-								Mantenimiento vencido: requiere seguimiento más inmediato.
-							</div>
-
-							<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
-								Documento por vencer: ayuda a anticipar renovaciones o revisión.
-							</div>
-
-							<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
-								Cada alerta muestra proyecto relacionado, fecha y acción
-								sugerida.
-							</div>
-						</div>
-					</section>
-
-					<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
-						<div className="space-y-3">
-							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-primaryStrong">
-								Contexto general
-							</p>
-
-							<h2 className="text-xl font-bold tracking-tight text-text-primary">
-								Alcance visible en portal
-							</h2>
-						</div>
-
-						<div className="mt-5 space-y-3">
-							<div className="rounded-2xl border border-border bg-surface px-4 py-4">
-								<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-									Proyectos con alertas
-								</p>
-								<p className="mt-2 text-2xl font-bold text-text-primary">
-									{alertsData.relatedProjectsCount}
-								</p>
-								<p className="mt-2 text-sm leading-6 text-text-secondary">
-									Proyectos que actualmente generan alertas visibles en el
-									portal.
-								</p>
-							</div>
-
-							<div className="rounded-2xl border border-border bg-surface px-4 py-4">
-								<p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-									Mantenimientos vencidos
-								</p>
-								<p className="mt-2 text-2xl font-bold text-text-primary">
-									{alertsData.summary.overdueAlerts}
-								</p>
-								<p className="mt-2 text-sm leading-6 text-text-secondary">
-									Elementos que requieren especial atención dentro del
-									seguimiento.
-								</p>
-							</div>
-						</div>
-					</section>
-				</div>
+				{alertsData.items.length === 0 ? (
+					<EmptyState />
+				) : filteredItems.length === 0 ? (
+					<EmptyFilterResultsState />
+				) : (
+					<HistoryTable items={filteredItems} />
+				)}
 			</section>
 		</div>
 	);

@@ -39,6 +39,7 @@ import type {
 	MaintenanceSummary,
 	MaintenanceType,
 	MaintenanceWritePayload,
+	MaintenanceEmailStatus,
 } from "@/types/maintenance";
 
 /* -------------------------------------------------------------------------- */
@@ -184,6 +185,14 @@ function normalizeAlertStatus(value: unknown): MaintenanceAlertStatus {
 	return value === "emitted" ? "emitted" : "pending";
 }
 
+function normalizeEmailStatus(value: unknown): MaintenanceEmailStatus {
+	if (value === "sent" || value === "failed" || value === "skipped") {
+		return value;
+	}
+
+	return "pending";
+}
+
 function normalizeExecutionStatus(value: unknown): MaintenanceExecutionStatus {
 	if (value === "done" || value === "overdue" || value === "cancelled") {
 		return value;
@@ -265,6 +274,9 @@ function normalizeScheduleEntry(
 		recipients: normalizeRecipients(source.recipients),
 		recipientEmail: normalizeString(source.recipientEmail),
 		emittedAt: normalizeNullableDate(source.emittedAt),
+		emailStatus: normalizeEmailStatus(source.emailStatus),
+		emailSentAt: normalizeNullableDate(source.emailSentAt),
+		emailError: normalizeString(source.emailError),
 		completedAt: normalizeNullableDate(source.completedAt),
 		completed,
 		completedByRole: normalizeCompletedByRole(source.completedByRole),
@@ -324,7 +336,6 @@ function deriveMaintenanceStatus(
 		return "overdue";
 	}
 
-	// 🔥 ESTA LÍNEA ES LA CLAVE QUE TE FALTA
 	return "active";
 }
 
