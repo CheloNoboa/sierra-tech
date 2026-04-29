@@ -9,13 +9,18 @@
  *
  * Propósito:
  * - persistir la configuración editable desde el admin
- * - controlar la ejecución lógica del demonio de mantenimientos
- * - soportar programación tipo alarma:
- *   - intervalo
+ * - controlar la ejecución lógica del scheduler de mantenimientos
+ * - soportar programación simple y realista:
  *   - diaria
  *   - semanal
  * - configurar envío de correos sin guardar credenciales sensibles
  * - guardar auditoría básica de la última ejecución
+ *
+ * Decisiones:
+ * - no se soporta ejecución por intervalos en esta versión
+ * - no se soporta proveedor Resend
+ * - SMTP es el único proveedor de correo habilitable
+ * - disabled permite apagar correos sin apagar el scheduler
  *
  * Reglas:
  * - no guarda claves API ni passwords
@@ -31,7 +36,6 @@ import mongoose, { Model, Schema, Types } from "mongoose";
 import type {
 	MaintenanceEmailProvider,
 	MaintenanceLastRunStatus,
-	MaintenanceSchedulerIntervalUnit,
 	MaintenanceSchedulerMode,
 	MaintenanceSchedulerWeekday,
 } from "@/types/maintenanceSettings";
@@ -40,16 +44,7 @@ import type {
 /* Enum values                                                                */
 /* -------------------------------------------------------------------------- */
 
-const SCHEDULER_MODE_VALUES: MaintenanceSchedulerMode[] = [
-	"interval",
-	"daily",
-	"weekly",
-];
-
-const INTERVAL_UNIT_VALUES: MaintenanceSchedulerIntervalUnit[] = [
-	"minutes",
-	"hours",
-];
+const SCHEDULER_MODE_VALUES: MaintenanceSchedulerMode[] = ["daily", "weekly"];
 
 const WEEKDAY_VALUES: MaintenanceSchedulerWeekday[] = [
 	"mon",
@@ -61,11 +56,7 @@ const WEEKDAY_VALUES: MaintenanceSchedulerWeekday[] = [
 	"sun",
 ];
 
-const EMAIL_PROVIDER_VALUES: MaintenanceEmailProvider[] = [
-	"resend",
-	"smtp",
-	"disabled",
-];
+const EMAIL_PROVIDER_VALUES: MaintenanceEmailProvider[] = ["smtp", "disabled"];
 
 const LAST_RUN_STATUS_VALUES: MaintenanceLastRunStatus[] = [
 	"success",
@@ -79,10 +70,6 @@ const LAST_RUN_STATUS_VALUES: MaintenanceLastRunStatus[] = [
 
 const MaintenanceSettingsSchema = new Schema(
 	{
-		/* ------------------------------------------------------------------ */
-		/* Scheduler core                                                     */
-		/* ------------------------------------------------------------------ */
-
 		singletonKey: {
 			type: String,
 			default: "maintenance-settings",
@@ -99,52 +86,15 @@ const MaintenanceSettingsSchema = new Schema(
 		schedulerMode: {
 			type: String,
 			enum: SCHEDULER_MODE_VALUES,
-			default: "interval",
+			default: "daily",
 		},
 
-		/**
-		 * Interval mode:
-		 * - ejecuta cada X minutos u horas
-		 */
-		intervalValue: {
-			type: Number,
-			default: 1,
-			min: 1,
-		},
-
-		intervalUnit: {
-			type: String,
-			enum: INTERVAL_UNIT_VALUES,
-			default: "hours",
-		},
-
-		/**
-		 * Hora base para modo interval.
-		 *
-		 * Ejemplo:
-		 * - 00:00 con cada 1 hora permite 00:00, 01:00, 02:00...
-		 */
-		intervalStartTime: {
-			type: String,
-			trim: true,
-			default: "00:00",
-		},
-
-		/**
-		 * Daily mode:
-		 * - hora exacta del día en formato HH:mm
-		 */
 		dailyRunTime: {
 			type: String,
 			trim: true,
 			default: "08:00",
 		},
 
-		/**
-		 * Weekly mode:
-		 * - días seleccionados usando claves estables
-		 * - no usar números para evitar ambigüedad entre calendarios
-		 */
 		weeklyRunDays: {
 			type: [
 				{
@@ -152,39 +102,25 @@ const MaintenanceSettingsSchema = new Schema(
 					enum: WEEKDAY_VALUES,
 				},
 			],
-			default: ["mon", "tue", "wed", "thu", "fri"],
+			default: ["mon"],
 		},
 
-		/**
-		 * Weekly mode:
-		 * - hora exacta para los días seleccionados
-		 */
 		weeklyRunTime: {
 			type: String,
 			trim: true,
 			default: "08:00",
 		},
 
-		/**
-		 * Zona horaria usada para interpretar días y horas.
-		 */
 		timezone: {
 			type: String,
 			trim: true,
 			default: "America/Guayaquil",
 		},
 
-		/**
-		 * Permite o bloquea ejecución manual desde UI.
-		 */
 		manualRunEnabled: {
 			type: Boolean,
-			default: false,
+			default: true,
 		},
-
-		/* ------------------------------------------------------------------ */
-		/* Email                                                              */
-		/* ------------------------------------------------------------------ */
 
 		emailEnabled: {
 			type: Boolean,
@@ -219,10 +155,6 @@ const MaintenanceSettingsSchema = new Schema(
 			type: [String],
 			default: [],
 		},
-
-		/* ------------------------------------------------------------------ */
-		/* Execution audit                                                    */
-		/* ------------------------------------------------------------------ */
 
 		lastRunAt: {
 			type: String,
@@ -269,6 +201,47 @@ const MaintenanceSettingsSchema = new Schema(
 			default: 0,
 			min: 0,
 		},
+
+		lastRunSource: {
+			type: String,
+			enum: ["cron", "manual", "unknown"],
+			default: "unknown",
+		},
+
+		lastRunStartedAt: {
+			type: String,
+			default: null,
+		},
+
+		lastRunFinishedAt: {
+			type: String,
+			default: null,
+		},
+
+		lastRunUpdated: {
+			type: Number,
+			default: 0,
+			min: 0,
+		},
+
+		lastRunEmailsSkipped: {
+			type: Number,
+			default: 0,
+			min: 0,
+		},
+
+		lastRunRowsMarkedOverdue: {
+			type: Number,
+			default: 0,
+			min: 0,
+		},
+
+		lastRunError: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+
 	},
 	{
 		collection: "MaintenanceSettings",
@@ -286,10 +259,6 @@ export interface MaintenanceSettingsDocument extends mongoose.Document {
 
 	schedulerEnabled: boolean;
 	schedulerMode: MaintenanceSchedulerMode;
-
-	intervalValue: number;
-	intervalUnit: MaintenanceSchedulerIntervalUnit;
-	intervalStartTime: string;
 
 	dailyRunTime: string;
 
@@ -317,6 +286,14 @@ export interface MaintenanceSettingsDocument extends mongoose.Document {
 	lastRunAlertsGenerated: number;
 	lastRunEmailsSent: number;
 	lastRunEmailsFailed: number;
+
+	lastRunSource: "cron" | "manual" | "unknown";
+	lastRunStartedAt: string | null;
+	lastRunFinishedAt: string | null;
+	lastRunUpdated: number;
+	lastRunEmailsSkipped: number;
+	lastRunRowsMarkedOverdue: number;
+	lastRunError: string;
 
 	createdAt: Date;
 	updatedAt: Date;

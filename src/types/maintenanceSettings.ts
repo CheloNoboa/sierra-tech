@@ -8,20 +8,26 @@
  * Contrato oficial de configuración operativa para el módulo Maintenance.
  *
  * Propósito:
- * - centralizar la configuración del demonio de mantenimientos
- * - controlar cuándo debe ejecutarse el scheduler
- * - controlar el envío de correos de alertas
- * - permitir administración desde el panel admin
+ * - centralizar la configuración del scheduler de mantenimientos
+ * - controlar si el job automático está activo
+ * - limitar la frecuencia operativa a modos reales y sostenibles
+ * - permitir ejecución manual controlada desde el panel admin
+ * - controlar el envío de correos de alertas mediante SMTP/Nodemailer
  *
  * Alcance:
  * - activación/desactivación del scheduler
- * - modo de ejecución tipo alarma/programador
- * - ejecución por intervalo, diaria o semanal
+ * - ejecución diaria o semanal
  * - zona horaria de interpretación
  * - ejecución manual controlada
  * - configuración de correo saliente
  * - destinatarios internos por defecto
  * - auditoría básica de la última ejecución
+ *
+ * Decisiones:
+ * - no se soporta ejecución por intervalos en esta versión
+ * - no se soporta proveedor Resend
+ * - SMTP es el único proveedor de correo habilitable
+ * - disabled permite apagar el envío de correos sin afectar el scheduler
  *
  * Reglas:
  * - no contiene lógica del job
@@ -32,11 +38,9 @@
  * =============================================================================
  */
 
-export type MaintenanceEmailProvider = "resend" | "smtp" | "disabled";
+export type MaintenanceEmailProvider = "smtp" | "disabled";
 
-export type MaintenanceSchedulerMode = "interval" | "daily" | "weekly";
-
-export type MaintenanceSchedulerIntervalUnit = "minutes" | "hours";
+export type MaintenanceSchedulerMode = "daily" | "weekly";
 
 export type MaintenanceSchedulerWeekday =
 	| "mon"
@@ -53,10 +57,6 @@ export type MaintenanceSettingsPayload = {
 	schedulerEnabled: boolean;
 
 	schedulerMode: MaintenanceSchedulerMode;
-
-	intervalValue: number;
-	intervalUnit: MaintenanceSchedulerIntervalUnit;
-	intervalStartTime: string;
 
 	dailyRunTime: string;
 
@@ -83,6 +83,14 @@ export type MaintenanceSettingsPayload = {
 	lastRunAlertsGenerated: number;
 	lastRunEmailsSent: number;
 	lastRunEmailsFailed: number;
+
+	lastRunSource: "cron" | "manual" | "unknown";
+	lastRunStartedAt: string | null;
+	lastRunFinishedAt: string | null;
+	lastRunUpdated: number;
+	lastRunEmailsSkipped: number;
+	lastRunRowsMarkedOverdue: number;
+	lastRunError: string;
 };
 
 export type MaintenanceSettingsEntity = MaintenanceSettingsPayload & {

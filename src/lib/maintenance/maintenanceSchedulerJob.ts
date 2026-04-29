@@ -9,7 +9,7 @@
  *
  * Propósito:
  * - leer la configuración operativa de MaintenanceSettings
- * - decidir si corresponde ejecutar según modo interval/daily/weekly
+ * - decidir si corresponde ejecutar según modo daily/weekly
  * - detectar alertas pendientes por generar
  * - registrar generación de alertas del sistema
  * - procesar estado de correo asociado a la alerta
@@ -63,6 +63,10 @@ type SchedulerRunOptions = {
 
 type SchedulerRunResult = {
 	ok: true;
+	source: "cron" | "manual";
+	startedAt: string;
+	finishedAt: string;
+	durationMs: number;
 	processed: number;
 	updated: number;
 	alertsGenerated: number;
@@ -203,27 +207,6 @@ function getLocalParts(now: Date, timezone: string): {
 	};
 }
 
-function parseTimeToMinutes(value: string): number | null {
-	if (!/^\d{2}:\d{2}$/.test(value)) return null;
-
-	const [hourText, minuteText] = value.split(":");
-	const hour = Number(hourText);
-	const minute = Number(minuteText);
-
-	if (
-		!Number.isInteger(hour) ||
-		!Number.isInteger(minute) ||
-		hour < 0 ||
-		hour > 23 ||
-		minute < 0 ||
-		minute > 59
-	) {
-		return null;
-	}
-
-	return hour * 60 + minute;
-}
-
 function shouldRunScheduler(
 	settings: MaintenanceSettingsDocument,
 	now: Date,
@@ -240,10 +223,6 @@ function shouldRunScheduler(
 
 	const local = getLocalParts(now, settings.timezone);
 
-	if (settings.schedulerMode === "daily") {
-		return local.time === settings.dailyRunTime;
-	}
-
 	if (settings.schedulerMode === "weekly") {
 		return (
 			settings.weeklyRunDays.includes(local.weekday) &&
@@ -251,18 +230,7 @@ function shouldRunScheduler(
 		);
 	}
 
-	const startMinutes = parseTimeToMinutes(settings.intervalStartTime) ?? 0;
-	const intervalMinutes =
-		settings.intervalUnit === "minutes"
-			? settings.intervalValue
-			: settings.intervalValue * 60;
-
-	if (intervalMinutes <= 0) return false;
-
-	const diff = local.minutesFromMidnight - startMinutes;
-	if (diff < 0) return false;
-
-	return diff % intervalMinutes === 0;
+	return local.time === settings.dailyRunTime;
 }
 
 async function getOrCreateSettings(): Promise<MaintenanceSettingsDocument> {
@@ -286,25 +254,40 @@ async function getOrCreateSettings(): Promise<MaintenanceSettingsDocument> {
 async function writeSchedulerAudit(
 	settings: MaintenanceSettingsDocument,
 	params: {
-		nowIso: string;
+		source: "cron" | "manual";
+		startedAt: string;
+		finishedAt: string;
 		status: "success" | "failed";
 		message: string;
 		durationMs: number | null;
 		processed: number;
+		updated: number;
 		alertsGenerated: number;
 		emailsSent: number;
 		emailsFailed: number;
+		emailsSkipped: number;
+		rowsMarkedOverdue: number;
+		error: string;
 	},
 ): Promise<void> {
 	settings.set({
-		lastRunAt: params.nowIso,
+		lastRunAt: params.finishedAt,
+		lastRunSource: params.source,
+		lastRunStartedAt: params.startedAt,
+		lastRunFinishedAt: params.finishedAt,
+
 		lastRunStatus: params.status,
 		lastRunMessage: params.message,
+		lastRunError: params.error,
+
 		lastRunDurationMs: params.durationMs,
 		lastRunProcessed: params.processed,
+		lastRunUpdated: params.updated,
 		lastRunAlertsGenerated: params.alertsGenerated,
 		lastRunEmailsSent: params.emailsSent,
 		lastRunEmailsFailed: params.emailsFailed,
+		lastRunEmailsSkipped: params.emailsSkipped,
+		lastRunRowsMarkedOverdue: params.rowsMarkedOverdue,
 	});
 
 	await settings.save({ validateBeforeSave: true });
@@ -673,38 +656,51 @@ export async function runMaintenanceSchedulerJob(
 
 	const startedAt = Date.now();
 	const now = options.now ?? new Date();
-	const nowIso = now.toISOString();
+	const startedAtIso = now.toISOString();
+
 	const limit = options.limit ?? 250;
 	const mode = options.mode ?? "automatic";
 	const force = Boolean(options.force);
+	const source: "cron" | "manual" = mode === "manual" ? "manual" : "cron";
 
 	const settings = await getOrCreateSettings();
 
-	const emptyResult: SchedulerRunResult = {
-		ok: true,
-		processed: 0,
-		updated: 0,
-		alertsGenerated: 0,
-		emailsSent: 0,
-		emailsFailed: 0,
-		emailsSkipped: 0,
-		rowsMarkedOverdue: 0,
-	};
-
 	try {
 		if (!shouldRunScheduler(settings, now, mode, force)) {
+			const finishedAt = new Date().toISOString();
+			const durationMs = Date.now() - startedAt;
+
 			await writeSchedulerAudit(settings, {
-				nowIso,
+				source,
+				startedAt: startedAtIso,
+				finishedAt,
 				status: "success",
 				message: "Scheduler skipped by configuration.",
-				durationMs: Date.now() - startedAt,
+				durationMs,
 				processed: 0,
+				updated: 0,
 				alertsGenerated: 0,
 				emailsSent: 0,
 				emailsFailed: 0,
+				emailsSkipped: 0,
+				rowsMarkedOverdue: 0,
+				error: "",
 			});
 
-			return emptyResult;
+			return {
+				ok: true,
+				source,
+				startedAt: startedAtIso,
+				finishedAt,
+				durationMs,
+				processed: 0,
+				updated: 0,
+				alertsGenerated: 0,
+				emailsSent: 0,
+				emailsFailed: 0,
+				emailsSkipped: 0,
+				rowsMarkedOverdue: 0,
+			};
 		}
 
 		const items = await Maintenance.find({
@@ -736,19 +732,32 @@ export async function runMaintenanceSchedulerJob(
 			rowsMarkedOverdue += result.rowsMarkedOverdue;
 		}
 
+		const finishedAt = new Date().toISOString();
+		const durationMs = Date.now() - startedAt;
+
 		await writeSchedulerAudit(settings, {
-			nowIso,
+			source,
+			startedAt: startedAtIso,
+			finishedAt,
 			status: "success",
 			message: "Scheduler executed successfully.",
-			durationMs: Date.now() - startedAt,
+			durationMs,
 			processed,
+			updated,
 			alertsGenerated,
 			emailsSent,
 			emailsFailed,
+			emailsSkipped,
+			rowsMarkedOverdue,
+			error: "",
 		});
 
 		return {
 			ok: true,
+			source,
+			startedAt: startedAtIso,
+			finishedAt,
+			durationMs,
 			processed,
 			updated,
 			alertsGenerated,
@@ -758,18 +767,28 @@ export async function runMaintenanceSchedulerJob(
 			rowsMarkedOverdue,
 		};
 	} catch (error) {
+		const finishedAt = new Date().toISOString();
+		const durationMs = Date.now() - startedAt;
+		const errorMessage =
+			error instanceof Error
+				? error.message
+				: "Unknown scheduler execution error.";
+
 		await writeSchedulerAudit(settings, {
-			nowIso,
+			source,
+			startedAt: startedAtIso,
+			finishedAt,
 			status: "failed",
-			message:
-				error instanceof Error
-					? error.message
-					: "Unknown scheduler execution error.",
-			durationMs: Date.now() - startedAt,
+			message: errorMessage,
+			durationMs,
 			processed: 0,
+			updated: 0,
 			alertsGenerated: 0,
 			emailsSent: 0,
 			emailsFailed: 0,
+			emailsSkipped: 0,
+			rowsMarkedOverdue: 0,
+			error: errorMessage,
 		});
 
 		throw error;

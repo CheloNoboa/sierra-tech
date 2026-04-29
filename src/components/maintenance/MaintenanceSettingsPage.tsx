@@ -8,15 +8,20 @@
  *
  * ES:
  * Pantalla administrativa oficial para configurar el scheduler del módulo
- * Maintenance con una experiencia tipo alarma.
+ * Maintenance.
  *
  * Propósito:
- * - encender/apagar el demonio de mantenimientos
- * - configurar ejecución por intervalo, diaria o semanal
- * - seleccionar días y horarios reales de ejecución
+ * - encender/apagar el scheduler de mantenimientos
+ * - configurar ejecución diaria o semanal
  * - controlar ejecución manual desde admin
- * - configurar correos de alerta sin guardar credenciales sensibles
+ * - configurar correos de alerta vía SMTP sin guardar credenciales sensibles
  * - mostrar auditoría de la última ejecución
+ *
+ * Decisiones:
+ * - no se soporta modo interval
+ * - no se soporta proveedor Resend
+ * - SMTP es el único proveedor habilitable
+ * - disabled permite apagar correos sin apagar el scheduler
  *
  * Reglas:
  * - no administra claves privadas ni passwords
@@ -36,7 +41,6 @@ import {
 	Clock,
 	Mail,
 	PlayCircle,
-	Repeat,
 	RotateCcw,
 	Save,
 	Settings2,
@@ -48,7 +52,6 @@ import { useTranslation } from "@/hooks/useTranslation";
 
 import type {
 	MaintenanceEmailProvider,
-	MaintenanceSchedulerIntervalUnit,
 	MaintenanceSchedulerMode,
 	MaintenanceSchedulerWeekday,
 	MaintenanceSettingsEntity,
@@ -71,6 +74,12 @@ type SettingsResponse =
 		error: string;
 	};
 
+type RunNowResponse = {
+	ok: boolean;
+	message?: string;
+	error?: string;
+};
+
 type SchedulerModeOption = {
 	key: MaintenanceSchedulerMode;
 	icon: ReactNode;
@@ -85,19 +94,15 @@ type SchedulerModeOption = {
 const EMPTY_SETTINGS: MaintenanceSettingsPayload = {
 	schedulerEnabled: true,
 
-	schedulerMode: "interval",
-
-	intervalValue: 1,
-	intervalUnit: "hours",
-	intervalStartTime: "00:00",
+	schedulerMode: "daily",
 
 	dailyRunTime: "08:00",
 
-	weeklyRunDays: ["mon", "tue", "wed", "thu", "fri"],
+	weeklyRunDays: ["mon"],
 	weeklyRunTime: "08:00",
 
 	timezone: "America/Guayaquil",
-	manualRunEnabled: false,
+	manualRunEnabled: true,
 
 	emailEnabled: false,
 	emailProvider: "disabled",
@@ -116,6 +121,14 @@ const EMPTY_SETTINGS: MaintenanceSettingsPayload = {
 	lastRunAlertsGenerated: 0,
 	lastRunEmailsSent: 0,
 	lastRunEmailsFailed: 0,
+
+	lastRunSource: "unknown",
+	lastRunStartedAt: null,
+	lastRunFinishedAt: null,
+	lastRunUpdated: 0,
+	lastRunEmailsSkipped: 0,
+	lastRunRowsMarkedOverdue: 0,
+	lastRunError: "",
 };
 
 const WEEKDAYS: MaintenanceSchedulerWeekday[] = [
@@ -133,7 +146,10 @@ const TIMEZONE_OPTIONS = [
 	{ value: "America/New_York", label: "EE. UU. Este — America/New_York" },
 	{ value: "America/Chicago", label: "EE. UU. Central — America/Chicago" },
 	{ value: "America/Denver", label: "EE. UU. Montaña — America/Denver" },
-	{ value: "America/Los_Angeles", label: "EE. UU. Pacífico — America/Los_Angeles" },
+	{
+		value: "America/Los_Angeles",
+		label: "EE. UU. Pacífico — America/Los_Angeles",
+	},
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -144,7 +160,7 @@ const TEXT = {
 	es: {
 		title: "Configuración de Maintenance",
 		subtitle:
-			"Programa el demonio de mantenimientos como una alarma: intervalo, horario diario o días específicos.",
+			"Programa el scheduler de mantenimientos con una ejecución diaria o semanal, y usa la ejecución manual cuando sea necesario.",
 		loading: "Cargando configuración...",
 		save: "Guardar configuración",
 		saving: "Guardando...",
@@ -154,25 +170,19 @@ const TEXT = {
 
 		statusTitle: "Estado general",
 		statusSubtitle:
-			"Activa o detén el scheduler y permite pruebas manuales controladas.",
-		schedulerEnabled: "Demonio encendido",
-		schedulerDisabled: "Demonio apagado",
-		manualRunEnabled: "Permitir ejecución manual",
-		manualRunDisabled: "Ejecución manual bloqueada",
+			"Activa o detén el scheduler y permite ejecución manual controlada.",
+		schedulerEnabled: "Scheduler encendido",
+		schedulerDisabled: "Scheduler apagado",
+		manualRunEnabled: "Ejecución manual disponible",
+		manualRunDisabled: "Ejecución manual oculta",
 
-		schedulerTitle: "Programación del demonio",
+		schedulerTitle: "Programación del scheduler",
 		schedulerSubtitle:
-			"Elige cómo y cuándo se ejecutará el proceso automático de alertas.",
-		intervalTitle: "Intervalo",
-		intervalDescription: "Repetir cada cierto tiempo.",
+			"Elige si el proceso automático se ejecuta diariamente o en días específicos.",
 		dailyTitle: "Diario",
 		dailyDescription: "Ejecutar todos los días a una hora fija.",
 		weeklyTitle: "Semanal",
 		weeklyDescription: "Ejecutar solo en días específicos.",
-		every: "Cada",
-		minutes: "Minutos",
-		hours: "Horas",
-		baseTime: "Hora base",
 		dailyTime: "Hora diaria",
 		weeklyDays: "Días de ejecución",
 		weeklyTime: "Hora semanal",
@@ -193,7 +203,6 @@ const TEXT = {
 		emailEnabled: "Envío de correos activo",
 		emailProvider: "Proveedor",
 		disabled: "Desactivado",
-		resend: "Resend",
 		smtp: "SMTP",
 		fromName: "Nombre remitente",
 		fromEmail: "Correo remitente",
@@ -201,7 +210,7 @@ const TEXT = {
 		internalRecipients: "Destinatarios internos",
 		internalRecipientsHint: "Separados por coma",
 		credentialsNote:
-			"Las claves API, SMTP password o tokens deben configurarse en variables de entorno, no en esta pantalla.",
+			"El usuario, contraseña SMTP, host, puerto o tokens deben configurarse en variables de entorno, no en esta pantalla.",
 
 		auditTitle: "Última ejecución",
 		auditSubtitle:
@@ -213,6 +222,16 @@ const TEXT = {
 		lastRunAlertsGenerated: "Alertas",
 		lastRunEmailsSent: "Correos enviados",
 		lastRunEmailsFailed: "Correos fallidos",
+		lastRunSource: "Origen",
+		lastRunStartedAt: "Inicio",
+		lastRunFinishedAt: "Fin",
+		lastRunUpdated: "Actualizados",
+		lastRunEmailsSkipped: "Correos omitidos",
+		lastRunRowsMarkedOverdue: "Vencidos marcados",
+		lastRunError: "Error",
+		cron: "Cron",
+		manual: "Manual",
+		unknown: "Desconocido",
 		lastRunMessage: "Mensaje",
 		success: "Exitosa",
 		failed: "Fallida",
@@ -225,7 +244,7 @@ const TEXT = {
 	en: {
 		title: "Maintenance Settings",
 		subtitle:
-			"Schedule the maintenance daemon like an alarm: interval, daily time, or selected weekdays.",
+			"Schedule the maintenance scheduler with a daily or weekly execution, and use manual execution when needed.",
 		loading: "Loading settings...",
 		save: "Save settings",
 		saving: "Saving...",
@@ -235,25 +254,19 @@ const TEXT = {
 
 		statusTitle: "General status",
 		statusSubtitle:
-			"Enable or stop the scheduler and allow controlled manual testing.",
-		schedulerEnabled: "Daemon enabled",
-		schedulerDisabled: "Daemon disabled",
-		manualRunEnabled: "Allow manual execution",
-		manualRunDisabled: "Manual execution blocked",
+			"Enable or stop the scheduler and allow controlled manual execution.",
+		schedulerEnabled: "Scheduler enabled",
+		schedulerDisabled: "Scheduler disabled",
+		manualRunEnabled: "Manual execution available",
+		manualRunDisabled: "Manual execution hidden",
 
-		schedulerTitle: "Daemon schedule",
+		schedulerTitle: "Scheduler schedule",
 		schedulerSubtitle:
-			"Choose how and when the automatic alert process should run.",
-		intervalTitle: "Interval",
-		intervalDescription: "Repeat every configured interval.",
+			"Choose whether the automatic process runs daily or on selected weekdays.",
 		dailyTitle: "Daily",
 		dailyDescription: "Run every day at a fixed time.",
 		weeklyTitle: "Weekly",
 		weeklyDescription: "Run only on selected weekdays.",
-		every: "Every",
-		minutes: "Minutes",
-		hours: "Hours",
-		baseTime: "Base time",
 		dailyTime: "Daily time",
 		weeklyDays: "Run days",
 		weeklyTime: "Weekly time",
@@ -269,12 +282,10 @@ const TEXT = {
 		sun: "Sun",
 
 		emailTitle: "Alert emails",
-		emailSubtitle:
-			"Configure email behavior. Credentials are not stored here.",
+		emailSubtitle: "Configure email behavior. Credentials are not stored here.",
 		emailEnabled: "Email sending enabled",
 		emailProvider: "Provider",
 		disabled: "Disabled",
-		resend: "Resend",
 		smtp: "SMTP",
 		fromName: "Sender name",
 		fromEmail: "Sender email",
@@ -282,11 +293,10 @@ const TEXT = {
 		internalRecipients: "Internal recipients",
 		internalRecipientsHint: "Comma separated",
 		credentialsNote:
-			"API keys, SMTP passwords or tokens must be configured as environment variables, not in this screen.",
+			"SMTP user, password, host, port or tokens must be configured as environment variables, not in this screen.",
 
 		auditTitle: "Last run",
-		auditSubtitle:
-			"Result recorded by the scheduler after its last execution.",
+		auditSubtitle: "Result recorded by the scheduler after its last execution.",
 		lastRunAt: "Date",
 		lastRunStatus: "Status",
 		lastRunDuration: "Duration",
@@ -294,6 +304,16 @@ const TEXT = {
 		lastRunAlertsGenerated: "Alerts",
 		lastRunEmailsSent: "Emails sent",
 		lastRunEmailsFailed: "Emails failed",
+		lastRunSource: "Source",
+		lastRunStartedAt: "Started",
+		lastRunFinishedAt: "Finished",
+		lastRunUpdated: "Updated",
+		lastRunEmailsSkipped: "Emails skipped",
+		lastRunRowsMarkedOverdue: "Rows marked overdue",
+		lastRunError: "Error",
+		cron: "Cron",
+		manual: "Manual",
+		unknown: "Unknown",
 		lastRunMessage: "Message",
 		success: "Success",
 		failed: "Failed",
@@ -359,6 +379,15 @@ function getStatusLabel(
 	return t.never;
 }
 
+function getSourceLabel(
+	source: MaintenanceSettingsPayload["lastRunSource"],
+	t: (typeof TEXT)[Locale],
+): string {
+	if (source === "cron") return t.cron;
+	if (source === "manual") return t.manual;
+	return t.unknown;
+}
+
 function getWeekdayLabel(
 	day: MaintenanceSchedulerWeekday,
 	t: (typeof TEXT)[Locale],
@@ -374,10 +403,6 @@ function buildSchedulePreview(
 		return t.schedulerDisabled;
 	}
 
-	if (form.schedulerMode === "daily") {
-		return `${t.dailyTitle}: ${form.dailyRunTime} · ${form.timezone}`;
-	}
-
 	if (form.schedulerMode === "weekly") {
 		const days = form.weeklyRunDays
 			.map((day) => getWeekdayLabel(day, t))
@@ -386,10 +411,49 @@ function buildSchedulePreview(
 		return `${t.weeklyTitle}: ${days} · ${form.weeklyRunTime} · ${form.timezone}`;
 	}
 
-	const unit =
-		form.intervalUnit === "minutes" ? t.minutes.toLowerCase() : t.hours.toLowerCase();
+	return `${t.dailyTitle}: ${form.dailyRunTime} · ${form.timezone}`;
+}
 
-	return `${t.intervalTitle}: ${t.every.toLowerCase()} ${form.intervalValue} ${unit} · ${t.baseTime}: ${form.intervalStartTime} · ${form.timezone}`;
+function mapEntityToPayload(item: MaintenanceSettingsEntity): MaintenanceSettingsPayload {
+	return {
+		schedulerEnabled: item.schedulerEnabled,
+
+		schedulerMode: item.schedulerMode,
+
+		dailyRunTime: item.dailyRunTime,
+
+		weeklyRunDays: item.weeklyRunDays,
+		weeklyRunTime: item.weeklyRunTime,
+
+		timezone: item.timezone,
+		manualRunEnabled: item.manualRunEnabled,
+
+		emailEnabled: item.emailEnabled,
+		emailProvider: item.emailProvider,
+
+		fromName: item.fromName,
+		fromEmail: item.fromEmail,
+		replyToEmail: item.replyToEmail,
+
+		internalRecipients: item.internalRecipients,
+
+		lastRunAt: item.lastRunAt,
+		lastRunStatus: item.lastRunStatus,
+		lastRunMessage: item.lastRunMessage,
+		lastRunDurationMs: item.lastRunDurationMs,
+		lastRunProcessed: item.lastRunProcessed,
+		lastRunAlertsGenerated: item.lastRunAlertsGenerated,
+		lastRunEmailsSent: item.lastRunEmailsSent,
+		lastRunEmailsFailed: item.lastRunEmailsFailed,
+
+		lastRunSource: item.lastRunSource,
+		lastRunStartedAt: item.lastRunStartedAt,
+		lastRunFinishedAt: item.lastRunFinishedAt,
+		lastRunUpdated: item.lastRunUpdated,
+		lastRunEmailsSkipped: item.lastRunEmailsSkipped,
+		lastRunRowsMarkedOverdue: item.lastRunRowsMarkedOverdue,
+		lastRunError: item.lastRunError,
+	};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -489,13 +553,7 @@ function ToggleCard({
 	);
 }
 
-function StatCard({
-	label,
-	value,
-}: {
-	label: string;
-	value: ReactNode;
-}) {
+function StatCard({ label, value }: { label: string; value: ReactNode }) {
 	return (
 		<div className="rounded-2xl border border-border bg-surface px-4 py-4">
 			<p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-secondary">
@@ -517,8 +575,7 @@ export default function MaintenanceSettingsPage() {
 	const lang: Locale = locale === "en" ? "en" : "es";
 	const t = TEXT[lang];
 
-	const [form, setForm] =
-		useState<MaintenanceSettingsPayload>(EMPTY_SETTINGS);
+	const [form, setForm] = useState<MaintenanceSettingsPayload>(EMPTY_SETTINGS);
 	const [snapshot, setSnapshot] = useState(serializeSettings(EMPTY_SETTINGS));
 
 	const [loading, setLoading] = useState(true);
@@ -537,12 +594,6 @@ export default function MaintenanceSettingsPage() {
 
 	const schedulerModeOptions: SchedulerModeOption[] = useMemo(
 		() => [
-			{
-				key: "interval",
-				icon: <Repeat className="h-5 w-5" />,
-				title: t.intervalTitle,
-				description: t.intervalDescription,
-			},
 			{
 				key: "daily",
 				icon: <AlarmClock className="h-5 w-5" />,
@@ -583,41 +634,7 @@ export default function MaintenanceSettingsPage() {
 					return;
 				}
 
-				const next: MaintenanceSettingsPayload = {
-					schedulerEnabled: json.item.schedulerEnabled,
-
-					schedulerMode: json.item.schedulerMode,
-
-					intervalValue: json.item.intervalValue,
-					intervalUnit: json.item.intervalUnit,
-					intervalStartTime: json.item.intervalStartTime,
-
-					dailyRunTime: json.item.dailyRunTime,
-
-					weeklyRunDays: json.item.weeklyRunDays,
-					weeklyRunTime: json.item.weeklyRunTime,
-
-					timezone: json.item.timezone,
-					manualRunEnabled: false,
-
-					emailEnabled: json.item.emailEnabled,
-					emailProvider: json.item.emailProvider,
-
-					fromName: json.item.fromName,
-					fromEmail: json.item.fromEmail,
-					replyToEmail: json.item.replyToEmail,
-
-					internalRecipients: json.item.internalRecipients,
-
-					lastRunAt: json.item.lastRunAt,
-					lastRunStatus: json.item.lastRunStatus,
-					lastRunMessage: json.item.lastRunMessage,
-					lastRunDurationMs: json.item.lastRunDurationMs,
-					lastRunProcessed: json.item.lastRunProcessed,
-					lastRunAlertsGenerated: json.item.lastRunAlertsGenerated,
-					lastRunEmailsSent: json.item.lastRunEmailsSent,
-					lastRunEmailsFailed: json.item.lastRunEmailsFailed,
-				};
+				const next = mapEntityToPayload(json.item);
 
 				setForm(next);
 				setSnapshot(serializeSettings(next));
@@ -670,7 +687,6 @@ export default function MaintenanceSettingsPage() {
 
 			const payload: MaintenanceSettingsPayload = {
 				...form,
-				manualRunEnabled: false,
 				emailProvider: form.emailEnabled ? form.emailProvider : "disabled",
 			};
 
@@ -691,41 +707,7 @@ export default function MaintenanceSettingsPage() {
 				return;
 			}
 
-			const next: MaintenanceSettingsPayload = {
-				schedulerEnabled: json.item.schedulerEnabled,
-
-				schedulerMode: json.item.schedulerMode,
-
-				intervalValue: json.item.intervalValue,
-				intervalUnit: json.item.intervalUnit,
-				intervalStartTime: json.item.intervalStartTime,
-
-				dailyRunTime: json.item.dailyRunTime,
-
-				weeklyRunDays: json.item.weeklyRunDays,
-				weeklyRunTime: json.item.weeklyRunTime,
-
-				timezone: json.item.timezone,
-				manualRunEnabled: false,
-
-				emailEnabled: json.item.emailEnabled,
-				emailProvider: json.item.emailProvider,
-
-				fromName: json.item.fromName,
-				fromEmail: json.item.fromEmail,
-				replyToEmail: json.item.replyToEmail,
-
-				internalRecipients: json.item.internalRecipients,
-
-				lastRunAt: json.item.lastRunAt,
-				lastRunStatus: json.item.lastRunStatus,
-				lastRunMessage: json.item.lastRunMessage,
-				lastRunDurationMs: json.item.lastRunDurationMs,
-				lastRunProcessed: json.item.lastRunProcessed,
-				lastRunAlertsGenerated: json.item.lastRunAlertsGenerated,
-				lastRunEmailsSent: json.item.lastRunEmailsSent,
-				lastRunEmailsFailed: json.item.lastRunEmailsFailed,
-			};
+			const next = mapEntityToPayload(json.item);
 
 			setForm(next);
 			setSnapshot(serializeSettings(next));
@@ -753,12 +735,11 @@ export default function MaintenanceSettingsPage() {
 			});
 
 			const json = (await response.json().catch(() => null)) as
-				| { ok: true; message?: string }
-				| { ok: false; message?: string }
+				| RunNowResponse
 				| null;
 
 			if (!response.ok || !json || !json.ok) {
-				const message = json?.message || t.runNowError;
+				const message = json?.message || json?.error || t.runNowError;
 				setError(message);
 				toast.error(message);
 				return;
@@ -844,6 +825,7 @@ export default function MaintenanceSettingsPage() {
 						onClick={() => setManualRunVisible((current) => !current)}
 					/>
 				</div>
+
 				{manualRunVisible ? (
 					<div className="mt-4">
 						<button
@@ -852,8 +834,7 @@ export default function MaintenanceSettingsPage() {
 							onClick={() => void handleRunNow()}
 							className="
 								w-full rounded-2xl border border-brand-primary
-								bg-brand-primary text-white
-								py-3 text-sm font-semibold
+								bg-brand-primary py-3 text-sm font-semibold text-white
 								transition hover:opacity-90
 								disabled:cursor-not-allowed disabled:opacity-60
 							"
@@ -870,7 +851,7 @@ export default function MaintenanceSettingsPage() {
 				icon={<AlarmClock className="h-5 w-5" />}
 			>
 				<div className="space-y-6">
-					<div className="grid gap-4 xl:grid-cols-3">
+					<div className="grid gap-4 xl:grid-cols-2">
 						{schedulerModeOptions.map((option) => (
 							<ToggleCard
 								key={option.key}
@@ -906,59 +887,6 @@ export default function MaintenanceSettingsPage() {
 									{buildSchedulePreview(form, t)}
 								</div>
 							</div>
-
-							{form.schedulerMode === "interval" ? (
-								<>
-									<div>
-										<FieldLabel>{t.every}</FieldLabel>
-										<input
-											type="number"
-											min={1}
-											value={form.intervalValue}
-											onChange={(event) =>
-												patch(
-													"intervalValue",
-													Math.max(
-														1,
-														Number(event.currentTarget.value) || 1,
-													),
-												)
-											}
-											className="h-12 w-full rounded-2xl border border-border bg-white px-4 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
-										/>
-									</div>
-
-									<div>
-										<FieldLabel>{t.every}</FieldLabel>
-										<select
-											value={form.intervalUnit}
-											onChange={(event) =>
-												patch(
-													"intervalUnit",
-													event.currentTarget
-														.value as MaintenanceSchedulerIntervalUnit,
-												)
-											}
-											className="h-12 w-full rounded-2xl border border-border bg-white px-4 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
-										>
-											<option value="minutes">{t.minutes}</option>
-											<option value="hours">{t.hours}</option>
-										</select>
-									</div>
-
-									<div>
-										<FieldLabel>{t.baseTime}</FieldLabel>
-										<input
-											type="time"
-											value={form.intervalStartTime}
-											onChange={(event) =>
-												patch("intervalStartTime", event.currentTarget.value)
-											}
-											className="h-12 w-full rounded-2xl border border-border bg-white px-4 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
-										/>
-									</div>
-								</>
-							) : null}
 
 							{form.schedulerMode === "daily" ? (
 								<div>
@@ -1040,11 +968,7 @@ export default function MaintenanceSettingsPage() {
 								setForm((current) => ({
 									...current,
 									emailEnabled: checked,
-									emailProvider: checked
-										? current.emailProvider === "disabled"
-											? "resend"
-											: current.emailProvider
-										: "disabled",
+									emailProvider: checked ? "smtp" : "disabled",
 								}));
 							}}
 							className="h-4 w-4"
@@ -1066,7 +990,6 @@ export default function MaintenanceSettingsPage() {
 							className="h-11 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong disabled:cursor-not-allowed disabled:opacity-60"
 						>
 							<option value="disabled">{t.disabled}</option>
-							<option value="resend">{t.resend}</option>
 							<option value="smtp">{t.smtp}</option>
 						</select>
 					</div>
@@ -1075,9 +998,7 @@ export default function MaintenanceSettingsPage() {
 						<FieldLabel>{t.fromName}</FieldLabel>
 						<input
 							value={form.fromName}
-							onChange={(event) =>
-								patch("fromName", event.currentTarget.value)
-							}
+							onChange={(event) => patch("fromName", event.currentTarget.value)}
 							className="h-11 w-full rounded-2xl border border-border bg-surface px-4 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong"
 						/>
 					</div>
@@ -1131,14 +1052,20 @@ export default function MaintenanceSettingsPage() {
 				icon={<Bell className="h-5 w-5" />}
 			>
 				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-					<StatCard label={t.lastRunAt} value={formatDateTime(form.lastRunAt, lang)} />
+					<StatCard label={t.lastRunSource} value={getSourceLabel(form.lastRunSource, t)} />
 					<StatCard label={t.lastRunStatus} value={getStatusLabel(form.lastRunStatus, t)} />
+					<StatCard label={t.lastRunStartedAt} value={formatDateTime(form.lastRunStartedAt, lang)} />
+					<StatCard label={t.lastRunFinishedAt} value={formatDateTime(form.lastRunFinishedAt, lang)} />
 					<StatCard label={t.lastRunDuration} value={formatDuration(form.lastRunDurationMs)} />
 					<StatCard label={t.lastRunProcessed} value={form.lastRunProcessed} />
+					<StatCard label={t.lastRunUpdated} value={form.lastRunUpdated} />
 					<StatCard label={t.lastRunAlertsGenerated} value={form.lastRunAlertsGenerated} />
 					<StatCard label={t.lastRunEmailsSent} value={form.lastRunEmailsSent} />
 					<StatCard label={t.lastRunEmailsFailed} value={form.lastRunEmailsFailed} />
+					<StatCard label={t.lastRunEmailsSkipped} value={form.lastRunEmailsSkipped} />
+					<StatCard label={t.lastRunRowsMarkedOverdue} value={form.lastRunRowsMarkedOverdue} />
 					<StatCard label={t.lastRunMessage} value={normalizeString(form.lastRunMessage) || "—"} />
+					<StatCard label={t.lastRunError} value={normalizeString(form.lastRunError) || "—"} />
 				</div>
 
 				<div className="mt-5 flex items-center gap-2 text-xs text-text-muted">

@@ -8,15 +8,25 @@
  * Endpoint interno para ejecutar el job automático de Maintenance.
  *
  * Propósito:
- * - permitir ejecución controlada del demonio de Maintenance
- * - servir como destino para Vercel Cron
- * - proteger la ejecución mediante un secret interno
+ * - servir como destino oficial para Vercel Cron
+ * - permitir ejecución programada diaria del scheduler
+ * - proteger la ejecución mediante secret interno
+ * - centralizar la llamada a runMaintenanceSchedulerJob()
+ *
+ * Seguridad:
+ * - Vercel Cron envía CRON_SECRET automáticamente en:
+ *   Authorization: Bearer <CRON_SECRET>
+ * - también se acepta MAINTENANCE_SCHEDULER_SECRET como fallback interno
+ * - no debe ser llamado desde UI pública
  *
  * Reglas:
- * - no debe usarse desde UI
  * - no expone datos sensibles
- * - no modifica Projects
- * - ejecuta únicamente runMaintenanceSchedulerJob()
+ * - no modifica Projects directamente
+ * - no contiene lógica del scheduler
+ * - solo valida autorización y ejecuta runMaintenanceSchedulerJob()
+ *
+ * EN:
+ * Internal endpoint used by Vercel Cron to run the Maintenance scheduler job.
  * =============================================================================
  */
 
@@ -26,18 +36,29 @@ import { runMaintenanceSchedulerJob } from "@/lib/maintenance/maintenanceSchedul
 
 export const dynamic = "force-dynamic";
 
+function getExpectedSecrets(): string[] {
+	return [
+		process.env.CRON_SECRET,
+		process.env.MAINTENANCE_SCHEDULER_SECRET,
+	].filter((value): value is string => {
+		return typeof value === "string" && value.trim().length > 0;
+	});
+}
+
 function isAuthorized(req: Request): boolean {
-	const expectedSecret = process.env.MAINTENANCE_SCHEDULER_SECRET;
+	const expectedSecrets = getExpectedSecrets();
 
-	if (!expectedSecret) return false;
+	if (expectedSecrets.length === 0) return false;
 
-	const authHeader = req.headers.get("authorization") || "";
-	const cronSecret = req.headers.get("x-cron-secret") || "";
+	const authHeader = req.headers.get("authorization") ?? "";
+	const cronSecretHeader = req.headers.get("x-cron-secret") ?? "";
 
-	return (
-		authHeader === `Bearer ${expectedSecret}` ||
-		cronSecret === expectedSecret
-	);
+	return expectedSecrets.some((secret) => {
+		return (
+			authHeader === `Bearer ${secret}` ||
+			cronSecretHeader === secret
+		);
+	});
 }
 
 export async function GET(req: Request) {
@@ -54,7 +75,11 @@ export async function GET(req: Request) {
 
 		const result = await runMaintenanceSchedulerJob();
 
-		return NextResponse.json(result);
+		return NextResponse.json({
+			ok: true,
+			source: "internal-cron",
+			result,
+		});
 	} catch (error) {
 		return NextResponse.json(
 			{
