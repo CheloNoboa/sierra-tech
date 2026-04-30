@@ -246,6 +246,10 @@ export async function POST(req: NextRequest) {
 
 		for (const role of roleDocs) {
 			for (const permissionCode of role.permissions) {
+				if (permissionCode === "*") {
+					continue;
+				}
+
 				if (!permissionCodes.has(permissionCode)) {
 					throw new Error(
 						`Permiso inválido en rol "${role.code}": "${permissionCode}"`,
