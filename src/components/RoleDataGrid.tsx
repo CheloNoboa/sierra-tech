@@ -80,6 +80,7 @@ interface PermissionDTO {
 
 interface SystemSettingDTO {
 	key: string;
+	type?: "text" | "number" | "boolean";
 	value: string | number | boolean;
 }
 
@@ -146,9 +147,8 @@ async function fetchJsonStrict(
 		return {
 			ok: false,
 			status: res.status,
-			message: `Endpoint ${url} devolvió NO-JSON (content-type: ${
-				ct || "n/a"
-			}). Snippet: ${snippet(bodyText)}`,
+			message: `Endpoint ${url} devolvió NO-JSON (content-type: ${ct || "n/a"
+				}). Snippet: ${snippet(bodyText)}`,
 		};
 	}
 
@@ -261,6 +261,18 @@ function upsertRole(prev: RoleDTO[], saved: RoleSavedShape): RoleDTO[] {
 	return prev
 		.map((r: RoleDTO) => (r.id === normalized.id ? normalized : r))
 		.sort((a: RoleDTO, b: RoleDTO) => a.code.localeCompare(b.code));
+}
+
+function getValidRecordsPerPage(setting?: SystemSettingDTO): number | null {
+	if (!setting) return null;
+	if (setting.key !== "recordsPerPageRoles") return null;
+	if (setting.type !== "number") return null;
+
+	const parsed = Number(setting.value);
+
+	if (!Number.isInteger(parsed) || parsed <= 0) return null;
+
+	return parsed;
 }
 
 /* =============================================================================
@@ -376,7 +388,7 @@ export default function RoleDataGrid() {
 	const [permissionsGrouped, setPermissionsGrouped] = useState<
 		PermissionGrouped[]
 	>([]);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 
 	const [page, setPage] = useState(1);
 	const [recordsPerPage, setRecordsPerPage] = useState(10);
@@ -418,15 +430,12 @@ export default function RoleDataGrid() {
 			setRoles(rolesJson);
 			setPermissionsGrouped(groupPermissions(permsJson));
 
-			const perPageCfg = settingsJson.find(
-				(s: SystemSettingDTO) => s.key === "recordsPerPageRoles",
+			const perPage = getValidRecordsPerPage(
+				settingsJson.find((s: SystemSettingDTO) => s.key === "recordsPerPageRoles"),
 			);
 
-			if (perPageCfg) {
-				const parsed = Number(perPageCfg.value);
-				if (!Number.isNaN(parsed) && parsed > 0) {
-					setRecordsPerPage(parsed);
-				}
+			if (perPage !== null) {
+				setRecordsPerPage(perPage);
 			}
 
 			setPage(1);
@@ -803,9 +812,8 @@ export default function RoleDataGrid() {
 								return (
 									<tr
 										key={r.id}
-										className={`border-b border-border transition ${
-											checked ? "bg-surface-soft" : "bg-surface"
-										} hover:bg-surface-soft`}
+										className={`border-b border-border transition ${checked ? "bg-surface-soft" : "bg-surface"
+											} hover:bg-surface-soft`}
 									>
 										<td className="w-10 px-3 py-3 text-text-secondary">
 											{(currentPage - 1) * recordsPerPage + idx + 1}
@@ -839,10 +847,10 @@ export default function RoleDataGrid() {
 											{t.permsCount(
 												r.code === "superadmin"
 													? permissionsGrouped.reduce(
-															(acc: number, g: PermissionGrouped) =>
-																acc + g.permissions.length,
-															0,
-														)
+														(acc: number, g: PermissionGrouped) =>
+															acc + g.permissions.length,
+														0,
+													)
 													: r.permissions.length,
 											)}
 										</td>
@@ -906,3 +914,4 @@ export default function RoleDataGrid() {
 		</>
 	);
 }
+

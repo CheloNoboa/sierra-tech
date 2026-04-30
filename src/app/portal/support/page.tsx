@@ -37,7 +37,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { ArrowRight, LifeBuoy, Mail, MessageCircle } from "lucide-react";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { getPublicSiteSettings } from "@/lib/siteSettings";
 import CopyValueButton from "@/components/portal/CopyValueButton";
 
@@ -384,3 +384,4 @@ export default async function PortalSupportPage() {
 		</div>
 	);
 }
+

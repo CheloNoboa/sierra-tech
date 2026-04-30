@@ -97,3 +97,4 @@ export default function PrivacyEditor({ policy }: { policy: Policy }) {
 		</div>
 	);
 }
+

@@ -56,3 +56,4 @@ const PrivacyPolicySchema = new Schema<IPrivacyPolicy>(
 // Usa el modelo existente o crea uno nuevo
 export default models.PrivacyPolicy ||
 	model<IPrivacyPolicy>("PrivacyPolicy", PrivacyPolicySchema);
+

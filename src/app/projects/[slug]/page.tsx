@@ -360,7 +360,6 @@ export default async function PublicProjectDetailPage({ params }: PageProps) {
 						<div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
 							<div className="aspect-[16/10] bg-slate-100">
 								{coverImageUrl ? (
-									// eslint-disable-next-line @next/next/no-img-element
 									<img
 										src={coverImageUrl}
 										alt={coverImageAlt || title || ui.noTitle}
@@ -502,3 +501,4 @@ export default async function PublicProjectDetailPage({ params }: PageProps) {
 		</main>
 	);
 }
+

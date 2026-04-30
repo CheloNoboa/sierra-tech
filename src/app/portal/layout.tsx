@@ -45,7 +45,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { Building2, ShieldCheck } from "lucide-react";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import PortalLogoutButton from "@/components/portal/PortalLogoutButton";
 import PortalSidebarNav from "@/components/portal/PortalSidebarNav";
 
@@ -199,3 +199,4 @@ export default async function PortalLayout({ children }: PortalLayoutProps) {
 		</div>
 	);
 }
+

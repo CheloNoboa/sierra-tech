@@ -82,6 +82,7 @@ import {
 import {
 	DEFAULT_APP_DATE_FORMAT,
 	formatAppDate,
+	normalizeAppDateFormat,
 	type AppDateFormat,
 } from "@/lib/format/date.format";
 
@@ -777,7 +778,9 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 
 	const lang: Locale = locale === "en" ? "en" : "es";
 	const t = TEXT[lang];
-	const dateFormat: AppDateFormat = DEFAULT_APP_DATE_FORMAT;
+	const [dateFormat, setDateFormat] = useState<AppDateFormat>(
+		DEFAULT_APP_DATE_FORMAT,
+	);
 
 	const isCreate = mode === "create";
 	const isEdit = mode === "edit";
@@ -846,6 +849,51 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 			window.removeEventListener("beforeunload", handleBeforeUnload);
 		};
 	}, [hasChanges]);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		async function loadDateFormat() {
+			try {
+				const response = await fetch("/api/admin/settings?keys=dateFormat", {
+					method: "GET",
+					cache: "no-store",
+				});
+
+				const json = (await response.json().catch(() => null)) as
+					| {
+						ok: true;
+						data: Array<{ key: string; value: unknown }>;
+					}
+					| {
+						ok: false;
+						message: string;
+					}
+					| null;
+
+				if (cancelled) return;
+
+				if (!response.ok || !json || !json.ok) {
+					setDateFormat(DEFAULT_APP_DATE_FORMAT);
+					return;
+				}
+
+				const setting = json.data.find((item) => item.key === "dateFormat");
+
+				setDateFormat(normalizeAppDateFormat(setting?.value));
+			} catch {
+				if (!cancelled) {
+					setDateFormat(DEFAULT_APP_DATE_FORMAT);
+				}
+			}
+		}
+
+		void loadDateFormat();
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	useEffect(() => {
 		if (!isCreate) return;
@@ -1231,12 +1279,16 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 	}
 
 	if (loading) {
-		return <div className="p-6 text-sm text-text-secondary">{t.loading}</div>;
+		return (
+			<div className="w-full px-6">
+				<p className="text-sm text-text-secondary">{t.loading}</p>
+			</div>
+		);
 	}
 
 	if (!form) {
 		return (
-			<div className="space-y-4 px-6 py-6">
+			<div className="w-full space-y-4 px-6">
 				<button
 					type="button"
 					onClick={handleBack}
@@ -1251,7 +1303,7 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 	}
 
 	return (
-		<div className="space-y-6 pb-24">
+		<div className="w-full space-y-6 px-6 pb-24">
 			<section className="rounded-[30px] border border-border bg-white p-8 shadow-sm">
 				<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
 					<div className="max-w-3xl space-y-4">
@@ -2190,3 +2242,4 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 		</div>
 	);
 }
+

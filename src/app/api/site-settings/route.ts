@@ -333,3 +333,4 @@ export async function GET() {
 		return NextResponse.json(EMPTY_SITE_SETTINGS, { status: 200 });
 	}
 }
+

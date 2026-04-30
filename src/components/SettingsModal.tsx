@@ -41,7 +41,7 @@ import GlobalButton from "@/components/ui/GlobalButton";
 import GlobalUnsavedChangesConfirm from "@/components/ui/GlobalUnsavedChangesConfirm";
 import { useTranslation } from "@/hooks/useTranslation";
 
-type SettingValueType = "string" | "number" | "boolean";
+type SettingValueType = "text" | "number" | "boolean";
 
 export interface SettingsModalData {
 	key: string;
@@ -75,11 +75,11 @@ function inferTypeFromValue(
 		return "number";
 	}
 
-	return "string";
+	return "text";
 }
 
 function normalizeType(value: unknown): SettingValueType | null {
-	return value === "string" || value === "number" || value === "boolean"
+	return value === "text" || value === "number" || value === "boolean"
 		? value
 		: null;
 }
@@ -89,8 +89,8 @@ function cloneModalData(data: SettingsModalData): SettingsModalData {
 		key: typeof data.key === "string" ? data.key : "",
 		value:
 			typeof data.value === "string" ||
-			typeof data.value === "number" ||
-			typeof data.value === "boolean"
+				typeof data.value === "number" ||
+				typeof data.value === "boolean"
 				? data.value
 				: "",
 		type: normalizeType(data.type) ?? inferTypeFromValue(data.value),
@@ -119,12 +119,12 @@ export default function SettingsModal({
 	const [form, setForm] = useState<SettingsModalData>({
 		key: "",
 		value: "",
-		type: "string",
+		type: "text",
 		module: "",
 		description: "",
 	});
 
-	const [type, setType] = useState<SettingValueType>("string");
+	const [type, setType] = useState<SettingValueType>("text");
 	const [showUnsaved, setShowUnsaved] = useState(false);
 
 	/* ------------------------------------------------------------------------ */
@@ -150,7 +150,7 @@ export default function SettingsModal({
 			description: locale === "es" ? "Descripción" : "Description",
 			type: locale === "es" ? "Tipo" : "Type",
 
-			stringType: locale === "es" ? "Texto" : "String",
+			textType: locale === "es" ? "Texto" : "Text",
 			numberType: locale === "es" ? "Número" : "Number",
 			booleanType: locale === "es" ? "Booleano" : "Boolean",
 
@@ -358,7 +358,7 @@ export default function SettingsModal({
 								setType(event.target.value as SettingValueType)
 							}
 						>
-							<option value="string">{t.stringType}</option>
+							<option value="text">{t.textType}</option>
 							<option value="number">{t.numberType}</option>
 							<option value="boolean">{t.booleanType}</option>
 						</select>
@@ -454,3 +454,4 @@ export default function SettingsModal({
 		</>
 	);
 }
+

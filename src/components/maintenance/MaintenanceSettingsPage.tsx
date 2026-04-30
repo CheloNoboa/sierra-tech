@@ -764,7 +764,7 @@ export default function MaintenanceSettingsPage() {
 	}
 
 	return (
-		<div className="space-y-6 pb-24">
+		<div className="space-y-6 px-6 pb-24">
 			<section className="rounded-[30px] border border-border bg-white p-8 shadow-sm">
 				<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
 					<div className="max-w-3xl">
@@ -1092,3 +1092,4 @@ function PowerIcon() {
 		</span>
 	);
 }
+

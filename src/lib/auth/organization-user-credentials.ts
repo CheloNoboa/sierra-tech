@@ -115,3 +115,4 @@ export function buildActivationUrl(token: string): string {
 
 	return `${baseUrl}/activate-account?token=${encodeURIComponent(token)}`;
 }
+

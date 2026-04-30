@@ -173,3 +173,4 @@ export type ApiKey<
 	L extends ApiLocale,
 	S extends ApiSection<L>,
 > = keyof (typeof apiMessages)[L][S];
+

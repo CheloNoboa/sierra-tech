@@ -311,3 +311,4 @@ const MaintenanceSettings: Model<MaintenanceSettingsDocument> =
 	);
 
 export default MaintenanceSettings;
+

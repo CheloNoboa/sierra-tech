@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { connectToDB } from "@/lib/connectToDB";
 import ServicesPage from "@/models/ServicesPage";
 
@@ -79,3 +79,4 @@ export async function PUT(request: Request) {
 
 	return NextResponse.json(doc.toObject(), { status: 200 });
 }
+

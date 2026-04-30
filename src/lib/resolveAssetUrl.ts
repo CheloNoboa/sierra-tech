@@ -27,3 +27,4 @@ export function resolveAssetUrl(value: unknown): string {
 
 	return raw;
 }
+

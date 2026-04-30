@@ -99,3 +99,4 @@ const CookiePolicySchema = new Schema<ICookiePolicy>(
  */
 export default models.CookiePolicy ||
 	model<ICookiePolicy>("CookiePolicy", CookiePolicySchema);
+

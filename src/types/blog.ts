@@ -228,3 +228,4 @@ export interface BlogAdminFilters {
 	status: "" | BlogStatus;
 	featured: "" | "true" | "false";
 }
+

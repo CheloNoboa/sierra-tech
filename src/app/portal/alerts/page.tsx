@@ -56,7 +56,7 @@ import {
 	Wrench,
 } from "lucide-react";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { connectToDB } from "@/lib/connectToDB";
 import { getPortalAlertsByOrganization } from "@/lib/portal/portalAlerts";
 import Maintenance from "@/models/Maintenance";
@@ -801,3 +801,4 @@ export default async function PortalAlertsPage({
 		</div>
 	);
 }
+

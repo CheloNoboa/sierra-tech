@@ -313,3 +313,4 @@ const BlogPostModel =
 	mongoose.model<BlogPostDocument>("BlogPost", BlogPostSchema);
 
 export default BlogPostModel;
+

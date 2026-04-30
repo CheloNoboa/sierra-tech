@@ -155,3 +155,4 @@ const Permission: Model<IPermission> = modelRegistry.Permission
 	: model<IPermission>("Permission", PermissionSchema);
 
 export default Permission;
+

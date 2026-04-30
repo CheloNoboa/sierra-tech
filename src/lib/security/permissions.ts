@@ -160,3 +160,4 @@ export const PERMISSIONS: PermissionDef[] = [
 		description_en: "Can view policy change history.",
 	},
 ];
+

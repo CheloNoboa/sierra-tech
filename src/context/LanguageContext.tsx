@@ -150,3 +150,4 @@ export const useLanguage = () => {
 		throw new Error("useLanguage must be used within a LanguageProvider");
 	return ctx;
 };
+

@@ -69,3 +69,4 @@ const PrivacyAuditLogSchema = new Schema<IPrivacyAuditLog>(
  */
 export default models.PrivacyAuditLog ||
 	model<IPrivacyAuditLog>("PrivacyAuditLog", PrivacyAuditLogSchema);
+

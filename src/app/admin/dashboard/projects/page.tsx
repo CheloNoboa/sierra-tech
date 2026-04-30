@@ -47,6 +47,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import {
 	DEFAULT_APP_DATE_FORMAT,
 	formatAppDate,
+	normalizeAppDateFormat,
 	type AppDateFormat,
 } from "@/lib/format/date.format";
 
@@ -390,7 +391,9 @@ export default function AdminProjectsPage() {
 
 	const safeLocale: Locale = locale === "en" ? "en" : "es";
 	const t = TEXT[safeLocale];
-	const dateFormat: AppDateFormat = DEFAULT_APP_DATE_FORMAT;
+	const [dateFormat, setDateFormat] = useState<AppDateFormat>(
+		DEFAULT_APP_DATE_FORMAT,
+	);
 
 	const [items, setItems] = useState<ProjectEntity[]>([]);
 	const [filters, setFilters] = useState<ProjectFilters>(createDefaultFilters);
@@ -493,6 +496,51 @@ export default function AdminProjectsPage() {
 			cancelled = true;
 		};
 	}, [t.loadError]);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		async function loadDateFormat() {
+			try {
+				const response = await fetch("/api/admin/settings?keys=dateFormat", {
+					method: "GET",
+					cache: "no-store",
+				});
+
+				const json = (await response.json().catch(() => null)) as
+					| {
+						ok: true;
+						data: Array<{ key: string; value: unknown }>;
+					}
+					| {
+						ok: false;
+						message: string;
+					}
+					| null;
+
+				if (cancelled) return;
+
+				if (!response.ok || !json || !json.ok) {
+					setDateFormat(DEFAULT_APP_DATE_FORMAT);
+					return;
+				}
+
+				const setting = json.data.find((item) => item.key === "dateFormat");
+
+				setDateFormat(normalizeAppDateFormat(setting?.value));
+			} catch {
+				if (!cancelled) {
+					setDateFormat(DEFAULT_APP_DATE_FORMAT);
+				}
+			}
+		}
+
+		void loadDateFormat();
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	async function handleDeleteConfirmed() {
 		if (!deleteTarget) return;
@@ -871,3 +919,4 @@ export default function AdminProjectsPage() {
 		</div>
 	);
 }
+

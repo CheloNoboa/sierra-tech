@@ -217,3 +217,4 @@ export function applyManualModeDefaults(
 		status: "scheduled",
 	};
 }
+

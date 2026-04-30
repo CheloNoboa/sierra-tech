@@ -270,10 +270,10 @@ export default function AdminContactRequestsPage() {
 				prev.map((item) =>
 					item._id === id
 						? {
-								...item,
-								status: result.item?.status ?? nextStatus,
-								updatedAt: result.item?.updatedAt ?? item.updatedAt,
-							}
+							...item,
+							status: result.item?.status ?? nextStatus,
+							updatedAt: result.item?.updatedAt ?? item.updatedAt,
+						}
 						: item,
 				),
 			);
@@ -290,208 +290,207 @@ export default function AdminContactRequestsPage() {
 	};
 
 	return (
-		<main className="min-h-screen bg-white px-6 py-8 md:px-8">
-			<div className="mx-auto max-w-7xl">
-				<header className="mb-6">
-					<h1 className="text-3xl font-semibold text-slate-900">
-						{text.title}
-					</h1>
-					<p className="mt-2 text-sm text-slate-600">{text.subtitle}</p>
-				</header>
+		<main className="space-y-6 px-6 pb-24">
+			<header className="mb-6">
+				<h1 className="text-3xl font-semibold text-slate-900">
+					{text.title}
+				</h1>
+				<p className="mt-2 text-sm text-slate-600">{text.subtitle}</p>
+			</header>
 
-				<section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-					<div className="grid gap-4 md:grid-cols-[1fr_220px_220px]">
-						<div>
-							<label className="mb-2 block text-sm font-medium text-slate-700">
-								{text.search}
-							</label>
-							<input
-								type="text"
-								value={search}
-								onChange={(e) => setSearch(e.target.value)}
-								placeholder={text.searchPlaceholder}
-								className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
-							/>
-						</div>
-
-						<div>
-							<label className="mb-2 block text-sm font-medium text-slate-700">
-								{text.intent}
-							</label>
-							<select
-								value={intentFilter}
-								onChange={(e) =>
-									setIntentFilter((e.target.value as ContactIntent) || "")
-								}
-								className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
-							>
-								<option value="">{text.all}</option>
-								<option value="general">
-									{getIntentLabel("general", lang)}
-								</option>
-								<option value="advisory">
-									{getIntentLabel("advisory", lang)}
-								</option>
-								<option value="quote">{getIntentLabel("quote", lang)}</option>
-								<option value="support">
-									{getIntentLabel("support", lang)}
-								</option>
-							</select>
-						</div>
-
-						<div>
-							<label className="mb-2 block text-sm font-medium text-slate-700">
-								{text.status}
-							</label>
-							<select
-								value={statusFilter}
-								onChange={(e) =>
-									setStatusFilter((e.target.value as ContactStatus) || "")
-								}
-								className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
-							>
-								<option value="">{text.all}</option>
-								<option value="new">{getStatusLabel("new", lang)}</option>
-								<option value="in_review">
-									{getStatusLabel("in_review", lang)}
-								</option>
-								<option value="closed">{getStatusLabel("closed", lang)}</option>
-							</select>
-						</div>
+			<section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+				<div className="grid gap-4 md:grid-cols-[1fr_220px_220px]">
+					<div>
+						<label className="mb-2 block text-sm font-medium text-slate-700">
+							{text.search}
+						</label>
+						<input
+							type="text"
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+							placeholder={text.searchPlaceholder}
+							className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
+						/>
 					</div>
-				</section>
 
-				<section className="space-y-4">
-					{loading ? (
-						<div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-							{text.loading}
-						</div>
-					) : error ? (
-						<div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow-sm">
-							{error}
-						</div>
-					) : items.length === 0 ? (
-						<div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-							{text.empty}
-						</div>
-					) : (
-						items.map((item) => (
-							<article
-								key={item._id}
-								className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-							>
-								<div className="mb-4 flex flex-wrap items-center gap-3">
-									<span className="rounded-full bg-lime-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-lime-700">
-										{getIntentLabel(item.intent, lang)}
-									</span>
+					<div>
+						<label className="mb-2 block text-sm font-medium text-slate-700">
+							{text.intent}
+						</label>
+						<select
+							value={intentFilter}
+							onChange={(e) =>
+								setIntentFilter((e.target.value as ContactIntent) || "")
+							}
+							className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
+						>
+							<option value="">{text.all}</option>
+							<option value="general">
+								{getIntentLabel("general", lang)}
+							</option>
+							<option value="advisory">
+								{getIntentLabel("advisory", lang)}
+							</option>
+							<option value="quote">{getIntentLabel("quote", lang)}</option>
+							<option value="support">
+								{getIntentLabel("support", lang)}
+							</option>
+						</select>
+					</div>
 
-									<span
-										className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${getStatusBadgeClass(
-											item.status,
-										)}`}
-									>
-										{getStatusLabel(item.status, lang)}
-									</span>
+					<div>
+						<label className="mb-2 block text-sm font-medium text-slate-700">
+							{text.status}
+						</label>
+						<select
+							value={statusFilter}
+							onChange={(e) =>
+								setStatusFilter((e.target.value as ContactStatus) || "")
+							}
+							className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500"
+						>
+							<option value="">{text.all}</option>
+							<option value="new">{getStatusLabel("new", lang)}</option>
+							<option value="in_review">
+								{getStatusLabel("in_review", lang)}
+							</option>
+							<option value="closed">{getStatusLabel("closed", lang)}</option>
+						</select>
+					</div>
+				</div>
+			</section>
 
-									<span className="text-xs text-slate-500">
-										{text.createdAt}: {formatDate(item.createdAt, lang)}
-									</span>
-								</div>
+			<section className="space-y-4">
+				{loading ? (
+					<div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+						{text.loading}
+					</div>
+				) : error ? (
+					<div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow-sm">
+						{error}
+					</div>
+				) : items.length === 0 ? (
+					<div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+						{text.empty}
+					</div>
+				) : (
+					items.map((item) => (
+						<article
+							key={item._id}
+							className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+						>
+							<div className="mb-4 flex flex-wrap items-center gap-3">
+								<span className="rounded-full bg-lime-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-lime-700">
+									{getIntentLabel(item.intent, lang)}
+								</span>
 
-								<div className="mb-5">
-									<label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-										{text.status}
-									</label>
-									<select
-										value={item.status}
-										disabled={updatingId === item._id}
-										onChange={(e) =>
-											void handleStatusChange(
-												item._id,
-												e.target.value as ContactStatus,
-											)
-										}
-										className="w-full max-w-[240px] rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500 disabled:cursor-not-allowed disabled:opacity-70"
-									>
-										<option value="new">{getStatusLabel("new", lang)}</option>
-										<option value="in_review">
-											{getStatusLabel("in_review", lang)}
-										</option>
-										<option value="closed">
-											{getStatusLabel("closed", lang)}
-										</option>
-									</select>
-								</div>
+								<span
+									className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${getStatusBadgeClass(
+										item.status,
+									)}`}
+								>
+									{getStatusLabel(item.status, lang)}
+								</span>
 
-								<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-									<div>
-										<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-											{text.name}
-										</p>
-										<p className="mt-1 text-sm text-slate-900">
-											{item.name || "-"}
-										</p>
-									</div>
+								<span className="text-xs text-slate-500">
+									{text.createdAt}: {formatDate(item.createdAt, lang)}
+								</span>
+							</div>
 
-									<div>
-										<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-											{text.company}
-										</p>
-										<p className="mt-1 text-sm text-slate-900">
-											{item.company || "-"}
-										</p>
-									</div>
+							<div className="mb-5">
+								<label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+									{text.status}
+								</label>
+								<select
+									value={item.status}
+									disabled={updatingId === item._id}
+									onChange={(e) =>
+										void handleStatusChange(
+											item._id,
+											e.target.value as ContactStatus,
+										)
+									}
+									className="w-full max-w-[240px] rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-500 disabled:cursor-not-allowed disabled:opacity-70"
+								>
+									<option value="new">{getStatusLabel("new", lang)}</option>
+									<option value="in_review">
+										{getStatusLabel("in_review", lang)}
+									</option>
+									<option value="closed">
+										{getStatusLabel("closed", lang)}
+									</option>
+								</select>
+							</div>
 
-									<div>
-										<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-											{text.email}
-										</p>
-										<p className="mt-1 text-sm text-slate-900">
-											{item.email || "-"}
-										</p>
-									</div>
-
-									<div>
-										<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-											{text.phone}
-										</p>
-										<p className="mt-1 text-sm text-slate-900">
-											{item.phone || "-"}
-										</p>
-									</div>
-
-									<div>
-										<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-											{text.location}
-										</p>
-										<p className="mt-1 text-sm text-slate-900">
-											{item.location || "-"}
-										</p>
-									</div>
-
-									<div>
-										<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-											{text.serviceClass}
-										</p>
-										<p className="mt-1 text-sm text-slate-900">
-											{item.serviceClassSnapshot?.[lang]?.trim() || "-"}
-										</p>
-									</div>
-								</div>
-
-								<div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+							<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+								<div>
 									<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-										{text.message}
+										{text.name}
 									</p>
-									<p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
-										{item.message || "-"}
+									<p className="mt-1 text-sm text-slate-900">
+										{item.name || "-"}
 									</p>
 								</div>
-							</article>
-						))
-					)}
-				</section>
-			</div>
+
+								<div>
+									<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+										{text.company}
+									</p>
+									<p className="mt-1 text-sm text-slate-900">
+										{item.company || "-"}
+									</p>
+								</div>
+
+								<div>
+									<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+										{text.email}
+									</p>
+									<p className="mt-1 text-sm text-slate-900">
+										{item.email || "-"}
+									</p>
+								</div>
+
+								<div>
+									<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+										{text.phone}
+									</p>
+									<p className="mt-1 text-sm text-slate-900">
+										{item.phone || "-"}
+									</p>
+								</div>
+
+								<div>
+									<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+										{text.location}
+									</p>
+									<p className="mt-1 text-sm text-slate-900">
+										{item.location || "-"}
+									</p>
+								</div>
+
+								<div>
+									<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+										{text.serviceClass}
+									</p>
+									<p className="mt-1 text-sm text-slate-900">
+										{item.serviceClassSnapshot?.[lang]?.trim() || "-"}
+									</p>
+								</div>
+							</div>
+
+							<div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+								<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+									{text.message}
+								</p>
+								<p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+									{item.message || "-"}
+								</p>
+							</div>
+						</article>
+					))
+				)}
+			</section>
 		</main>
 	);
 }
+

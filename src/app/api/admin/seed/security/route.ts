@@ -37,11 +37,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import type { Session } from "next-auth";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { connectToDB } from "@/lib/connectToDB";
 
 import Permission from "@/models/Permission";
 import Role from "@/models/Role";
+import SystemSettingsModel from "@/models/SystemSettings";
 
 import { PERMISSIONS, type PermissionDef } from "@/lib/security/permissions";
 import { ROLES, type RoleDef } from "@/lib/security/roles";
@@ -135,6 +136,75 @@ function mapRoleDefToInsert(r: RoleDef): InsertRole {
 	};
 }
 
+type SeedSystemSetting = {
+	key: string;
+	type: "text" | "number" | "boolean";
+	value: string | number | boolean;
+	description: string;
+	module: string;
+	autoTranslate: boolean;
+};
+
+const SYSTEM_SETTINGS_SEED: SeedSystemSetting[] = [
+	{
+		key: "recordsPerPageConfiguration",
+		type: "number",
+		value: 10,
+		description: "Número de configuraciones por página en la grilla",
+		module: "configuration",
+		autoTranslate: false,
+	},
+	{
+		key: "recordsPerPageUsers",
+		type: "number",
+		value: 10,
+		description: "Número de usuarios por página en la grilla",
+		module: "users",
+		autoTranslate: false,
+	},
+	{
+		key: "recordsPerPageServiceClasses",
+		type: "number",
+		value: 10,
+		description: "Número de clases de servicio por página en la grilla",
+		module: "service-classes",
+		autoTranslate: false,
+	},
+	{
+		key: "recordsPerPageOrganizations",
+		type: "number",
+		value: 10,
+		description: "Número de organizaciones por página en la grilla",
+		module: "organizations",
+		autoTranslate: false,
+	},
+	{
+		key: "recordsPerPageOrganizationUsers",
+		type: "number",
+		value: 10,
+		description: "Número de usuarios de organización por página en la grilla",
+		module: "organization-users",
+		autoTranslate: false,
+	},
+	{
+		key: "sessionTimeoutMinutes",
+		type: "number",
+		value: 30,
+		description: "Configuración de expiración de sesión",
+		module: "general",
+		autoTranslate: false,
+	},
+	{
+		key: "dateFormat",
+		type: "text",
+		value: "MM/dd/yyyy",
+		description:
+			"Formatos de fechas. Opciones soportadas: MM/dd/yyyy - dd/MM/yyyy - yyyy-MM-dd",
+		module: "general",
+		autoTranslate: false,
+	},
+];
+
 /* =============================================================================
  * 📬 POST → EJECUTAR SEEDER
  * -----------------------------------------------------------------------------
@@ -170,7 +240,43 @@ export async function POST(req: NextRequest) {
 
 		// 5) Insertar roles base
 		const roleDocs: InsertRole[] = ROLES.map(mapRoleDefToInsert);
+
+		// ✅ VALIDAR QUE TODOS LOS PERMISOS DE LOS ROLES EXISTAN
+		const permissionCodes = new Set(permissionDocs.map((permission) => permission.code));
+
+		for (const role of roleDocs) {
+			for (const permissionCode of role.permissions) {
+				if (!permissionCodes.has(permissionCode)) {
+					throw new Error(
+						`Permiso inválido en rol "${role.code}": "${permissionCode}"`,
+					);
+				}
+			}
+		}
+
 		await Role.insertMany(roleDocs);
+
+		// 6) Crear configuraciones base si no existen.
+		// ES: No sobrescribe valores existentes.
+		// EN: Does not overwrite existing values.
+		const settingsUserName = guard.session.user?.name ?? "Super Admin";
+		const settingsUserEmail = guard.session.user?.email ?? "super@admin.com";
+
+		await Promise.all(
+			SYSTEM_SETTINGS_SEED.map((setting) =>
+				SystemSettingsModel.updateOne(
+					{ key: setting.key },
+					{
+						$setOnInsert: {
+							...setting,
+							lastModifiedBy: settingsUserName,
+							lastModifiedEmail: settingsUserEmail,
+						},
+					},
+					{ upsert: true },
+				),
+			),
+		);
 
 		const lang = req.headers.get("accept-language")?.startsWith("es")
 			? "es"
@@ -184,6 +290,7 @@ export async function POST(req: NextRequest) {
 						: "Seeder executed successfully.",
 				permissions: permissionDocs.length,
 				roles: roleDocs.length,
+				settings: SYSTEM_SETTINGS_SEED.length,
 			},
 			{ status: 200 },
 		);
@@ -205,3 +312,4 @@ export async function POST(req: NextRequest) {
 		);
 	}
 }
+

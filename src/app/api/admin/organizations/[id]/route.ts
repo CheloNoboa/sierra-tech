@@ -30,7 +30,7 @@ import mongoose from "mongoose";
 import { getServerSession } from "next-auth";
 
 import { connectToDB } from "@/lib/connectToDB";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import Organization from "@/models/Organization";
 
 /* -------------------------------------------------------------------------- */
@@ -337,3 +337,4 @@ export async function PUT(
 		);
 	}
 }
+

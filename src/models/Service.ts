@@ -249,3 +249,4 @@ const Service =
 	mongoose.model<ServiceDocument, ServiceModel>("Service", ServiceSchema);
 
 export default Service;
+

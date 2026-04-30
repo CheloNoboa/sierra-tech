@@ -74,3 +74,4 @@ export async function connectToDB(): Promise<Mongoose> {
 }
 
 export const connectDB = connectToDB;
+

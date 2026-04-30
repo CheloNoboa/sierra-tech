@@ -27,7 +27,7 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 
 type Locale = "es" | "en";
 
@@ -113,3 +113,4 @@ export async function requirePermission(
 
 	return { ok: true, session };
 }
+

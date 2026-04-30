@@ -44,7 +44,7 @@ import {
 	Wrench,
 } from "lucide-react";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { getPortalHomeDataByOrganization } from "@/lib/portal/portalHome";
 import type {
 	PortalAlertItem,
@@ -714,3 +714,4 @@ export default async function PortalHomePage() {
 		</div>
 	);
 }
+

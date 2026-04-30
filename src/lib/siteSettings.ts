@@ -337,3 +337,4 @@ export async function getPublicSiteSettings(): Promise<PublicSiteSettings> {
 		return DEFAULTS;
 	}
 }
+

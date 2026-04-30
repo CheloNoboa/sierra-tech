@@ -8,3 +8,4 @@
 export function checkAdminRole(role?: string) {
 	return role === "admin" || role === "superadmin";
 }
+

@@ -389,3 +389,4 @@ export interface PortalAlertsFilters {
 	type?: PortalAlertType | "all";
 	priority?: PortalAlertPriority | "all";
 }
+

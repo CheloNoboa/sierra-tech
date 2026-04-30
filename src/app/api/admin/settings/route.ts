@@ -3,51 +3,88 @@
  * 📌 API: /api/admin/settings
  * Path: src/app/api/admin/settings/route.ts
  * =============================================================================
+ *
  * ES:
- *   CRUD minimalista y estable para Configuraciones del Sistema.
+ * Endpoint administrativo oficial para Configuraciones del Sistema.
  *
- *   OBJETIVO:
- *   ---------
- *   Proveer un endpoint limpio que:
- *     • Exponga configuraciones (todas o por keys)
- *     • Permita crear nuevas configuraciones
- *     • Permita actualizarlas sin romper tipos
- *     • Permita eliminarlas individualmente
+ * Propósito:
+ * - exponer configuraciones globales u operativas del sistema
+ * - permitir lectura completa o filtrada por keys
+ * - permitir creación de configuraciones tipadas
+ * - permitir actualización segura sin perder el tipo real del valor
+ * - permitir eliminación individual por id
  *
- *   DECISIONES:
- *   -----------
- *   - Respuesta consistente: { ok, data?, message? }
- *   - Sin "any": validaciones con helpers tipados
- *   - GET soporta:
- *       - /api/admin/settings                => todas
- *       - /api/admin/settings?keys=a,b,c     => solo esas keys
+ * Alcance:
+ * - Configuraciones simples de tipo:
+ *   - text
+ *   - number
+ *   - boolean
+ *
+ * Decisiones:
+ * - `type` deja de ser decorativo y pasa a ser parte real del contrato.
+ * - `value` se normaliza según `type` antes de persistir.
+ * - `text` se usa como nombre oficial en lugar de `string` para que la UI,
+ *   el modelo y la API hablen el mismo lenguaje administrativo.
+ * - En update, si no viene `type`, se conserva el tipo actual guardado en BD.
+ * - En update, si viene `value`, se castea usando el tipo final aplicable.
+ * - La API no guarda objetos ni arreglos dentro de SystemSettings en esta fase.
+ *
+ * Reglas:
+ * - sin any
+ * - respuestas consistentes: { ok, data } o { ok, message }
+ * - GET soporta:
+ *   - /api/admin/settings
+ *   - /api/admin/settings?keys=a,b,c
+ * - POST valida key única antes de crear
+ * - PUT valida colisión de key si se intenta cambiar
+ * - DELETE elimina por id
  *
  * EN:
- *   Stable CRUD endpoint for System Settings.
+ * Official administrative endpoint for System Settings.
  *
- * Seguridad, rendimiento y simplicidad primero.
+ * Purpose:
+ * - expose global or operational settings
+ * - allow full or key-filtered reads
+ * - allow typed setting creation
+ * - allow safe updates without losing the real value type
+ * - allow individual deletion by id
  *
- * Autor: Marcelo Noboa
- * Mantención técnica: IA Asistida (ChatGPT)
- * Última actualización: 2026-02-19
+ * Decisions:
+ * - `type` is now part of the real persisted contract.
+ * - `value` is normalized according to `type` before persistence.
+ * - `text` is the official administrative label instead of `string`.
+ * - updates preserve the current stored type if no new type is provided.
  * =============================================================================
  */
 
 import { NextRequest, NextResponse } from "next/server";
+
 import { connectToDB } from "@/lib/connectToDB";
-import SystemSettings, { type ISystemSetting } from "@/models/SystemSettings";
+import SystemSettings, {
+	type ISystemSetting,
+	type SystemSettingValue,
+	type SystemSettingValueType,
+} from "@/models/SystemSettings";
 
 /* =============================================================================
- * Types (API contract)
+ * Types
  * ============================================================================= */
 
-type ApiOk<T> = { ok: true; data: T };
-type ApiFail = { ok: false; message: string };
+type ApiOk<T> = {
+	ok: true;
+	data: T;
+};
+
+type ApiFail = {
+	ok: false;
+	message: string;
+};
 
 type LeanSetting = {
 	_id: string;
 	key: string;
-	value: unknown;
+	type: SystemSettingValueType;
+	value: SystemSettingValue;
 	description?: string;
 	module?: string | null;
 	autoTranslate?: boolean;
@@ -59,258 +96,526 @@ type LeanSetting = {
 
 type CreateBody = {
 	key: string;
-	value: unknown;
-	description?: string;
-	module?: string | null;
-	autoTranslate?: boolean;
-	lastModifiedBy?: string | null;
-	lastModifiedEmail?: string | null;
+	type: SystemSettingValueType;
+	value: SystemSettingValue;
+	description: string;
+	module: string | null;
+	autoTranslate: boolean;
+	lastModifiedBy: string | null;
+	lastModifiedEmail: string | null;
 };
 
 type UpdateBody = Partial<CreateBody> & {
 	_id: string;
 };
 
-function isObj(x: unknown): x is Record<string, unknown> {
-	return !!x && typeof x === "object";
+/* =============================================================================
+ * Primitive helpers
+ * ============================================================================= */
+
+function isObj(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function safeString(x: unknown): string {
-	return typeof x === "string" ? x : "";
+function safeString(value: unknown): string {
+	return typeof value === "string" ? value : "";
 }
 
-function isNonEmptyString(x: unknown): x is string {
-	return typeof x === "string" && x.trim().length > 0;
+function isNonEmptyString(value: unknown): value is string {
+	return typeof value === "string" && value.trim().length > 0;
 }
 
+/* =============================================================================
+ * Setting type/value normalization
+ * ============================================================================= */
+
+/**
+ * ES:
+ * Normaliza el tipo administrativo del setting.
+ *
+ * Regla:
+ * - cualquier valor desconocido cae a `text`
+ * - esto mantiene compatibilidad con registros antiguos sin type
+ */
+function normalizeSettingType(value: unknown): SystemSettingValueType {
+	if (value === "number") return "number";
+	if (value === "boolean") return "boolean";
+
+	return "text";
+}
+
+/**
+ * ES:
+ * Normaliza el valor real según el tipo final que se va a persistir.
+ *
+ * Reglas:
+ * - text:
+ *   - siempre persiste string
+ * - number:
+ *   - intenta convertir desde number/string
+ *   - si no es válido, persiste 0
+ * - boolean:
+ *   - acepta boolean real
+ *   - acepta strings comunes: true, 1, yes
+ *   - todo lo demás se interpreta como false/Boolean(value)
+ */
+function normalizeSettingValue(
+	value: unknown,
+	type: SystemSettingValueType,
+): SystemSettingValue {
+	if (type === "number") {
+		const parsed =
+			typeof value === "number"
+				? value
+				: typeof value === "string"
+					? Number(value)
+					: Number.NaN;
+
+		return Number.isFinite(parsed) ? parsed : 0;
+	}
+
+	if (type === "boolean") {
+		if (typeof value === "boolean") return value;
+
+		if (typeof value === "string") {
+			const normalized = value.trim().toLowerCase();
+
+			if (
+				normalized === "true" ||
+				normalized === "1" ||
+				normalized === "yes"
+			) {
+				return true;
+			}
+
+			if (
+				normalized === "false" ||
+				normalized === "0" ||
+				normalized === "no" ||
+				normalized === ""
+			) {
+				return false;
+			}
+		}
+
+		return Boolean(value);
+	}
+
+	return typeof value === "string" ? value : String(value ?? "");
+}
+
+/* =============================================================================
+ * Query helpers
+ * ============================================================================= */
+
+/**
+ * ES:
+ * Convierte ?keys=a,b,c en una lista única y limpia.
+ */
 function parseKeysParam(req: NextRequest): string[] {
 	const raw = req.nextUrl.searchParams.get("keys") ?? "";
-	const parts = raw
-		.split(",")
-		.map((s) => s.trim())
-		.filter((s) => s.length > 0);
-
 	const seen = new Set<string>();
-	const out: string[] = [];
-	for (const k of parts) {
-		if (seen.has(k)) continue;
-		seen.add(k);
-		out.push(k);
-	}
-	return out;
+
+	return raw
+		.split(",")
+		.map((item) => item.trim())
+		.filter((item) => {
+			if (!item || seen.has(item)) return false;
+
+			seen.add(item);
+			return true;
+		});
 }
 
+/* =============================================================================
+ * Body normalization
+ * ============================================================================= */
+
+/**
+ * ES:
+ * Normaliza payload de creación.
+ *
+ * Reglas:
+ * - key es obligatorio
+ * - value es obligatorio
+ * - type es opcional, pero si no viene se asume text
+ * - value se castea según type antes de persistir
+ */
 function normalizeCreateBody(
 	raw: unknown,
 ): { ok: true; body: CreateBody } | { ok: false; message: string } {
-	if (!isObj(raw)) return { ok: false, message: "Invalid body." };
+	if (!isObj(raw)) {
+		return { ok: false, message: "Invalid body." };
+	}
 
 	const key = safeString(raw.key).trim();
-	if (!key) return { ok: false, message: "Missing key." };
 
-	// value es required, pero puede ser unknown (incluye string/number/bool/object)
-	if (!("value" in raw)) return { ok: false, message: "Missing value." };
+	if (!key) {
+		return { ok: false, message: "Missing key." };
+	}
 
-	const body: CreateBody = {
-		key,
-		value: (raw as { value: unknown }).value,
-		description: isNonEmptyString(raw.description)
-			? safeString(raw.description).trim()
-			: "",
-		module: isNonEmptyString(raw.module) ? safeString(raw.module).trim() : null,
-		autoTranslate:
-			typeof raw.autoTranslate === "boolean" ? raw.autoTranslate : false,
-		lastModifiedBy: isNonEmptyString(raw.lastModifiedBy)
-			? safeString(raw.lastModifiedBy).trim()
-			: null,
-		lastModifiedEmail: isNonEmptyString(raw.lastModifiedEmail)
-			? safeString(raw.lastModifiedEmail).trim().toLowerCase()
-			: null,
+	if (!("value" in raw)) {
+		return { ok: false, message: "Missing value." };
+	}
+
+	const type = normalizeSettingType(raw.type);
+	const value = normalizeSettingValue(raw.value, type);
+
+	return {
+		ok: true,
+		body: {
+			key,
+			type,
+			value,
+			description: isNonEmptyString(raw.description)
+				? safeString(raw.description).trim()
+				: "",
+			module: isNonEmptyString(raw.module)
+				? safeString(raw.module).trim()
+				: null,
+			autoTranslate:
+				typeof raw.autoTranslate === "boolean" ? raw.autoTranslate : false,
+			lastModifiedBy: isNonEmptyString(raw.lastModifiedBy)
+				? safeString(raw.lastModifiedBy).trim()
+				: null,
+			lastModifiedEmail: isNonEmptyString(raw.lastModifiedEmail)
+				? safeString(raw.lastModifiedEmail).trim().toLowerCase()
+				: null,
+		},
 	};
-
-	return { ok: true, body };
 }
 
+/**
+ * ES:
+ * Normaliza payload de actualización.
+ *
+ * Reglas:
+ * - _id es obligatorio
+ * - si viene `type`, se usa como nuevo tipo final
+ * - si no viene `type`, se usa el tipo actual de BD
+ * - si viene `value`, se castea usando el tipo final aplicable
+ * - no fuerza edición de campos que no llegaron en el payload
+ */
 function normalizeUpdateBody(
 	raw: unknown,
+	currentType: SystemSettingValueType,
 ): { ok: true; body: UpdateBody } | { ok: false; message: string } {
-	if (!isObj(raw)) return { ok: false, message: "Invalid body." };
+	if (!isObj(raw)) {
+		return { ok: false, message: "Invalid body." };
+	}
 
 	const _id = safeString(raw._id).trim();
-	if (!_id) return { ok: false, message: "Missing _id for update." };
+
+	if (!_id) {
+		return { ok: false, message: "Missing _id for update." };
+	}
+
+	const finalType = "type" in raw ? normalizeSettingType(raw.type) : currentType;
 
 	const body: UpdateBody = { _id };
 
-	if ("key" in raw && isNonEmptyString(raw.key))
+	if ("key" in raw && isNonEmptyString(raw.key)) {
 		body.key = safeString(raw.key).trim();
-	if ("value" in raw) body.value = (raw as { value: unknown }).value;
+	}
 
-	if ("description" in raw)
+	if ("type" in raw) {
+		body.type = finalType;
+	}
+
+	if ("value" in raw) {
+		body.value = normalizeSettingValue(raw.value, finalType);
+	}
+
+	if ("description" in raw) {
 		body.description = isNonEmptyString(raw.description)
 			? safeString(raw.description).trim()
 			: "";
-	if ("module" in raw)
+	}
+
+	if ("module" in raw) {
 		body.module = isNonEmptyString(raw.module)
 			? safeString(raw.module).trim()
 			: null;
-	if ("autoTranslate" in raw && typeof raw.autoTranslate === "boolean")
-		body.autoTranslate = raw.autoTranslate;
+	}
 
-	if ("lastModifiedBy" in raw)
+	if ("autoTranslate" in raw && typeof raw.autoTranslate === "boolean") {
+		body.autoTranslate = raw.autoTranslate;
+	}
+
+	if ("lastModifiedBy" in raw) {
 		body.lastModifiedBy = isNonEmptyString(raw.lastModifiedBy)
 			? safeString(raw.lastModifiedBy).trim()
 			: null;
-	if ("lastModifiedEmail" in raw)
+	}
+
+	if ("lastModifiedEmail" in raw) {
 		body.lastModifiedEmail = isNonEmptyString(raw.lastModifiedEmail)
 			? safeString(raw.lastModifiedEmail).trim().toLowerCase()
 			: null;
+	}
 
 	return { ok: true, body };
 }
 
 /* =============================================================================
- * GET — Obtener settings (todos o por keys)
- * =============================================================================
- */
+ * GET — Obtener settings
+ * ============================================================================= */
+
 export async function GET(req: NextRequest) {
 	try {
 		await connectToDB();
 
 		const keys = parseKeysParam(req);
-
 		const query = keys.length > 0 ? { key: { $in: keys } } : {};
 
 		const settings = await SystemSettings.find(query)
 			.sort({ key: 1 })
 			.lean<LeanSetting[]>();
 
-		const body: ApiOk<LeanSetting[]> = { ok: true, data: settings };
-		return NextResponse.json(body, { status: 200 });
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : "Unknown error";
-		const body: ApiFail = { ok: false, message: msg };
-		return NextResponse.json(body, { status: 500 });
+		return NextResponse.json<ApiOk<LeanSetting[]>>(
+			{
+				ok: true,
+				data: settings,
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+
+		return NextResponse.json<ApiFail>(
+			{
+				ok: false,
+				message,
+			},
+			{ status: 500 },
+		);
 	}
 }
 
 /* =============================================================================
- * POST — Crear nuevo setting
- * =============================================================================
- */
+ * POST — Crear setting
+ * ============================================================================= */
+
 export async function POST(req: NextRequest) {
 	try {
 		await connectToDB();
 
 		const raw: unknown = await req.json().catch(() => null);
 		const parsed = normalizeCreateBody(raw);
+
 		if (!parsed.ok) {
-			const body: ApiFail = { ok: false, message: parsed.message };
-			return NextResponse.json(body, { status: 400 });
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: parsed.message,
+				},
+				{ status: 400 },
+			);
 		}
 
-		// ✅ Enforce unique key at app level (además del schema unique)
-		const exists = await SystemSettings.findOne({ key: parsed.body.key })
+		const exists = await SystemSettings.findOne({
+			key: parsed.body.key,
+		})
 			.select({ _id: 1 })
 			.lean<{ _id: string } | null>();
+
 		if (exists?._id) {
-			const body: ApiFail = { ok: false, message: "Key already exists." };
-			return NextResponse.json(body, { status: 409 });
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: "Key already exists.",
+				},
+				{ status: 409 },
+			);
 		}
 
 		const created = await SystemSettings.create(parsed.body);
 
-		const body: ApiOk<ISystemSetting> = { ok: true, data: created };
-		return NextResponse.json(body, { status: 201 });
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : "Unknown error";
-		const body: ApiFail = { ok: false, message: msg };
-		return NextResponse.json(body, { status: 500 });
+		return NextResponse.json<ApiOk<ISystemSetting>>(
+			{
+				ok: true,
+				data: created,
+			},
+			{ status: 201 },
+		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+
+		return NextResponse.json<ApiFail>(
+			{
+				ok: false,
+				message,
+			},
+			{ status: 500 },
+		);
 	}
 }
 
 /* =============================================================================
- * PUT — Actualizar un setting existente
- * =============================================================================
- */
+ * PUT — Actualizar setting
+ * ============================================================================= */
+
 export async function PUT(req: NextRequest) {
 	try {
 		await connectToDB();
 
 		const raw: unknown = await req.json().catch(() => null);
-		const parsed = normalizeUpdateBody(raw);
-		if (!parsed.ok) {
-			const body: ApiFail = { ok: false, message: parsed.message };
-			return NextResponse.json(body, { status: 400 });
+
+		if (!isObj(raw)) {
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: "Invalid body.",
+				},
+				{ status: 400 },
+			);
 		}
 
-		const { _id, ...patch } = parsed.body;
+		const _id = safeString(raw._id).trim();
 
-		// ✅ Si cambian key, validamos colisión
+		if (!_id) {
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: "Missing _id for update.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		const current = await SystemSettings.findById(_id)
+			.select({ type: 1 })
+			.lean<{ type?: SystemSettingValueType } | null>();
+
+		if (!current) {
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: "Setting not found.",
+				},
+				{ status: 404 },
+			);
+		}
+
+		const parsed = normalizeUpdateBody(raw, normalizeSettingType(current.type));
+
+		if (!parsed.ok) {
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: parsed.message,
+				},
+				{ status: 400 },
+			);
+		}
+
+		const { _id: settingId, ...patch } = parsed.body;
+
 		if (patch.key) {
 			const collision = await SystemSettings.findOne({
 				key: patch.key,
-				_id: { $ne: _id },
+				_id: { $ne: settingId },
 			})
 				.select({ _id: 1 })
 				.lean<{ _id: string } | null>();
 
 			if (collision?._id) {
-				const body: ApiFail = { ok: false, message: "Key already exists." };
-				return NextResponse.json(body, { status: 409 });
+				return NextResponse.json<ApiFail>(
+					{
+						ok: false,
+						message: "Key already exists.",
+					},
+					{ status: 409 },
+				);
 			}
 		}
 
-		const updated = await SystemSettings.findByIdAndUpdate(_id, patch, {
+		const updated = await SystemSettings.findByIdAndUpdate(settingId, patch, {
 			new: true,
+			runValidators: true,
 		}).lean<LeanSetting | null>();
 
 		if (!updated) {
-			const body: ApiFail = { ok: false, message: "Setting not found." };
-			return NextResponse.json(body, { status: 404 });
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: "Setting not found.",
+				},
+				{ status: 404 },
+			);
 		}
 
-		const body: ApiOk<LeanSetting> = { ok: true, data: updated };
-		return NextResponse.json(body, { status: 200 });
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : "Unknown error";
-		const body: ApiFail = { ok: false, message: msg };
-		return NextResponse.json(body, { status: 500 });
+		return NextResponse.json<ApiOk<LeanSetting>>(
+			{
+				ok: true,
+				data: updated,
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+
+		return NextResponse.json<ApiFail>(
+			{
+				ok: false,
+				message,
+			},
+			{ status: 500 },
+		);
 	}
 }
 
 /* =============================================================================
- * DELETE — Eliminar un setting (por id)
- * =============================================================================
- */
+ * DELETE — Eliminar setting
+ * ============================================================================= */
+
 export async function DELETE(req: NextRequest) {
 	try {
 		await connectToDB();
 
-		const id = req.nextUrl.searchParams.get("id") ?? "";
-		const _id = id.trim();
+		const _id = (req.nextUrl.searchParams.get("id") ?? "").trim();
 
 		if (!_id) {
-			const body: ApiFail = { ok: false, message: "Missing id to delete." };
-			return NextResponse.json(body, { status: 400 });
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: "Missing id to delete.",
+				},
+				{ status: 400 },
+			);
 		}
 
-		const deleted = await SystemSettings.findByIdAndDelete(
-			_id,
-		).lean<LeanSetting | null>();
+		const deleted = await SystemSettings.findByIdAndDelete(_id).lean<
+			LeanSetting | null
+		>();
 
 		if (!deleted) {
-			const body: ApiFail = { ok: false, message: "Setting not found." };
-			return NextResponse.json(body, { status: 404 });
+			return NextResponse.json<ApiFail>(
+				{
+					ok: false,
+					message: "Setting not found.",
+				},
+				{ status: 404 },
+			);
 		}
 
-		const body: ApiOk<{ success: true }> = {
-			ok: true,
-			data: { success: true },
-		};
-		return NextResponse.json(body, { status: 200 });
-	} catch (e) {
-		const msg = e instanceof Error ? e.message : "Unknown error";
-		const body: ApiFail = { ok: false, message: msg };
-		return NextResponse.json(body, { status: 500 });
+		return NextResponse.json<ApiOk<{ success: true }>>(
+			{
+				ok: true,
+				data: { success: true },
+			},
+			{ status: 200 },
+		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+
+		return NextResponse.json<ApiFail>(
+			{
+				ok: false,
+				message,
+			},
+			{ status: 500 },
+		);
 	}
 }
+

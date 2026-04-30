@@ -214,7 +214,6 @@ export default function ProjectGalleryCarousel({
 			<div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
 				<div className="relative aspect-[16/9] bg-slate-100">
 					{currentImageUrl ? (
-						// eslint-disable-next-line @next/next/no-img-element
 						<img
 							src={currentImageUrl}
 							alt={currentAlt}
@@ -313,7 +312,6 @@ export default function ProjectGalleryCarousel({
 							>
 								<div className="relative h-20 w-28 bg-slate-100">
 									{thumbUrl ? (
-										// eslint-disable-next-line @next/next/no-img-element
 										<img
 											src={thumbUrl}
 											alt={thumbAlt}
@@ -333,3 +331,4 @@ export default function ProjectGalleryCarousel({
 		</div>
 	);
 }
+

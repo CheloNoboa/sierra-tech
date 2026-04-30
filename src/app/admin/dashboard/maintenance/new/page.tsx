@@ -100,3 +100,4 @@ import MaintenanceFormPage from "@/components/maintenance/MaintenanceFormPage";
 export default function AdminMaintenanceCreatePage() {
 	return <MaintenanceFormPage mode="create" />;
 }
+

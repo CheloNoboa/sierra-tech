@@ -68,3 +68,4 @@ export async function initSuperAdmin() {
 
 	console.log(`✅ SUPERADMIN creado con email: ${email}`);
 }
+

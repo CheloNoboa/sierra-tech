@@ -40,3 +40,4 @@ export function getApiMessage<
 		return apiMessages["es"].global.unknown;
 	}
 }
+

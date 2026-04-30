@@ -218,6 +218,7 @@ export default function AdminSidebar() {
 		isSuperAdmin ||
 		canAccessModule(permissions, "roles") ||
 		canAccessModule(permissions, "users") ||
+		canAccessModule(permissions, "service-classes") ||
 		canAccessModule(permissions, "settings");
 
 	return (
@@ -358,21 +359,6 @@ export default function AdminSidebar() {
 								)}
 
 							{(isSuperAdmin ||
-								canAccessModule(permissions, "service-classes") ||
-								canAccessModule(permissions, "cms")) && (
-									<Link
-										href="/admin/dashboard/service-classes"
-										className={linkClass(isServiceClassesActive)}
-									>
-										<ListOrdered
-											size={18}
-											className={iconClass(isServiceClassesActive)}
-										/>
-										<span className={textVisibility}>{t.serviceClasses}</span>
-									</Link>
-								)}
-
-							{(isSuperAdmin ||
 								canAccessModule(permissions, "contact-requests") ||
 								canAccessModule(permissions, "cms")) && (
 									<Link
@@ -497,6 +483,19 @@ export default function AdminSidebar() {
 								</Link>
 							)}
 
+							{(isSuperAdmin || canAccessModule(permissions, "service-classes")) && (
+								<Link
+									href="/admin/dashboard/service-classes"
+									className={linkClass(isServiceClassesActive)}
+								>
+									<ListOrdered
+										size={18}
+										className={iconClass(isServiceClassesActive)}
+									/>
+									<span className={textVisibility}>{t.serviceClasses}</span>
+								</Link>
+							)}
+
 							{(isSuperAdmin || canAccessModule(permissions, "settings")) && (
 								<Link
 									href="/admin/dashboard/settings"
@@ -568,3 +567,4 @@ export default function AdminSidebar() {
 		</aside>
 	);
 }
+

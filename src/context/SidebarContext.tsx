@@ -89,3 +89,4 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
 export function useSidebar(): SidebarContextValue {
 	return useContext(SidebarContext);
 }
+

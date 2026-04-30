@@ -290,3 +290,4 @@ select:-webkit-autofill:focus {
 	transition: background-color 9999s ease-in-out 0s;
 	caret-color: var(--color-text-primary);
 }
+

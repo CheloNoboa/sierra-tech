@@ -241,3 +241,4 @@ export const EMPTY_HOME_PAYLOAD: HomePayload = {
 		zoom: 7,
 	},
 };
+

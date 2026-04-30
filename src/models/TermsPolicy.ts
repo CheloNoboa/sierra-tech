@@ -103,3 +103,4 @@ const TermsPolicySchema = new Schema<ITermsPolicy>(
  */
 export default models.TermsPolicy ||
 	model<ITermsPolicy>("TermsPolicy", TermsPolicySchema);
+

@@ -35,7 +35,7 @@
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Plus,
 	Trash2,
@@ -63,6 +63,7 @@ import { extractNationalFromE164 } from "@/components/phone/PhoneUtils";
 
 interface SystemSettingDTO {
 	key: string;
+	type?: "text" | "number" | "boolean";
 	value: string | number | boolean;
 }
 
@@ -125,6 +126,18 @@ function upsertUser(prev: UserDTO[], saved: UserDTO): UserDTO[] {
 	}
 
 	return prev.map((item) => (item._id === saved._id ? saved : item));
+}
+
+function getValidRecordsPerPage(setting?: SystemSettingDTO): number | null {
+	if (!setting) return null;
+	if (setting.key !== "recordsPerPageUsers") return null;
+	if (setting.type !== "number") return null;
+
+	const parsed = Number(setting.value);
+
+	if (!Number.isInteger(parsed) || parsed <= 0) return null;
+
+	return parsed;
 }
 
 /* =============================================================================
@@ -218,7 +231,7 @@ export default function UsersDataGrid() {
 
 	const [users, setUsers] = useState<UserDTO[]>([]);
 	const [roles, setRoles] = useState<RoleDTO[]>([]);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 
 	const [searchName, setSearchName] = useState("");
@@ -234,11 +247,16 @@ export default function UsersDataGrid() {
 	const [showDeleteModal, setShowDeleteModal] = useState(false);
 	const [bulkDeleting, setBulkDeleting] = useState(false);
 
+	const initialLoadDoneRef = useRef(false);
+
 	/* =============================================================================
 	 * Initial load
 	 * ============================================================================= */
 
 	useEffect(() => {
+		if (initialLoadDoneRef.current) return;
+		initialLoadDoneRef.current = true;
+
 		async function runInitialLoad() {
 			try {
 				setLoading(true);
@@ -269,15 +287,12 @@ export default function UsersDataGrid() {
 					"settings",
 					"data",
 				]);
-				const perPageCfg = settingsData.find(
-					(s) => s.key === "recordsPerPageUsers",
+				const perPage = getValidRecordsPerPage(
+					settingsData.find((s) => s.key === "recordsPerPageUsers"),
 				);
 
-				if (perPageCfg) {
-					const parsed = Number(perPageCfg.value);
-					if (!Number.isNaN(parsed) && parsed > 0) {
-						setRecordsPerPage(parsed);
-					}
+				if (perPage !== null) {
+					setRecordsPerPage(perPage);
 				}
 
 				setPage(1);
@@ -688,9 +703,8 @@ export default function UsersDataGrid() {
 								return (
 									<tr
 										key={user._id}
-										className={`border-b border-border transition ${
-											checked ? "bg-surface-soft" : "bg-surface"
-										} hover:bg-surface-soft`}
+										className={`border-b border-border transition ${checked ? "bg-surface-soft" : "bg-surface"
+											} hover:bg-surface-soft`}
 									>
 										<td className="px-3 py-3 text-text-secondary">
 											{(currentPage - 1) * recordsPerPage + idx + 1}
@@ -782,3 +796,4 @@ export default function UsersDataGrid() {
 		</>
 	);
 }
+

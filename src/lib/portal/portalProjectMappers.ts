@@ -676,3 +676,4 @@ export function sortPortalProjects(projects: ProjectEntity[]): ProjectEntity[] {
 		return compareIsoDesc(a.updatedAt, b.updatedAt);
 	});
 }
+

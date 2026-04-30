@@ -48,7 +48,7 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { getPortalDocumentsByOrganization } from "@/lib/portal/portalDocuments";
 import type { PortalDocumentItem } from "@/types/portal";
 
@@ -844,3 +844,4 @@ export default async function PortalDocumentsPage({
 		</div>
 	);
 }
+

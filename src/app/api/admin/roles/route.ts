@@ -27,7 +27,7 @@ import { connectToDB } from "@/lib/connectToDB";
 import Role, { type IRole } from "@/models/Role";
 
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 
 /* ============================================================================
  * 🌐 Localización
@@ -319,3 +319,4 @@ export async function DELETE(req: NextRequest) {
 		);
 	}
 }
+

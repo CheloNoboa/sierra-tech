@@ -122,9 +122,8 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
 	return (
 		<input
 			{...rest}
-			className={`w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${
-				className ?? ""
-			}`}
+			className={`w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${className ?? ""
+				}`}
 		/>
 	);
 }
@@ -135,9 +134,8 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 	return (
 		<textarea
 			{...rest}
-			className={`min-h-[96px] w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${
-				className ?? ""
-			}`}
+			className={`min-h-[96px] w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-brand-primaryStrong ${className ?? ""
+				}`}
 		/>
 	);
 }
@@ -150,11 +148,10 @@ function Toggle(props: {
 }) {
 	return (
 		<label
-			className={`inline-flex items-center gap-3 text-sm ${
-				props.disabled
+			className={`inline-flex items-center gap-3 text-sm ${props.disabled
 					? "cursor-not-allowed text-text-secondary opacity-60"
 					: "cursor-pointer text-text-primary"
-			}`}
+				}`}
 		>
 			<input
 				type="checkbox"
@@ -174,9 +171,8 @@ function ActionButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 	return (
 		<button
 			{...rest}
-			className={`inline-flex items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50 ${
-				className ?? ""
-			}`}
+			className={`inline-flex items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""
+				}`}
 		/>
 	);
 }
@@ -187,9 +183,8 @@ function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 	return (
 		<button
 			{...rest}
-			className={`inline-flex items-center justify-center rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white disabled:cursor-not-allowed disabled:opacity-50 ${
-				className ?? ""
-			}`}
+			className={`inline-flex items-center justify-center rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-text-primary transition hover:bg-brand-primaryStrong hover:text-white disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""
+				}`}
 		/>
 	);
 }
@@ -650,7 +645,7 @@ export default function SiteSettingsPage() {
 
 	if (status === "loading") {
 		return (
-			<main className="flex min-h-[60vh] items-center justify-center px-4">
+			<main className="flex min-h-[60vh] items-center justify-center px-6">
 				<div className="rounded-2xl border border-border bg-surface px-6 py-5 text-sm text-text-secondary shadow-sm">
 					{lang === "es" ? "Cargando sesión..." : "Loading session..."}
 				</div>
@@ -660,7 +655,7 @@ export default function SiteSettingsPage() {
 
 	if (!hasAccess) {
 		return (
-			<main className="flex min-h-[60vh] items-center justify-center px-4">
+			<main className="flex min-h-[60vh] items-center justify-center px-6">
 				<div className="max-w-xl rounded-2xl border border-border bg-surface px-6 py-5 text-center text-status-error shadow-sm">
 					{lang === "es"
 						? "Acceso restringido a administradores."
@@ -672,7 +667,7 @@ export default function SiteSettingsPage() {
 
 	if (loading) {
 		return (
-			<main className="flex min-h-[60vh] items-center justify-center px-4">
+			<main className="flex min-h-[60vh] items-center justify-center px-6">
 				<div className="rounded-2xl border border-border bg-surface px-6 py-5 text-sm text-text-secondary shadow-sm">
 					{lang === "es"
 						? "Cargando configuración..."
@@ -687,7 +682,7 @@ export default function SiteSettingsPage() {
 	/* ---------------------------------------------------------------------- */
 
 	return (
-		<main className="space-y-6">
+		<main className="space-y-6 px-6 pb-24">
 			<AdminPageHeader
 				icon={<SettingsIcon className="h-6 w-6 text-brand-primaryStrong" />}
 				title={lang === "es" ? "Configuración del Sitio" : "Site Settings"}
@@ -1375,14 +1370,14 @@ export default function SiteSettingsPage() {
 									onChange={(e) => {
 										const next: Locale[] = e.target.checked
 											? Array.from(
-													new Set<Locale>([
-														...siteForm.i18n.supportedLocales,
-														"es",
-													]),
-												)
+												new Set<Locale>([
+													...siteForm.i18n.supportedLocales,
+													"es",
+												]),
+											)
 											: siteForm.i18n.supportedLocales.filter(
-													(item): item is Locale => item !== "es",
-												);
+												(item): item is Locale => item !== "es",
+											);
 
 										updateI18nSupportedLocales(next);
 									}}
@@ -1398,14 +1393,14 @@ export default function SiteSettingsPage() {
 									onChange={(e) => {
 										const next: Locale[] = e.target.checked
 											? Array.from(
-													new Set<Locale>([
-														...siteForm.i18n.supportedLocales,
-														"en",
-													]),
-												)
+												new Set<Locale>([
+													...siteForm.i18n.supportedLocales,
+													"en",
+												]),
+											)
 											: siteForm.i18n.supportedLocales.filter(
-													(item): item is Locale => item !== "en",
-												);
+												(item): item is Locale => item !== "en",
+											);
 
 										updateI18nSupportedLocales(next);
 									}}
@@ -1442,3 +1437,4 @@ export default function SiteSettingsPage() {
 		</main>
 	);
 }
+

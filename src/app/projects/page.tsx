@@ -194,7 +194,6 @@ function ProjectCard({
 		>
 			<div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
 				{imageUrl ? (
-					// eslint-disable-next-line @next/next/no-img-element
 					<img
 						src={imageUrl}
 						alt={
@@ -392,3 +391,4 @@ export default async function PublicProjectsPage() {
 		</main>
 	);
 }
+

@@ -128,3 +128,4 @@ export function listenBrandingUpdates(callback: () => void): () => void {
 		window.removeEventListener("storage", handleStorageEvent);
 	};
 }
+

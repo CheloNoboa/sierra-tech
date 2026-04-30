@@ -15,3 +15,4 @@ export async function GET(req: Request): Promise<Response> {
 		{ status: 200 },
 	);
 }
+

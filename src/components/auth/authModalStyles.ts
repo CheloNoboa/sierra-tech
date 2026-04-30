@@ -64,3 +64,4 @@ export const AUTH_MODAL_STYLES = {
 
 	helperMuted: "mt-1 text-[11px] text-text-muted",
 } as const;
+

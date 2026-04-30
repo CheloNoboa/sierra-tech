@@ -453,3 +453,4 @@ export function normalizeProjectEntity(value: unknown): ProjectEntity {
 			normalizeNullableIsoDate(source.updatedAt) ?? new Date().toISOString(),
 	};
 }
+

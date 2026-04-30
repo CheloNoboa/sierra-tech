@@ -40,3 +40,4 @@ export function formatLastAccess(
 		minute: "2-digit",
 	}).format(date);
 }
+

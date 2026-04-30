@@ -1626,7 +1626,7 @@ export default function HomeAdminPage() {
 
 	if (status === "loading") {
 		return (
-			<main className="flex min-h-[60vh] items-center justify-center px-4">
+			<main className="flex min-h-[60vh] items-center justify-center px-6">
 				<div className="rounded-2xl border border-border bg-surface px-6 py-5 text-sm text-text-secondary shadow-sm">
 					{lang === "es" ? "Cargando sesión..." : "Loading session..."}
 				</div>
@@ -1636,7 +1636,7 @@ export default function HomeAdminPage() {
 
 	if (!hasAccess) {
 		return (
-			<main className="flex min-h-[60vh] items-center justify-center px-4">
+			<main className="flex min-h-[60vh] items-center justify-center px-6">
 				<div className="max-w-xl rounded-2xl border border-border bg-surface px-6 py-5 text-center text-status-error shadow-sm">
 					{lang === "es"
 						? "Acceso restringido a administradores."
@@ -1648,7 +1648,7 @@ export default function HomeAdminPage() {
 
 	if (loading) {
 		return (
-			<main className="flex min-h-[60vh] items-center justify-center px-4">
+			<main className="flex min-h-[60vh] items-center justify-center px-6">
 				<div className="rounded-2xl border border-border bg-surface px-6 py-5 text-sm text-text-secondary shadow-sm">
 					{lang === "es"
 						? "Cargando configuración..."
@@ -1663,7 +1663,7 @@ export default function HomeAdminPage() {
 		: [];
 
 	return (
-		<main className="space-y-6">
+		<main className="space-y-6 px-6 pb-24">
 			<AdminPageHeader
 				icon={<HomeIcon className="h-6 w-6 text-brand-primaryStrong" />}
 				title={lang === "es" ? "Página de Inicio" : "Home"}
@@ -4068,3 +4068,4 @@ export default function HomeAdminPage() {
 		</main>
 	);
 }
+

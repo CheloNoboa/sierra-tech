@@ -98,3 +98,4 @@ export type MaintenanceSettingsEntity = MaintenanceSettingsPayload & {
 	createdAt: string;
 	updatedAt: string;
 };
+

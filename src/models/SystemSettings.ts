@@ -84,9 +84,13 @@ import { Schema, model, models, type Document, type Model } from "mongoose";
  *       `timestamps: true`.
  * -----------------------------------------------------------------------------
  */
+export type SystemSettingValueType = "text" | "number" | "boolean";
+export type SystemSettingValue = string | number | boolean;
+
 export interface ISystemSetting extends Document {
 	key: string;
-	value: unknown;
+	type: SystemSettingValueType;
+	value: SystemSettingValue;
 	description: string;
 	module: string | null;
 	autoTranslate: boolean;
@@ -136,6 +140,13 @@ const SystemSettingsSchema = new Schema<ISystemSetting>(
 			required: [true, "La clave del parámetro es obligatoria"],
 			unique: true,
 			trim: true,
+		},
+
+		type: {
+			type: String,
+			enum: ["text", "number", "boolean"],
+			required: true,
+			default: "text",
 		},
 
 		value: {
@@ -202,3 +213,4 @@ const SystemSettingsModel =
 	model<ISystemSetting>("SystemSettings", SystemSettingsSchema);
 
 export default SystemSettingsModel;
+

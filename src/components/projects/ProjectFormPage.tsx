@@ -127,6 +127,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { ArrowLeft, ArrowRight, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import FormActionsHeader from "@/components/ui/FormActionsHeader";
 
@@ -536,12 +537,12 @@ function SectionCard({
 	actions?: ReactNode;
 }) {
 	return (
-		<section className="rounded-2xl border border-border bg-surface-soft p-5 shadow-sm">
+		<section className="rounded-[28px] border border-border bg-white p-6 shadow-sm">
 			<div className="mb-5 flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-start md:justify-between">
 				<div className="min-w-0">
-					<h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+					<h3 className="text-xl font-bold tracking-tight text-text-primary">{title}</h3>
 					{subtitle ? (
-						<p className="mt-1 text-xs text-text-muted">{subtitle}</p>
+						<p className="mt-1 text-sm leading-7 text-text-secondary">{subtitle}</p>
 					) : null}
 				</div>
 
@@ -1224,16 +1225,82 @@ export default function ProjectFormPage({
 
 	return (
 		<div className="space-y-6 px-6 pb-24">
-			<FormActionsHeader
-				backLabel={safeLocale === "es" ? "Atrás" : "Back"}
-				saveLabel={safeLocale === "es" ? "Guardar proyecto" : "Save project"}
-				savingLabel={t.saving}
-				isSaving={saving}
-				canSave={canSave}
-				statusLabel={projectStatusLabel}
-				onBack={requestBack}
-				onSave={handleSave}
-			/>
+			<section className="rounded-[30px] border border-border bg-white p-8 shadow-sm">
+				<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+					<div className="max-w-3xl space-y-4">
+						<button
+							type="button"
+							onClick={requestBack}
+							className="inline-flex items-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+						>
+							<ArrowLeft className="h-4 w-4" />
+							{t.back}
+						</button>
+
+						<p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-primaryStrong">
+							{safeLocale === "es" ? "Proyectos" : "Projects"}
+						</p>
+
+						<h1 className="text-3xl font-bold tracking-tight text-text-primary">
+							{t.pageTitle}
+						</h1>
+
+						<p className="text-base leading-8 text-text-secondary">
+							{t.subtitle}
+						</p>
+					</div>
+
+					<div className="flex flex-wrap gap-3">
+						<button
+							type="button"
+							onClick={() => void handleSave()}
+							disabled={!canSave}
+							className="inline-flex items-center gap-2 rounded-2xl bg-brand-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-primaryStrong disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{saving ? (
+								t.saving
+							) : (
+								<>
+									<Save className="h-4 w-4" />
+									{safeLocale === "es" ? "Guardar proyecto" : "Save project"}
+									{isCreateMode ? <ArrowRight className="h-4 w-4" /> : null}
+								</>
+							)}
+						</button>
+					</div>
+				</div>
+
+				<div className="mt-6 grid gap-3 md:grid-cols-4">
+					<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+						{safeLocale === "es" ? "Estado" : "Status"}:{" "}
+						<strong className="text-text-primary">{projectStatusLabel}</strong>
+					</div>
+
+					<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+						Slug: <strong className="text-text-primary">{form.slug || "—"}</strong>
+					</div>
+
+					<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+						{safeLocale === "es" ? "Organización" : "Organization"}:{" "}
+						<strong className="text-text-primary">
+							{form.clientDisplayName || selectedOrganization?.label || "—"}
+						</strong>
+					</div>
+
+					<div className="rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+						{safeLocale === "es" ? "Cambios" : "Changes"}:{" "}
+						<strong className={hasChanges ? "text-amber-700" : "text-emerald-700"}>
+							{hasChanges
+								? safeLocale === "es"
+									? "Sin guardar"
+									: "Unsaved"
+								: safeLocale === "es"
+									? "Guardado"
+									: "Saved"}
+						</strong>
+					</div>
+				</div>
+			</section>
 
 			{loading ? (
 				<section className="rounded-[2rem] border border-border bg-surface-soft p-6 shadow-sm">
@@ -2255,6 +2322,17 @@ export default function ProjectFormPage({
 				</>
 			)}
 
+			<FormActionsHeader
+				backLabel={safeLocale === "es" ? "Atrás" : "Back"}
+				saveLabel={safeLocale === "es" ? "Guardar proyecto" : "Save project"}
+				savingLabel={t.saving}
+				isSaving={saving}
+				canSave={canSave}
+				statusLabel={projectStatusLabel}
+				onBack={requestBack}
+				onSave={handleSave}
+			/>
+
 			<GlobalConfirm
 				open={showUnsaved}
 				title={t.unsavedTitle}
@@ -2271,3 +2349,4 @@ export default function ProjectFormPage({
 		</div>
 	);
 }
+

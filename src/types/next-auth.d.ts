@@ -186,3 +186,4 @@ declare module "next-auth/jwt" {
 		exp?: number;
 	}
 }
+

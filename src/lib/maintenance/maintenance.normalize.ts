@@ -546,3 +546,4 @@ export function createEmptyMaintenanceSummary(): MaintenanceSummary {
 		upcomingEvents: 0,
 	};
 }
+

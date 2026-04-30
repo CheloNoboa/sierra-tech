@@ -17,7 +17,7 @@
  */
 
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 
 export async function getSessionSafe() {
 	try {
@@ -27,3 +27,4 @@ export async function getSessionSafe() {
 		return null;
 	}
 }
+

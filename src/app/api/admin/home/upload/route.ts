@@ -53,7 +53,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -305,3 +305,4 @@ export async function POST(request: Request) {
 		);
 	}
 }
+

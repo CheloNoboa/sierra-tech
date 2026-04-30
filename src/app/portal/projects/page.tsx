@@ -40,7 +40,7 @@ import {
 	Wrench,
 } from "lucide-react";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { getPortalProjectsByOrganization } from "@/lib/portal/portalProjects";
 import type { PortalProjectCard } from "@/types/portal";
 
@@ -283,3 +283,4 @@ export default async function PortalProjectsPage() {
 		</div>
 	);
 }
+

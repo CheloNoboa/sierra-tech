@@ -34,7 +34,7 @@
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Building2,
 	Plus,
@@ -62,6 +62,7 @@ import type { Organization, OrganizationStatus } from "@/types/organization";
 
 interface SystemSettingDTO {
 	key: string;
+	type?: "text" | "number" | "boolean";
 	value: string | number | boolean;
 }
 
@@ -156,6 +157,18 @@ function applyInactiveStatus(
 	return prev.map((item) =>
 		selected.has(item._id) ? { ...item, status: "inactive" } : item,
 	);
+}
+
+function getValidRecordsPerPage(setting?: SystemSettingDTO): number | null {
+	if (!setting) return null;
+	if (setting.key !== "recordsPerPageOrganizations") return null;
+	if (setting.type !== "number") return null;
+
+	const parsed = Number(setting.value);
+
+	if (!Number.isInteger(parsed) || parsed <= 0) return null;
+
+	return parsed;
 }
 
 /* =============================================================================
@@ -276,7 +289,7 @@ export default function OrganizationDataGrid() {
 	 * ============================================================================= */
 
 	const [organizations, setOrganizations] = useState<Organization[]>([]);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 
 	const [searchName, setSearchName] = useState("");
@@ -295,11 +308,16 @@ export default function OrganizationDataGrid() {
 	const [showDeactivateModal, setShowDeactivateModal] = useState(false);
 	const [bulkDeactivating, setBulkDeactivating] = useState(false);
 
+	const initialLoadDoneRef = useRef(false);
+
 	/* =============================================================================
 	 * Initial load
 	 * ============================================================================= */
 
 	useEffect(() => {
+		if (initialLoadDoneRef.current) return;
+		initialLoadDoneRef.current = true;
+
 		async function runInitialLoad() {
 			try {
 				setLoading(true);
@@ -325,15 +343,12 @@ export default function OrganizationDataGrid() {
 					"data",
 				]);
 
-				const perPageCfg = settingsData.find(
-					(s) => s.key === "recordsPerPageOrganizations",
+				const perPage = getValidRecordsPerPage(
+					settingsData.find((s) => s.key === "recordsPerPageOrganizations"),
 				);
 
-				if (perPageCfg) {
-					const parsed = Number(perPageCfg.value);
-					if (!Number.isNaN(parsed) && parsed > 0) {
-						setRecordsPerPage(parsed);
-					}
+				if (perPage !== null) {
+					setRecordsPerPage(perPage);
 				}
 
 				setPage(1);
@@ -783,9 +798,8 @@ export default function OrganizationDataGrid() {
 								return (
 									<tr
 										key={organization._id}
-										className={`border-b border-border transition ${
-											checked ? "bg-surface-soft" : "bg-surface"
-										} hover:bg-surface-soft`}
+										className={`border-b border-border transition ${checked ? "bg-surface-soft" : "bg-surface"
+											} hover:bg-surface-soft`}
 									>
 										<td className="px-3 py-3 text-text-secondary">
 											{(currentPage - 1) * recordsPerPage + idx + 1}
@@ -835,11 +849,10 @@ export default function OrganizationDataGrid() {
 
 										<td className="px-3 py-3">
 											<span
-												className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${
-													organization.status === "active"
-														? "border border-brand-primary bg-brand-secondary text-text-primary"
-														: "border border-border bg-surface-soft text-text-secondary"
-												}`}
+												className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${organization.status === "active"
+													? "border border-brand-primary bg-brand-secondary text-text-primary"
+													: "border border-border bg-surface-soft text-text-secondary"
+													}`}
 											>
 												{organization.status === "active"
 													? t.statusActiveText
@@ -907,3 +920,4 @@ export default function OrganizationDataGrid() {
 		</>
 	);
 }
+

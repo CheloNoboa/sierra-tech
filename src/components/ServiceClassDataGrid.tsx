@@ -92,6 +92,7 @@ interface DeleteResponse {
 
 interface SystemSettingDTO {
 	key: string;
+	type?: "text" | "number" | "boolean";
 	value: string | number | boolean;
 }
 
@@ -167,6 +168,18 @@ function upsertServiceClass(
 	return sortClasses(
 		prev.map((item) => (item._id === saved._id ? saved : item)),
 	);
+}
+
+function getValidRecordsPerPage(setting?: SystemSettingDTO): number | null {
+	if (!setting) return null;
+	if (setting.key !== "recordsPerPageServiceClasses") return null;
+	if (setting.type !== "number") return null;
+
+	const parsed = Number(setting.value);
+
+	if (!Number.isInteger(parsed) || parsed <= 0) return null;
+
+	return parsed;
 }
 
 /* =============================================================================
@@ -290,7 +303,7 @@ export default function ServiceClassDataGrid() {
 	}, [t]);
 
 	const [items, setItems] = useState<ServiceClassDTO[]>([]);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 
 	const [searchKey, setSearchKey] = useState("");
 	const [searchLabel, setSearchLabel] = useState("");
@@ -355,15 +368,12 @@ export default function ServiceClassDataGrid() {
 						"settings",
 					]);
 
-					const perPageCfg = settingsData.find(
-						(s) => s.key === textRef.current.settingsKey,
+					const perPage = getValidRecordsPerPage(
+						settingsData.find((s) => s.key === textRef.current.settingsKey),
 					);
 
-					if (perPageCfg) {
-						const parsed = Number(perPageCfg.value);
-						if (!Number.isNaN(parsed) && parsed > 0) {
-							setRecordsPerPage(parsed);
-						}
+					if (perPage !== null) {
+						setRecordsPerPage(perPage);
 					}
 				}
 			} catch (e: unknown) {
@@ -810,3 +820,4 @@ export default function ServiceClassDataGrid() {
 		</>
 	);
 }
+

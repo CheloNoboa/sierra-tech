@@ -43,3 +43,4 @@ export const ROUTES = {
 		PRODUCTS_ADMIN: "/api/admin/products",
 	},
 } as const;
+

@@ -29,6 +29,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
 	ArrowRight,
@@ -42,7 +43,6 @@ import {
 	Trash2,
 } from "lucide-react";
 
-import BlogModal from "@/components/BlogModal";
 import { AdminPageHeader } from "@/components/ui/AdminPageHeader";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import GlobalButton from "@/components/ui/GlobalButton";
@@ -466,6 +466,7 @@ function EmptyState({
 /* -------------------------------------------------------------------------- */
 
 export default function AdminBlogPage() {
+	const router = useRouter();
 	const toast = useToast();
 
 	const [locale, setLocale] = useState<BlogLocale>("es");
@@ -477,10 +478,6 @@ export default function AdminBlogPage() {
 
 	const [deleteTarget, setDeleteTarget] = useState<BlogListItem | null>(null);
 	const [deleteLoading, setDeleteLoading] = useState(false);
-
-	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [modalMode, setModalMode] = useState<"create" | "edit">("create");
-	const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
 
 	const [serviceClasses, setServiceClasses] = useState<ServiceClassListItem[]>([]);
 
@@ -601,10 +598,6 @@ export default function AdminBlogPage() {
 				current.filter((post) => post._id !== deleteTarget._id),
 			);
 
-			if (selectedPost?._id === deleteTarget._id) {
-				setSelectedPost(null);
-			}
-
 			setDeleteTarget(null);
 			toast.success(text.deleteSuccess);
 		} catch (error) {
@@ -615,69 +608,11 @@ export default function AdminBlogPage() {
 	}
 
 	function handleOpenCreate() {
-		setModalMode("create");
-		setSelectedPost(null);
-		setIsModalOpen(true);
+		router.push("/admin/dashboard/blog/new");
 	}
 
-	async function handleOpenEdit(id: string) {
-		try {
-			const response = await fetch(`/api/admin/blog/${id}`, {
-				method: "GET",
-				cache: "no-store",
-			});
-
-			const result = (await response.json().catch(() => null)) as {
-				ok: boolean;
-				data?: BlogPost;
-				message?: string;
-			} | null;
-
-			if (!response.ok || !result?.ok || !result.data) {
-				throw new Error(result?.message || text.editLoadError);
-			}
-
-			setSelectedPost(result.data);
-			setModalMode("edit");
-			setIsModalOpen(true);
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : text.editLoadError);
-		}
-	}
-
-	function handleModalSuccess(post: BlogPost) {
-		const nextListItem = mapPostToListItem(post);
-
-		setPosts((current) => {
-			const exists = current.some((item) => item._id === nextListItem._id);
-
-			if (!exists) {
-				if (!matchesFilters(post, filters, serviceClasses, locale, text)) {
-					return current;
-				}
-
-				return sortPosts([nextListItem, ...current]);
-			}
-
-			const updated = current.map((item) =>
-				item._id === nextListItem._id ? nextListItem : item,
-			);
-
-			if (!matchesFilters(post, filters, serviceClasses, locale, text)) {
-				return sortPosts(
-					updated.filter((item) => item._id !== nextListItem._id),
-				);
-			}
-
-			return sortPosts(updated);
-		});
-
-		setSelectedPost(post);
-	}
-
-	function handleCloseModal() {
-		setIsModalOpen(false);
-		setSelectedPost(null);
+	function handleOpenEdit(id: string) {
+		router.push(`/admin/dashboard/blog/${id}`);
 	}
 
 	return (
@@ -998,15 +933,6 @@ export default function AdminBlogPage() {
 				) : null}
 			</section>
 
-			<BlogModal
-				mode={modalMode}
-				open={isModalOpen}
-				locale={locale}
-				initialData={selectedPost}
-				onClose={handleCloseModal}
-				onSuccess={handleModalSuccess}
-			/>
-
 			<GlobalConfirm
 				open={Boolean(deleteTarget)}
 				title={text.deleteTitle}
@@ -1029,3 +955,4 @@ export default function AdminBlogPage() {
 		</div>
 	);
 }
+

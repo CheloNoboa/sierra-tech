@@ -1489,7 +1489,6 @@ export default function DocumentAttachmentSelector({
 										{locale === "es" ? "Vista previa" : "Preview"}
 									</div>
 
-									{/* eslint-disable-next-line @next/next/no-img-element */}
 									<img
 										src={resolveAssetUrl(quickForm.thumbnailUrl)}
 										alt="Document thumbnail preview"
@@ -1648,3 +1647,4 @@ export default function DocumentAttachmentSelector({
 		</>
 	);
 }
+

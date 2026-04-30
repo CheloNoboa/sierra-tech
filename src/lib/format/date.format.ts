@@ -49,3 +49,4 @@ export function formatAppDate(
 
 	return `${month}/${day}/${year}`;
 }
+

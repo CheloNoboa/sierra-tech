@@ -192,3 +192,4 @@ export async function getPortalProjectDetailByOrganization(params: {
 		alerts: getProjectAlerts(alertsData.items, detail.projectId),
 	};
 }
+

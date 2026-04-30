@@ -187,3 +187,4 @@ const OrganizationUserModel: Model<OrganizationUserDocument> =
 	);
 
 export default OrganizationUserModel;
+

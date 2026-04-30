@@ -56,3 +56,4 @@ import ServiceFormPage from "@/components/services/ServiceFormPage";
 export default function AdminServiceCreatePage() {
 	return <ServiceFormPage mode="create" />;
 }
+

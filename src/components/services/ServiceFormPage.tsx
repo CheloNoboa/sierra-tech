@@ -1246,32 +1246,6 @@ export default function ServiceFormPage({
 
 	return (
 		<div className="space-y-6 px-6 pb-24">
-			<FormActionsHeader
-				backLabel={lang === "es" ? "Atrás" : "Back"}
-				saveLabel={
-					isEditMode
-						? lang === "es"
-							? "Guardar servicio"
-							: "Save service"
-						: lang === "es"
-							? "Crear servicio"
-							: "Create service"
-				}
-				savingLabel={lang === "es" ? "Guardando..." : "Saving..."}
-				isSaving={saving}
-				canSave={canSave}
-				statusLabel={
-					form.status === "published"
-						? lang === "es"
-							? "Publicado"
-							: "Published"
-						: lang === "es"
-							? "Borrador"
-							: "Draft"
-				}
-				onBack={handleBack}
-				onSave={saveService}
-			/>
 
 			<section className="rounded-[30px] border border-border bg-white p-8 shadow-sm">
 				<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -1996,6 +1970,33 @@ export default function ServiceFormPage({
 				</div>
 			</SectionCard>
 
+			<FormActionsHeader
+				backLabel={lang === "es" ? "Atrás" : "Back"}
+				saveLabel={
+					isEditMode
+						? lang === "es"
+							? "Guardar servicio"
+							: "Save service"
+						: lang === "es"
+							? "Crear servicio"
+							: "Create service"
+				}
+				savingLabel={lang === "es" ? "Guardando..." : "Saving..."}
+				isSaving={saving}
+				canSave={canSave}
+				statusLabel={
+					form.status === "published"
+						? lang === "es"
+							? "Publicado"
+							: "Published"
+						: lang === "es"
+							? "Borrador"
+							: "Draft"
+				}
+				onBack={handleBack}
+				onSave={saveService}
+			/>
+
 			<GlobalConfirm
 				open={leaveConfirmOpen}
 				title={lang === "es" ? "Cambios sin guardar" : "Unsaved changes"}
@@ -2018,3 +2019,4 @@ export default function ServiceFormPage({
 		</div>
 	);
 }
+

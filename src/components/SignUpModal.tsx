@@ -376,3 +376,4 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
 		</div>
 	);
 }
+

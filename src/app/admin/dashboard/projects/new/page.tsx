@@ -58,3 +58,4 @@ import ProjectFormPage from "@/components/projects/ProjectFormPage";
 export default function AdminProjectsCreatePage() {
 	return <ProjectFormPage mode="create" />;
 }
+

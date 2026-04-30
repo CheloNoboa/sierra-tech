@@ -20,3 +20,4 @@ export interface FullDBUser {
 	role: "user" | "admin" | "superadmin";
 	password?: string;
 }
+

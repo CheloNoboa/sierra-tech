@@ -115,3 +115,4 @@ export interface OrganizationUserFilters {
 export interface OrganizationUserRow extends OrganizationUser {
 	organizationName: string;
 }
+

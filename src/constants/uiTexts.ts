@@ -26,3 +26,4 @@ export const UI_TEXTS = {
 		en: "Last updated",
 	},
 } as const;
+

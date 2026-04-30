@@ -578,3 +578,4 @@ export type MaintenanceScheduleRowUpdate =
 		emailSentAt: string | null;
 		emailError: string;
 	};
+

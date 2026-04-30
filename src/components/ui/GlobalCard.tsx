@@ -44,3 +44,4 @@ export default function GlobalCard({ children, className }: GlobalCardProps) {
 		</div>
 	);
 }
+

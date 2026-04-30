@@ -28,3 +28,4 @@ import MaintenanceSettingsPage from "@/components/maintenance/MaintenanceSetting
 export default function AdminMaintenanceSettingsPage() {
 	return <MaintenanceSettingsPage />;
 }
+

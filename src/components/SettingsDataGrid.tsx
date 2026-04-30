@@ -21,7 +21,8 @@
  *
  * Reglas:
  * - El grid trabaja con valores serializables compatibles con UI:
- *   `string | number | boolean`.
+ * `string | number | boolean`.
+ * - `recordsPerPageConfiguration` debe ser tipo `number`.
  * - Si una key afecta branding público (`businessName`, `businessLogotipo`),
  *   se dispara `notifyBrandingUpdated()` después de crear, actualizar o eliminar.
  * - `recordsPerPageConfiguration` puede definir la paginación inicial del módulo.
@@ -35,7 +36,7 @@
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Plus,
 	Trash2,
@@ -61,13 +62,14 @@ import SettingsModal, {
  * ============================================================================= */
 
 type SettingValue = string | number | boolean;
-type FormType = "string" | "number" | "boolean";
+type FormType = "text" | "number" | "boolean";
 
 type ApiOk<T> = { ok: true; data: T };
 
 interface SystemSetting {
 	_id?: string;
 	key: string;
+	type: FormType;
 	value: SettingValue;
 	module?: string | null;
 	description?: string;
@@ -117,6 +119,7 @@ const EMPTY_SETTING: SettingsModalData = {
 	value: "",
 	module: "",
 	description: "",
+	type: "text",
 };
 
 function coerceSettingValue(value: unknown): SettingValue {
@@ -135,6 +138,10 @@ function normalizeSetting(x: SystemSetting): SystemSetting {
 	return {
 		_id: x._id,
 		key: safeString(x.key),
+		type:
+			x.type === "number" || x.type === "boolean" || x.type === "text"
+				? x.type
+				: "text",
 		value: coerceSettingValue((x as { value?: unknown }).value),
 		module:
 			isObj(x) && "module" in x
@@ -147,6 +154,18 @@ function normalizeSetting(x: SystemSetting): SystemSetting {
 				? safeString((x as { description?: unknown }).description)
 				: "",
 	};
+}
+
+function getValidRecordsPerPage(setting?: SystemSetting): number | null {
+	if (!setting) return null;
+	if (setting.key !== "recordsPerPageConfiguration") return null;
+	if (setting.type !== "number") return null;
+
+	const parsed = Number(setting.value);
+
+	if (!Number.isInteger(parsed) || parsed <= 0) return null;
+
+	return parsed;
 }
 
 function upsertSetting(
@@ -287,7 +306,7 @@ export default function SettingsDataGrid() {
 	 * ============================================================================= */
 
 	const [settings, setSettings] = useState<SystemSetting[]>([]);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 
 	const [page, setPage] = useState(1);
@@ -303,6 +322,8 @@ export default function SettingsDataGrid() {
 	const [showDeleteModal, setShowDeleteModal] = useState(false);
 	const [bulkDeleting, setBulkDeleting] = useState(false);
 
+	const initialLoadDoneRef = useRef(false);
+
 	/* =============================================================================
 	 * Helper logic
 	 * ============================================================================= */
@@ -310,7 +331,7 @@ export default function SettingsDataGrid() {
 	const detectType = (value: SettingValue): FormType => {
 		if (typeof value === "boolean") return "boolean";
 		if (typeof value === "number") return "number";
-		return "string";
+		return "text";
 	};
 
 	const normalizeValue = (value: unknown, type: FormType): SettingValue => {
@@ -323,6 +344,7 @@ export default function SettingsDataGrid() {
 		return {
 			key: s.key,
 			value: s.value,
+			type: s.type,
 			module: s.module ?? "",
 			description: s.description ?? "",
 		};
@@ -333,6 +355,9 @@ export default function SettingsDataGrid() {
 	 * ============================================================================= */
 
 	useEffect(() => {
+		if (initialLoadDoneRef.current) return;
+		initialLoadDoneRef.current = true;
+
 		async function runInitialLoad() {
 			try {
 				setLoading(true);
@@ -354,15 +379,12 @@ export default function SettingsDataGrid() {
 
 				setSettings(data);
 
-				const perPage = data.find(
-					(x) => x.key === "recordsPerPageConfiguration",
+				const perPage = getValidRecordsPerPage(
+					data.find((x) => x.key === "recordsPerPageConfiguration"),
 				);
 
-				if (perPage) {
-					const parsed = Number(perPage.value);
-					if (!Number.isNaN(parsed) && parsed > 0) {
-						setRecordsPerPage(parsed);
-					}
+				if (perPage !== null) {
+					setRecordsPerPage(perPage);
 				}
 
 				setPage(1);
@@ -394,7 +416,7 @@ export default function SettingsDataGrid() {
 	 * ============================================================================= */
 
 	const handleSubmit = async (data: SettingsModalData) => {
-		const type = detectType(data.value as SettingValue);
+		const type = data.type ?? detectType(data.value as SettingValue);
 		const parsed = normalizeValue(data.value, type);
 		const isEditing = !!editing;
 
@@ -412,6 +434,7 @@ export default function SettingsDataGrid() {
 				body: JSON.stringify({
 					...data,
 					key: keyTrim,
+					type,
 					value: parsed,
 					_id: editing?._id,
 				}),
@@ -429,6 +452,23 @@ export default function SettingsDataGrid() {
 			toast.success(isEditing ? t.updateSuccess : t.createSuccess);
 
 			setSettings((prev) => upsertSetting(prev, saved));
+
+			const perPage = getValidRecordsPerPage(saved);
+
+			if (perPage !== null) {
+				setRecordsPerPage(perPage);
+				setPage(1);
+			}
+
+			if (saved.key === "recordsPerPageConfiguration") {
+				const parsed = Number(saved.value);
+
+				if (!Number.isNaN(parsed) && parsed > 0) {
+					setRecordsPerPage(parsed);
+					setPage(1);
+				}
+			}
+
 			setModalOpen(false);
 			setEditing(null);
 
@@ -602,15 +642,12 @@ export default function SettingsDataGrid() {
 
 									setSettings(data);
 
-									const perPage = data.find(
-										(x) => x.key === "recordsPerPageConfiguration",
+									const perPage = getValidRecordsPerPage(
+										data.find((x) => x.key === "recordsPerPageConfiguration"),
 									);
 
-									if (perPage) {
-										const parsed = Number(perPage.value);
-										if (!Number.isNaN(parsed) && parsed > 0) {
-											setRecordsPerPage(parsed);
-										}
+									if (perPage !== null) {
+										setRecordsPerPage(perPage);
 									}
 								} catch {
 									toast.error(t.loadError);
@@ -803,9 +840,8 @@ export default function SettingsDataGrid() {
 								return (
 									<tr
 										key={id}
-										className={`border-b border-border transition ${
-											checked ? "bg-surface-soft" : "bg-surface"
-										} hover:bg-surface-soft`}
+										className={`border-b border-border transition ${checked ? "bg-surface-soft" : "bg-surface"
+											} hover:bg-surface-soft`}
 									>
 										<td className="w-10 px-3 py-3 text-text-secondary">
 											{(currentPage - 1) * recordsPerPage + idx + 1}
@@ -829,7 +865,7 @@ export default function SettingsDataGrid() {
 											{String(s.value)}
 										</td>
 										<td className="px-3 py-3 text-text-primary">
-											{detectType(s.value)}
+											{s.type}
 										</td>
 										<td className="px-3 py-3 text-text-secondary">
 											{s.module || "—"}
@@ -902,3 +938,4 @@ export default function SettingsDataGrid() {
 		</>
 	);
 }
+

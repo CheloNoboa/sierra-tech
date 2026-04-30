@@ -214,3 +214,4 @@ const UserSchema = new Schema<IUser>(
 const UserModel: Model<IUser> = models.User ?? model<IUser>("User", UserSchema);
 
 export default UserModel;
+

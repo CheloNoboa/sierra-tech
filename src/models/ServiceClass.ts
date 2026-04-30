@@ -166,3 +166,4 @@ const ServiceClassModel =
 	model<ServiceClassDocument>("ServiceClass", ServiceClassSchema);
 
 export default ServiceClassModel;
+

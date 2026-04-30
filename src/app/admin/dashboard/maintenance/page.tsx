@@ -53,6 +53,7 @@ import {
 	DEFAULT_APP_DATE_FORMAT,
 	formatAppDate,
 	type AppDateFormat,
+	normalizeAppDateFormat,
 } from "@/lib/format/date.format";
 
 import type {
@@ -451,7 +452,9 @@ export default function AdminMaintenancePage() {
 
 	const locale: Locale = "es";
 	const t = TEXT[locale];
-	const dateFormat: AppDateFormat = DEFAULT_APP_DATE_FORMAT;
+	const [dateFormat, setDateFormat] = useState<AppDateFormat>(
+		DEFAULT_APP_DATE_FORMAT,
+	);
 
 	const [items, setItems] = useState<MaintenanceListItem[]>([]);
 	const [summary, setSummary] = useState<MaintenanceSummary>(createEmptySummary);
@@ -527,6 +530,51 @@ export default function AdminMaintenancePage() {
 			cancelled = true;
 		};
 	}, [filters, t.loadError]);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		async function loadDateFormat() {
+			try {
+				const response = await fetch("/api/admin/settings?keys=dateFormat", {
+					method: "GET",
+					cache: "no-store",
+				});
+
+				const json = (await response.json().catch(() => null)) as
+					| {
+						ok: true;
+						data: Array<{ key: string; value: unknown }>;
+					}
+					| {
+						ok: false;
+						message: string;
+					}
+					| null;
+
+				if (cancelled) return;
+
+				if (!response.ok || !json || !json.ok) {
+					setDateFormat(DEFAULT_APP_DATE_FORMAT);
+					return;
+				}
+
+				const setting = json.data.find((item) => item.key === "dateFormat");
+
+				setDateFormat(normalizeAppDateFormat(setting?.value));
+			} catch {
+				if (!cancelled) {
+					setDateFormat(DEFAULT_APP_DATE_FORMAT);
+				}
+			}
+		}
+
+		void loadDateFormat();
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	async function handleDeleteConfirmed() {
 		if (!deleteTarget) return;
@@ -935,3 +983,4 @@ export default function AdminMaintenancePage() {
 		</div>
 	);
 }
+

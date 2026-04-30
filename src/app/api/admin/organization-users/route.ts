@@ -45,7 +45,7 @@ import Organization from "@/models/Organization";
 import OrganizationUser from "@/models/OrganizationUser";
 
 import { connectToDB } from "@/lib/connectToDB";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import {
 	buildActivationUrl,
 	generateActivationToken,
@@ -696,3 +696,4 @@ export async function POST(req: NextRequest) {
 		);
 	}
 }
+

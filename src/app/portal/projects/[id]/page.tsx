@@ -47,7 +47,7 @@ import {
 	Wrench,
 } from "lucide-react";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth/authOptions";
 import { getPortalProjectDetailByOrganization } from "@/lib/portal/portalProjects";
 import type {
 	PortalAlertItem,

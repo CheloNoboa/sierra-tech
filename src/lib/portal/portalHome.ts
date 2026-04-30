@@ -185,3 +185,4 @@ export async function getPortalHomeDataByOrganization(params: {
 		alerts: sortRecentAlerts(portalAlerts).slice(0, 5),
 	};
 }
+

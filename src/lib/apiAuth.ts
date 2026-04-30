@@ -52,3 +52,4 @@ export function assertPermission(
 		throw new Error(`Forbidden (missing permission: ${required}).`);
 	}
 }
+
