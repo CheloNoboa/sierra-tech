@@ -1,8 +1,48 @@
 /**
- * ✅ src/app/api/admin/cookies/route.ts
- * -------------------------------------------------------------------
- * API administrativa para la colección CookiePolicy — SIN ANY
- * -------------------------------------------------------------------
+ * =============================================================================
+ * 📌 API: Admin Cookie Policy
+ * Path: src/app/api/admin/cookies/route.ts
+ * =============================================================================
+ *
+ * ES:
+ * API administrativa para gestionar la Política de Cookies.
+ *
+ * Responsabilidades:
+ * - Listar las políticas de cookies disponibles por idioma.
+ * - Crear una política cuando no exista para el idioma indicado.
+ * - Actualizar una política existente.
+ * - Registrar metadata administrativa de modificación.
+ * - Responder con mensajes localizados ES/EN.
+ *
+ * Contrato:
+ * - La entidad se identifica por `lang`.
+ * - Cada política contiene:
+ *   - title
+ *   - sections[] con heading/content
+ * - No se crean registros duplicados para el mismo idioma.
+ *
+ * Seguridad:
+ * - El acceso de escritura se valida mediante permisos reales de sesión.
+ * - Permite escritura si el usuario cumple al menos una condición:
+ *   - role === "superadmin"
+ *   - permissions incluye "*"
+ *   - permissions incluye "policies.update"
+ *
+ * Decisiones:
+ * - No se usa validación rígida por rol "admin".
+ * - El editor administrativo trabaja con `heading`, no con `title`, dentro
+ *   de cada sección.
+ * - GET no modifica datos.
+ * - POST previene duplicados.
+ * - PUT actualiza únicamente el registro del idioma recibido.
+ *
+ * Reglas:
+ * - Sin `any`.
+ * - Sin lógica visual.
+ *
+ * EN:
+ * Administrative API for managing the Cookie Policy.
+ * =============================================================================
  */
 
 import { NextResponse } from "next/server";
@@ -11,27 +51,24 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import CookiePolicy from "@/models/CookiePolicy";
 
-/** 🌎 Tipado estricto de idiomas */
 type Lang = "es" | "en";
 
-/** 🔐 Tipado estricto de sesión */
 interface UserSession {
 	user?: {
-		name?: string;
-		email?: string;
-		role?: string;
-		language?: string;
+		name?: string | null;
+		email?: string | null;
+		role?: string | null;
+		language?: string | null;
+		permissions?: string[];
 	} | null;
 }
 
-/** 📝 Tipado del body que recibe POST y PUT */
 interface CookiePolicyPayload {
 	lang: Lang;
 	title: string;
 	sections: Array<{ heading: string; content: string }>;
 }
 
-/** 🗣️ Diccionario de mensajes localizados */
 const messages: Record<
 	Lang,
 	{
@@ -61,23 +98,31 @@ const messages: Record<
 	},
 };
 
-/** 🌐 Obtener idioma del usuario con tipado estricto */
 function getLang(session: UserSession | null): Lang {
 	const raw = session?.user?.language?.toLowerCase();
 	return raw === "es" ? "es" : "en";
 }
 
-/* ===================================================================
-   📌 GET — Obtener todas las políticas
-   =================================================================== */
+function canManagePolicies(session: UserSession | null): boolean {
+	const permissions = session?.user?.permissions ?? [];
+
+	return (
+		session?.user?.role === "superadmin" ||
+		permissions.includes("*") ||
+		permissions.includes("policies.update")
+	);
+}
 
 export async function GET() {
 	try {
 		await connectToDB();
-		const cookies = await CookiePolicy.find({}).sort({ lang: 1 });
-		return NextResponse.json(cookies);
+
+		const cookies = await CookiePolicy.find({}).sort({ lang: 1 }).lean();
+
+		return NextResponse.json(cookies, { status: 200 });
 	} catch (error) {
 		console.error("❌ Error obteniendo políticas de cookies:", error);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
@@ -85,23 +130,19 @@ export async function GET() {
 	}
 }
 
-/* ===================================================================
-   📌 POST — Crear nueva política
-   =================================================================== */
-
 export async function POST(req: Request) {
 	try {
 		const session = (await getServerSession(authOptions)) as UserSession | null;
 		const lang = getLang(session);
 		const msg = messages[lang];
 
-		if (!session || session.user?.role !== "admin") {
+		if (!canManagePolicies(session)) {
 			return NextResponse.json({ error: msg.unauthorized }, { status: 403 });
 		}
 
 		await connectToDB();
 
-		const body: CookiePolicyPayload = await req.json();
+		const body = (await req.json()) as CookiePolicyPayload;
 
 		const existing = await CookiePolicy.findOne({ lang: body.lang });
 
@@ -111,16 +152,17 @@ export async function POST(req: Request) {
 
 		const newCookie = await CookiePolicy.create({
 			...body,
-			lastModifiedBy: session.user?.name || "Administrator",
-			lastModifiedEmail: session.user?.email || "admin@fastfood.com",
+			lastModifiedBy: session?.user?.name ?? "Administrator",
+			lastModifiedEmail: session?.user?.email ?? "admin@sierratech.com",
 		});
 
 		return NextResponse.json(
-			{ message: msg.created, data: newCookie },
+			{ ok: true, message: msg.created, data: newCookie },
 			{ status: 201 },
 		);
 	} catch (error) {
 		console.error("❌ Error creando política de cookies:", error);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
@@ -128,23 +170,19 @@ export async function POST(req: Request) {
 	}
 }
 
-/* ===================================================================
-   📌 PUT — Actualizar política existente
-   =================================================================== */
-
 export async function PUT(req: Request) {
 	try {
 		const session = (await getServerSession(authOptions)) as UserSession | null;
 		const lang = getLang(session);
 		const msg = messages[lang];
 
-		if (!session || session.user?.role !== "admin") {
+		if (!canManagePolicies(session)) {
 			return NextResponse.json({ error: msg.unauthorized }, { status: 403 });
 		}
 
 		await connectToDB();
 
-		const body: CookiePolicyPayload = await req.json();
+		const body = (await req.json()) as CookiePolicyPayload;
 
 		const existing = await CookiePolicy.findOne({ lang: body.lang });
 
@@ -155,18 +193,21 @@ export async function PUT(req: Request) {
 		existing.title = body.title;
 		existing.sections = body.sections;
 		existing.updatedAt = new Date();
-		existing.lastModifiedBy = session.user?.name || "Administrator";
-		existing.lastModifiedEmail = session.user?.email || "admin@fastfood.com";
+		existing.lastModifiedBy = session?.user?.name ?? "Administrator";
+		existing.lastModifiedEmail = session?.user?.email ?? "admin@sierratech.com";
 
 		await existing.save();
 
-		return NextResponse.json({ message: msg.updated, data: existing });
+		return NextResponse.json(
+			{ ok: true, message: msg.updated, data: existing },
+			{ status: 200 },
+		);
 	} catch (error) {
 		console.error("❌ Error actualizando política de cookies:", error);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
 		);
 	}
 }
-

@@ -1,13 +1,49 @@
 /**
- * ✅ src/app/api/admin/privacy/route.ts
- * -------------------------------------------------------------------
- * API administrativa para la colección PrivacyPolicy
- * -------------------------------------------------------------------
- * - Tipado estricto
- * - Sin ANY
- * - Mensajes EN/ES según sesión
- * - Prevención de duplicados
- * -------------------------------------------------------------------
+ * =============================================================================
+ * 📌 API: Admin Privacy Policy
+ * Path: src/app/api/admin/privacy/route.ts
+ * =============================================================================
+ *
+ * ES:
+ * API administrativa para gestionar la Política de Privacidad.
+ *
+ * Responsabilidades:
+ * - Listar las políticas disponibles por idioma.
+ * - Crear una política cuando no exista para el idioma indicado.
+ * - Actualizar una política existente.
+ * - Registrar metadata administrativa de modificación.
+ * - Responder con mensajes localizados ES/EN.
+ *
+ * Contrato:
+ * - La entidad se identifica por `lang`.
+ * - Cada política contiene:
+ *   - title
+ *   - sections[] con heading/content
+ * - No se crean registros duplicados para el mismo idioma.
+ *
+ * Seguridad:
+ * - El acceso de escritura se valida mediante permisos reales de sesión.
+ * - Permite escritura si el usuario cumple al menos una condición:
+ *   - role === "superadmin"
+ *   - permissions incluye "*"
+ *   - permissions incluye "policies.update"
+ *
+ * Decisiones:
+ * - No se usa validación rígida por rol "admin".
+ * - El editor administrativo trabaja con `heading`, no con `title`, dentro
+ *   de cada sección.
+ * - GET no modifica datos.
+ * - POST previene duplicados.
+ * - PUT actualiza únicamente el registro del idioma recibido.
+ *
+ * Reglas:
+ * - Sin `any`.
+ * - Sin datos quemados de usuario salvo fallback administrativo.
+ * - Sin lógica visual.
+ *
+ * EN:
+ * Administrative API for managing the Privacy Policy.
+ * =============================================================================
  */
 
 import { NextResponse } from "next/server";
@@ -17,17 +53,18 @@ import { authOptions } from "@/lib/auth/authOptions";
 import PrivacyPolicy from "@/models/PrivacyPolicy";
 
 /* ============================================================
-   🌎 Types
-   ============================================================ */
+	 🌎 Types
+	 ============================================================ */
 
 type Lang = "es" | "en";
 
 interface UserSession {
 	user?: {
 		role?: string;
-		name?: string;
-		email?: string;
-		language?: string;
+		name?: string | null;
+		email?: string | null;
+		language?: string | null;
+		permissions?: string[];
 	};
 }
 
@@ -35,14 +72,14 @@ interface PrivacyPolicyBody {
 	lang: Lang;
 	title: string;
 	sections: Array<{
-		title: string;
+		heading: string;
 		content: string;
 	}>;
 }
 
 /* ============================================================
-   🗣️ Mensajes localizados
-   ============================================================ */
+	 🗣️ Mensajes localizados
+	 ============================================================ */
 
 const messages: Record<
 	Lang,
@@ -74,8 +111,8 @@ const messages: Record<
 };
 
 /* ============================================================
-   🌐 Obtener idioma según sesión
-   ============================================================ */
+	 🌐 Obtener idioma según sesión
+	 ============================================================ */
 
 function getLang(session: UserSession | null): Lang {
 	const lang = session?.user?.language?.toLowerCase();
@@ -83,8 +120,22 @@ function getLang(session: UserSession | null): Lang {
 }
 
 /* ============================================================
-   📌 GET — Listar políticas
-   ============================================================ */
+	 🔐 Validación de acceso por permisos reales
+	 ============================================================ */
+
+function canManagePolicies(session: UserSession | null): boolean {
+	const permissions = session?.user?.permissions ?? [];
+
+	return (
+		session?.user?.role === "superadmin" ||
+		permissions.includes("*") ||
+		permissions.includes("policies.update")
+	);
+}
+
+/* ============================================================
+	 📌 GET — Listar políticas
+	 ============================================================ */
 
 export async function GET() {
 	try {
@@ -95,6 +146,7 @@ export async function GET() {
 		return NextResponse.json(policies, { status: 200 });
 	} catch (err) {
 		console.error("❌ Error obteniendo políticas:", err);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
@@ -103,8 +155,8 @@ export async function GET() {
 }
 
 /* ============================================================
-   ➕ POST — Crear nueva política
-   ============================================================ */
+	 ➕ POST — Crear nueva política
+	 ============================================================ */
 
 export async function POST(req: Request) {
 	try {
@@ -112,7 +164,7 @@ export async function POST(req: Request) {
 		const lang = getLang(session);
 		const msg = messages[lang];
 
-		if (!session || session.user?.role !== "admin") {
+		if (!canManagePolicies(session)) {
 			return NextResponse.json({ error: msg.unauthorized }, { status: 403 });
 		}
 
@@ -120,7 +172,6 @@ export async function POST(req: Request) {
 
 		const body = (await req.json()) as PrivacyPolicyBody;
 
-		// Evitar duplicados
 		const existing = await PrivacyPolicy.findOne({ lang: body.lang });
 		if (existing) {
 			return NextResponse.json({ error: msg.duplicate }, { status: 409 });
@@ -130,16 +181,17 @@ export async function POST(req: Request) {
 			lang: body.lang,
 			title: body.title,
 			sections: body.sections,
-			lastModifiedBy: session.user.name ?? "Administrator",
-			lastModifiedEmail: session.user.email ?? "admin@fastfood.com",
+			lastModifiedBy: session?.user?.name ?? "Administrator",
+			lastModifiedEmail: session?.user?.email ?? "admin@sierratech.com",
 		});
 
 		return NextResponse.json(
-			{ message: msg.created, data: newPolicy },
+			{ ok: true, message: msg.created, data: newPolicy },
 			{ status: 201 },
 		);
 	} catch (err) {
 		console.error("❌ Error creando política:", err);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
@@ -148,8 +200,8 @@ export async function POST(req: Request) {
 }
 
 /* ============================================================
-   💾 PUT — Actualizar política existente
-   ============================================================ */
+	 💾 PUT — Actualizar política existente
+	 ============================================================ */
 
 export async function PUT(req: Request) {
 	try {
@@ -157,7 +209,7 @@ export async function PUT(req: Request) {
 		const lang = getLang(session);
 		const msg = messages[lang];
 
-		if (!session || session.user?.role !== "admin") {
+		if (!canManagePolicies(session)) {
 			return NextResponse.json({ error: msg.unauthorized }, { status: 403 });
 		}
 
@@ -173,21 +225,21 @@ export async function PUT(req: Request) {
 		existing.title = body.title;
 		existing.sections = body.sections;
 		existing.updatedAt = new Date();
-		existing.lastModifiedBy = session.user.name ?? "Administrator";
-		existing.lastModifiedEmail = session.user.email ?? "admin@fastfood.com";
+		existing.lastModifiedBy = session?.user?.name ?? "Administrator";
+		existing.lastModifiedEmail = session?.user?.email ?? "admin@sierratech.com";
 
 		await existing.save();
 
 		return NextResponse.json(
-			{ message: msg.updated, data: existing },
+			{ ok: true, message: msg.updated, data: existing },
 			{ status: 200 },
 		);
 	} catch (err) {
 		console.error("❌ Error actualizando política:", err);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
 		);
 	}
 }
-

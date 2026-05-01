@@ -1,9 +1,48 @@
 /**
- * ✅ src/app/api/admin/terms/route.ts
- * -------------------------------------------------------------------
- * API administrativa para la colección TermsPolicy
- * Tipado estricto — Sin ANY
- * -------------------------------------------------------------------
+ * =============================================================================
+ * 📌 API: Admin Terms Policy
+ * Path: src/app/api/admin/terms/route.ts
+ * =============================================================================
+ *
+ * ES:
+ * API administrativa para gestionar los Términos y Condiciones.
+ *
+ * Responsabilidades:
+ * - Listar las políticas de términos disponibles por idioma.
+ * - Crear una política cuando no exista para el idioma indicado.
+ * - Actualizar una política existente.
+ * - Registrar metadata administrativa de modificación.
+ * - Responder con mensajes localizados ES/EN.
+ *
+ * Contrato:
+ * - La entidad se identifica por `lang`.
+ * - Cada política contiene:
+ *   - title
+ *   - sections[] con heading/content
+ * - No se crean registros duplicados para el mismo idioma.
+ *
+ * Seguridad:
+ * - El acceso de escritura se valida mediante permisos reales de sesión.
+ * - Permite escritura si el usuario cumple al menos una condición:
+ *   - role === "superadmin"
+ *   - permissions incluye "*"
+ *   - permissions incluye "policies.update"
+ *
+ * Decisiones:
+ * - No se usa validación rígida por rol "admin".
+ * - El editor administrativo trabaja con `heading`, no con `title`, dentro
+ *   de cada sección.
+ * - GET no modifica datos.
+ * - POST previene duplicados.
+ * - PUT actualiza únicamente el registro del idioma recibido.
+ *
+ * Reglas:
+ * - Sin `any`.
+ * - Sin lógica visual.
+ *
+ * EN:
+ * Administrative API for managing Terms and Conditions.
+ * =============================================================================
  */
 
 import { NextResponse } from "next/server";
@@ -12,24 +51,23 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/authOptions";
 import TermsPolicy from "@/models/TermsPolicy";
 
-/* ===============================================================
-   🌎 Tipos
-   =============================================================== */
-
 type Lang = "es" | "en";
 
 interface UserSession {
 	user?: {
-		role?: string;
-		name?: string;
-		email?: string;
-		language?: string;
+		role?: string | null;
+		name?: string | null;
+		email?: string | null;
+		language?: string | null;
+		permissions?: string[];
 	};
 }
 
-/* ===============================================================
-   🗣️ Mensajes localizados
-   =============================================================== */
+interface TermsPolicyPayload {
+	lang: Lang;
+	title: string;
+	sections: Array<{ heading: string; content: string }>;
+}
 
 const messages: Record<
 	Lang,
@@ -60,26 +98,31 @@ const messages: Record<
 	},
 };
 
-/* ===============================================================
-   🌐 Obtener idioma (sin ANY)
-   =============================================================== */
-
 function getLang(session: UserSession | null): Lang {
 	const lang = session?.user?.language?.toLowerCase();
 	return lang === "es" ? "es" : "en";
 }
 
-/* ===============================================================
-   📌 GET
-   =============================================================== */
+function canManagePolicies(session: UserSession | null): boolean {
+	const permissions = session?.user?.permissions ?? [];
+
+	return (
+		session?.user?.role === "superadmin" ||
+		permissions.includes("*") ||
+		permissions.includes("policies.update")
+	);
+}
 
 export async function GET() {
 	try {
 		await connectToDB();
-		const terms = await TermsPolicy.find({}).sort({ lang: 1 });
-		return NextResponse.json(terms);
+
+		const terms = await TermsPolicy.find({}).sort({ lang: 1 }).lean();
+
+		return NextResponse.json(terms, { status: 200 });
 	} catch (error) {
 		console.error("❌ Error obteniendo términos:", error);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
@@ -87,22 +130,19 @@ export async function GET() {
 	}
 }
 
-/* ===============================================================
-   ➕ POST
-   =============================================================== */
-
 export async function POST(req: Request) {
 	try {
 		const session = (await getServerSession(authOptions)) as UserSession | null;
 		const lang = getLang(session);
 		const msg = messages[lang];
 
-		if (!session || session.user?.role !== "admin") {
+		if (!canManagePolicies(session)) {
 			return NextResponse.json({ error: msg.unauthorized }, { status: 403 });
 		}
 
 		await connectToDB();
-		const body = await req.json();
+
+		const body = (await req.json()) as TermsPolicyPayload;
 
 		const existing = await TermsPolicy.findOne({ lang: body.lang });
 		if (existing) {
@@ -113,16 +153,17 @@ export async function POST(req: Request) {
 			lang: body.lang,
 			title: body.title,
 			sections: body.sections,
-			lastModifiedBy: session.user.name || "Administrator",
-			lastModifiedEmail: session.user.email || "admin@fastfood.com",
+			lastModifiedBy: session?.user?.name ?? "Administrator",
+			lastModifiedEmail: session?.user?.email ?? "admin@sierratech.com",
 		});
 
 		return NextResponse.json(
-			{ message: msg.created, data: newTerms },
+			{ ok: true, message: msg.created, data: newTerms },
 			{ status: 201 },
 		);
 	} catch (error) {
 		console.error("❌ Error creando términos:", error);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
@@ -130,22 +171,19 @@ export async function POST(req: Request) {
 	}
 }
 
-/* ===============================================================
-   💾 PUT
-   =============================================================== */
-
 export async function PUT(req: Request) {
 	try {
 		const session = (await getServerSession(authOptions)) as UserSession | null;
 		const lang = getLang(session);
 		const msg = messages[lang];
 
-		if (!session || session.user?.role !== "admin") {
+		if (!canManagePolicies(session)) {
 			return NextResponse.json({ error: msg.unauthorized }, { status: 403 });
 		}
 
 		await connectToDB();
-		const body = await req.json();
+
+		const body = (await req.json()) as TermsPolicyPayload;
 
 		const existing = await TermsPolicy.findOne({ lang: body.lang });
 		if (!existing) {
@@ -155,18 +193,21 @@ export async function PUT(req: Request) {
 		existing.title = body.title;
 		existing.sections = body.sections;
 		existing.updatedAt = new Date();
-		existing.lastModifiedBy = session.user.name || "Administrator";
-		existing.lastModifiedEmail = session.user.email || "admin@fastfood.com";
+		existing.lastModifiedBy = session?.user?.name ?? "Administrator";
+		existing.lastModifiedEmail = session?.user?.email ?? "admin@sierratech.com";
 
 		await existing.save();
 
-		return NextResponse.json({ message: msg.updated, data: existing });
+		return NextResponse.json(
+			{ ok: true, message: msg.updated, data: existing },
+			{ status: 200 },
+		);
 	} catch (error) {
 		console.error("❌ Error actualizando términos:", error);
+
 		return NextResponse.json(
 			{ error: messages.en.serverError },
 			{ status: 500 },
 		);
 	}
 }
-
