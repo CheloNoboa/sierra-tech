@@ -13,7 +13,7 @@
  * - mostrar identidad mínima de organización y usuario autenticado
  * - mantener una navegación lateral estable para las secciones del portal
  * - integrar un mini-footer discreto con crédito de desarrollo
- * - incorporar el logotipo corto de FuturaTech dentro del footer del portal
+ * - incorporar el logotipo corto de CoreVix dentro del footer del portal
  *
  * Alcance:
  * - protege visualmente la experiencia del portal
@@ -30,10 +30,10 @@
  * Decisiones:
  * - el cierre de sesión regresa al sitio público
  * - el shell del portal no comparte header/footer del sitio comercial
- * - el footer de FuturaTech se mantiene discreto, tipo powered-by
+ * - el footer de CoreVix se mantiene discreto, tipo powered-by
  * - el footer vive dentro de la columna derecha para no romper la grilla
- * - el logotipo de FuturaTech se sirve desde:
- *   /public/images/LogoCortoFuturaTech.png
+ * - el logotipo de CoreVix se sirve desde:
+ *   /public/images/LogoCoreVix.png
  *
  * EN:
  * Official client portal layout for Sierra Tech.
@@ -67,15 +67,15 @@ function PortalFooter() {
 
 				<div className="flex items-center gap-2 rounded-full border border-border/70 bg-white px-3 py-1.5 shadow-sm">
 					<Image
-						src="/images/LogoCortoFuturaTech.png"
-						alt="FuturaTech"
+						src="/images/LogoCoreVix.png"
+						alt="CoreVix"
 						width={22}
 						height={22}
 						className="h-[22px] w-auto object-contain"
 					/>
 
 					<span className="text-xs font-semibold tracking-wide text-text-primary">
-						FuturaTech
+						CoreVix
 					</span>
 				</div>
 			</div>

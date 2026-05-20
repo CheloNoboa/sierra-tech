@@ -695,22 +695,23 @@ export default function Footer() {
 
 						{/* SIGNATURE STRIP */}
 						<div className="flex items-center justify-center">
-							<div className="flex items-center gap-3 text-xs text-text-muted">
+							<div className="flex flex-wrap items-center justify-center gap-3 text-xs text-text-muted">
 								<span className="hidden sm:inline">
 									{lang === "es" ? "Desarrollado por" : "Developed by"}
 								</span>
 
-								<div className="flex items-center gap-2">
+								<div className="flex items-center gap-2 rounded-full border border-border bg-bg-surface px-3 py-1.5">
 									<Image
-										src="/images/LogoCortoFuturaTech.png"
-										alt="FuturaTech"
-										width={20}
-										height={20}
-										className="h-5 w-auto object-contain opacity-90"
+										src="/images/LogoCoreVix.png"
+										alt="CoreVix"
+										width={96}
+										height={48}
+										priority
+										className="h-8 w-auto object-contain"
 									/>
 
-									<span className="font-medium tracking-wide text-text-primary">
-										FuturaTech
+									<span className="font-semibold tracking-wide text-text-primary">
+										CoreVix
 									</span>
 								</div>
 
@@ -718,8 +719,8 @@ export default function Footer() {
 
 								<span className="hidden sm:inline">
 									{lang === "es"
-										? "Desarrollo de software y soluciones cloud"
-										: "Software & cloud solutions"}
+										? "Construye sistemas más inteligentes"
+										: "Build Smarter Systems"}
 								</span>
 							</div>
 						</div>

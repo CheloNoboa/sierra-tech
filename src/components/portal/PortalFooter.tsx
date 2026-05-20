@@ -7,7 +7,7 @@
  * =============================================================================
  *
  * ES:
- * Footer discreto del portal cliente con branding de FuturaTech.
+ * Footer discreto del portal cliente con branding de CoreVix.
  *
  * Objetivo:
  * - mostrar crédito profesional sin invadir UI del cliente
@@ -20,7 +20,7 @@
  * - alineación limpia
  *
  * EN:
- * Lightweight footer with FuturaTech branding.
+ * Lightweight footer with CoreVix branding.
  * =============================================================================
  */
 
@@ -36,15 +36,15 @@ export default function PortalFooter() {
 
 				<div className="flex items-center gap-2">
 					<Image
-						src="/images/LogoCortoFuturaTech.png"
-						alt="FuturaTech"
+						src="/images/LogoCoreVix.png"
+						alt="CoreVix"
 						width={22}
 						height={22}
 						className="h-[22px] w-auto object-contain"
 					/>
 
 					<span className="text-xs font-semibold text-text-primary">
-						FuturaTech
+						CoreVix
 					</span>
 				</div>
 			</div>
