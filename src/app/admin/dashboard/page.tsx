@@ -84,7 +84,7 @@ export default function AdminDashboardPage() {
 	}
 
 	return (
-		<main className="space-y-6">
+		<main className="space-y-6 p-4">
 			{/* Welcome header */}
 			<section className="rounded-3xl border border-border bg-surface p-6 shadow-sm">
 				<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

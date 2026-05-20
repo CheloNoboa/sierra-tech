@@ -203,6 +203,15 @@ const SYSTEM_SETTINGS_SEED: SeedSystemSetting[] = [
 		module: "general",
 		autoTranslate: false,
 	},
+	{
+		key: "allowPublicRegistration",
+		type: "boolean",
+		value: "false",
+		description:
+			"Controla si el formulario público de registro de cuentas debe mostrarse o permanecer oculto.",
+		module: "auth",
+		autoTranslate: false,
+	},
 ];
 
 /* =============================================================================
@@ -242,7 +251,9 @@ export async function POST(req: NextRequest) {
 		const roleDocs: InsertRole[] = ROLES.map(mapRoleDefToInsert);
 
 		// ✅ VALIDAR QUE TODOS LOS PERMISOS DE LOS ROLES EXISTAN
-		const permissionCodes = new Set(permissionDocs.map((permission) => permission.code));
+		const permissionCodes = new Set(
+			permissionDocs.map((permission) => permission.code),
+		);
 
 		for (const role of roleDocs) {
 			for (const permissionCode of role.permissions) {
@@ -316,4 +327,3 @@ export async function POST(req: NextRequest) {
 		);
 	}
 }
-

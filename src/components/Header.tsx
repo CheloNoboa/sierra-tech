@@ -90,6 +90,11 @@ interface HeaderSiteSettings {
 	};
 }
 
+interface RegistrationPolicyResponse {
+	ok: boolean;
+	canRegister: boolean;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Safe defaults                                                              */
 /* -------------------------------------------------------------------------- */
@@ -212,6 +217,7 @@ export default function Header() {
 		HEADER_SITE_SETTINGS_DEFAULTS
 	);
 	const [currentHash, setCurrentHash] = useState("");
+	const [canShowSignUp, setCanShowSignUp] = useState(false);
 
 	useEffect(() => {
 		async function loadSiteSettings() {
@@ -260,6 +266,30 @@ export default function Header() {
 		});
 
 		return unsubscribe;
+	}, []);
+
+	useEffect(() => {
+		async function loadRegistrationPolicy() {
+			try {
+				const response = await fetch("/api/auth/registration-policy", {
+					cache: "no-store",
+				});
+
+				if (!response.ok) {
+					setCanShowSignUp(false);
+					return;
+				}
+
+				const payload = (await response.json()) as RegistrationPolicyResponse;
+
+				setCanShowSignUp(payload.ok === true && payload.canRegister === true);
+			} catch (error) {
+				console.error("[Header] Error loading registration policy:", error);
+				setCanShowSignUp(false);
+			}
+		}
+
+		void loadRegistrationPolicy();
 	}, []);
 
 	useEffect(() => {
@@ -571,14 +601,16 @@ export default function Header() {
 										<span>{authText.signIn}</span>
 									</button>
 
-									<button
-										type="button"
-										onClick={() => setShowSignUp(true)}
-										className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface-soft px-4 text-sm font-medium text-text-primary transition hover:border-brand-primary hover:bg-brand-secondary"
-									>
-										<HiOutlineIdentification size={18} className="shrink-0" />
-										<span>{authText.signUp}</span>
-									</button>
+									{canShowSignUp ? (
+										<button
+											type="button"
+											onClick={() => setShowSignUp(true)}
+											className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface-soft px-4 text-sm font-medium text-text-primary transition hover:border-brand-primary hover:bg-brand-secondary"
+										>
+											<HiOutlineIdentification size={18} className="shrink-0" />
+											<span>{authText.signUp}</span>
+										</button>
+									) : null}
 								</div>
 
 								<button
@@ -590,14 +622,16 @@ export default function Header() {
 									<HiOutlineUserCircle size={22} />
 								</button>
 
-								<button
-									type="button"
-									onClick={() => setShowSignUp(true)}
-									aria-label={authText.signUp}
-									className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-text-secondary transition hover:bg-surface-soft hover:text-brand-primaryStrong md:hidden"
-								>
-									<HiOutlineIdentification size={22} />
-								</button>
+								{canShowSignUp ? (
+									<button
+										type="button"
+										onClick={() => setShowSignUp(true)}
+										aria-label={authText.signUp}
+										className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-text-secondary transition hover:bg-surface-soft hover:text-brand-primaryStrong md:hidden"
+									>
+										<HiOutlineIdentification size={22} />
+									</button>
+								) : null}
 							</>
 						)}
 
@@ -707,14 +741,16 @@ export default function Header() {
 										<span>{authText.signIn}</span>
 									</button>
 
-									<button
-										type="button"
-										onClick={handleOpenSignUp}
-										className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-text-secondary transition hover:bg-surface-soft hover:text-brand-primaryStrong"
-									>
-										<HiOutlineIdentification size={18} />
-										<span>{authText.signUp}</span>
-									</button>
+									{canShowSignUp ? (
+										<button
+											type="button"
+											onClick={handleOpenSignUp}
+											className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-text-secondary transition hover:bg-surface-soft hover:text-brand-primaryStrong"
+										>
+											<HiOutlineIdentification size={18} />
+											<span>{authText.signUp}</span>
+										</button>
+									) : null}
 								</>
 							) : (
 								<button
@@ -735,7 +771,9 @@ export default function Header() {
 			</header>
 
 			<LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />
-			<SignUpModal isOpen={showSignUp} onClose={() => setShowSignUp(false)} />
+			{canShowSignUp ? (
+				<SignUpModal isOpen={showSignUp} onClose={() => setShowSignUp(false)} />
+			) : null}
 		</>
 	);
 }
