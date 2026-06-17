@@ -195,6 +195,105 @@ function toAdminUploadSrc(fileKeyOrUrl: string): string {
 		: fileKeyOrUrl;
 }
 
+type SiteAssetKind = "logo" | "favicon" | "og";
+
+interface SiteAssetUploaderProps {
+	label: string;
+	value: string;
+	placeholder: string;
+	accept: string;
+	uploading: boolean;
+	saving: boolean;
+	deleting: boolean;
+	previewAlt: string;
+	previewKind: SiteAssetKind;
+	uploadButtonText: string;
+	onChange: (value: string) => void;
+	onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+	onDelete: () => void;
+}
+
+function SiteAssetUploader(props: SiteAssetUploaderProps) {
+	const hasValue = props.value.trim().length > 0;
+
+	const previewClassName =
+		props.previewKind === "favicon"
+			? "h-16 w-16 object-contain"
+			: props.previewKind === "og"
+				? "max-h-40 w-auto object-contain"
+				: "max-h-24 w-auto object-contain";
+
+	const previewWidth =
+		props.previewKind === "favicon" ? 64 : props.previewKind === "og" ? 320 : 240;
+
+	const previewHeight =
+		props.previewKind === "favicon" ? 64 : props.previewKind === "og" ? 180 : 96;
+
+	return (
+		<div>
+			<FieldLabel>{props.label}</FieldLabel>
+
+			<div className="space-y-3">
+				<TextInput
+					value={props.value}
+					onChange={(e) => props.onChange(e.target.value)}
+					placeholder={props.placeholder}
+				/>
+
+				<div className="flex flex-wrap items-center gap-3">
+					<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
+						<input
+							type="file"
+							accept={props.accept}
+							className="hidden"
+							onChange={props.onUpload}
+							disabled={props.uploading || props.saving}
+						/>
+
+						{props.uploading ? "Subiendo..." : props.uploadButtonText}
+					</label>
+
+					<ActionButton
+						type="button"
+						disabled={!hasValue || props.uploading || props.saving || props.deleting}
+						onClick={props.onDelete}
+						className="text-status-error hover:text-status-error"
+					>
+						{props.deleting ? "Eliminando..." : "Eliminar"}
+					</ActionButton>
+				</div>
+
+				{hasValue ? (
+					<p className="break-all text-xs text-text-secondary">{props.value}</p>
+				) : null}
+
+				<div className="min-h-[158px] rounded-xl border border-border bg-background p-4">
+					<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
+						Vista previa
+					</div>
+
+					{hasValue ? (
+						<div className="flex min-h-[96px] items-center">
+							<Image
+								src={toAdminUploadSrc(props.value)}
+								alt={props.previewAlt}
+								width={previewWidth}
+								height={previewHeight}
+								unoptimized
+								className={previewClassName}
+							/>
+						</div>
+					) : (
+						<div className="flex min-h-[96px] items-center text-sm text-text-secondary">
+							Sin archivo cargado.
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Page                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -220,6 +319,10 @@ export default function SiteSettingsPage() {
 	const [uploadingLogoDark, setUploadingLogoDark] = useState(false);
 	const [uploadingFavicon, setUploadingFavicon] = useState(false);
 	const [uploadingOgImage, setUploadingOgImage] = useState(false);
+
+	const [deletingAsset, setDeletingAsset] = useState<
+		"logoLight" | "logoDark" | "favicon" | "defaultOgImage" | null
+	>(null);
 
 	const hasLoadedInitialDataRef = useRef(false);
 
@@ -616,6 +719,48 @@ export default function SiteSettingsPage() {
 		}
 	}
 
+	async function handleDeleteSiteAsset(
+		field: "logoLight" | "logoDark" | "favicon" | "defaultOgImage",
+	): Promise<void> {
+		try {
+			setDeletingAsset(field);
+
+			const response = await fetch("/api/admin/site-settings", {
+				method: "DELETE",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ field }),
+			});
+
+			if (!response.ok) {
+				throw new Error(`SITE_ASSET_DELETE_HTTP_${response.status}`);
+			}
+
+			const payload: unknown = await response.json().catch(() => null);
+			const normalized = normalizeSiteSettingsPayload(payload);
+
+			setSiteForm(normalized);
+			setSiteInitialData(normalized);
+
+			notifyBrandingUpdated();
+
+			toast.success(
+				lang === "es"
+					? "Archivo eliminado correctamente."
+					: "File deleted successfully.",
+			);
+		} catch (error) {
+			console.error("[SiteSettingsPage] Asset delete error:", error);
+
+			toast.error(
+				lang === "es"
+					? "No se pudo eliminar el archivo."
+					: "Could not delete the file.",
+			);
+		} finally {
+			setDeletingAsset(null);
+		}
+	}
+
 	function updateI18nDefaultLocale(value: Locale): void {
 		setSiteForm((prev) => ({
 			...prev,
@@ -790,171 +935,53 @@ export default function SiteSettingsPage() {
 				</div>
 
 				<div className="grid gap-5 md:grid-cols-3">
-					<div>
-						<FieldLabel>Logo Light</FieldLabel>
+					<SiteAssetUploader
+						label="Logo Light"
+						value={siteForm.identity.logoLight}
+						placeholder="admin/site-settings/logos/..."
+						accept=".png,.jpg,.jpeg,.webp,.svg"
+						uploading={uploadingLogoLight}
+						saving={saving}
+						previewAlt="Logo Light Preview"
+						previewKind="logo"
+						uploadButtonText={lang === "es" ? "Subir Logo Light" : "Upload Logo Light"}
+						onChange={(value) => updateIdentityField("logoLight", value)}
+						onUpload={handleLogoLightUpload}
+						onDelete={() => void handleDeleteSiteAsset("logoLight")}
+						deleting={deletingAsset === "logoLight"}
+					/>
 
-						<div className="space-y-3">
-							<TextInput
-								value={siteForm.identity.logoLight}
-								onChange={(e) =>
-									updateIdentityField("logoLight", e.target.value)
-								}
-								placeholder="admin/site-settings/logos/..."
-							/>
+					<SiteAssetUploader
+						label="Logo Dark"
+						value={siteForm.identity.logoDark}
+						placeholder="admin/site-settings/logos/..."
+						accept=".png,.jpg,.jpeg,.webp,.svg"
+						uploading={uploadingLogoDark}
+						saving={saving}
+						previewAlt="Logo Dark Preview"
+						previewKind="logo"
+						uploadButtonText={lang === "es" ? "Subir Logo Dark" : "Upload Logo Dark"}
+						onChange={(value) => updateIdentityField("logoDark", value)}
+						onUpload={handleLogoDarkUpload}
+						onDelete={() => void handleDeleteSiteAsset("logoDark")}
+						deleting={deletingAsset === "logoDark"}
+					/>
 
-							<div className="flex flex-wrap items-center gap-3">
-								<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
-									<input
-										type="file"
-										accept=".png,.jpg,.jpeg,.webp,.svg"
-										className="hidden"
-										onChange={handleLogoLightUpload}
-										disabled={uploadingLogoLight || saving}
-									/>
-									{uploadingLogoLight
-										? lang === "es"
-											? "Subiendo..."
-											: "Uploading..."
-										: lang === "es"
-											? "Subir Logo Light"
-											: "Upload Logo Light"}
-								</label>
-
-								{siteForm.identity.logoLight ? (
-									<span className="text-xs text-text-secondary">
-										{siteForm.identity.logoLight}
-									</span>
-								) : null}
-							</div>
-
-							{siteForm.identity.logoLight ? (
-								<div className="rounded-xl border border-border bg-background p-4">
-									<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
-										{lang === "es" ? "Vista previa" : "Preview"}
-									</div>
-
-									<Image
-										src={toAdminUploadSrc(siteForm.identity.logoLight)}
-										alt="Logo Light Preview"
-										width={240}
-										height={96}
-										unoptimized
-										className="max-h-24 w-auto object-contain"
-									/>
-								</div>
-							) : null}
-						</div>
-					</div>
-
-					<div>
-						<FieldLabel>Logo Dark</FieldLabel>
-
-						<div className="space-y-3">
-							<TextInput
-								value={siteForm.identity.logoDark}
-								onChange={(e) =>
-									updateIdentityField("logoDark", e.target.value)
-								}
-								placeholder="admin/site-settings/logos/..."
-							/>
-
-							<div className="flex flex-wrap items-center gap-3">
-								<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
-									<input
-										type="file"
-										accept=".png,.jpg,.jpeg,.webp,.svg"
-										className="hidden"
-										onChange={handleLogoDarkUpload}
-										disabled={uploadingLogoDark || saving}
-									/>
-									{uploadingLogoDark
-										? lang === "es"
-											? "Subiendo..."
-											: "Uploading..."
-										: lang === "es"
-											? "Subir Logo Dark"
-											: "Upload Logo Dark"}
-								</label>
-
-								{siteForm.identity.logoDark ? (
-									<span className="text-xs text-text-secondary">
-										{siteForm.identity.logoDark}
-									</span>
-								) : null}
-							</div>
-
-							{siteForm.identity.logoDark ? (
-								<div className="rounded-xl border border-border bg-background p-4">
-									<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
-										{lang === "es" ? "Vista previa" : "Preview"}
-									</div>
-
-									<Image
-										src={toAdminUploadSrc(siteForm.identity.logoDark)}
-										alt="Logo Dark Preview"
-										width={240}
-										height={96}
-										unoptimized
-										className="max-h-24 w-auto object-contain"
-									/>
-								</div>
-							) : null}
-						</div>
-					</div>
-
-					<div>
-						<FieldLabel>Favicon</FieldLabel>
-
-						<div className="space-y-3">
-							<TextInput
-								value={siteForm.identity.favicon}
-								onChange={(e) => updateIdentityField("favicon", e.target.value)}
-								placeholder="admin/site-settings/favicons/..."
-							/>
-
-							<div className="flex flex-wrap items-center gap-3">
-								<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
-									<input
-										type="file"
-										accept=".png,.ico,.svg"
-										className="hidden"
-										onChange={handleFaviconUpload}
-										disabled={uploadingFavicon || saving}
-									/>
-									{uploadingFavicon
-										? lang === "es"
-											? "Subiendo..."
-											: "Uploading..."
-										: lang === "es"
-											? "Subir Favicon"
-											: "Upload Favicon"}
-								</label>
-
-								{siteForm.identity.favicon ? (
-									<span className="text-xs text-text-secondary">
-										{siteForm.identity.favicon}
-									</span>
-								) : null}
-							</div>
-
-							{siteForm.identity.favicon ? (
-								<div className="rounded-xl border border-border bg-background p-4">
-									<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
-										{lang === "es" ? "Vista previa" : "Preview"}
-									</div>
-
-									<Image
-										src={toAdminUploadSrc(siteForm.identity.favicon)}
-										alt="Favicon Preview"
-										width={40}
-										height={40}
-										unoptimized
-										className="h-10 w-10 object-contain"
-									/>
-								</div>
-							) : null}
-						</div>
-					</div>
+					<SiteAssetUploader
+						label="Favicon"
+						value={siteForm.identity.favicon}
+						placeholder="admin/site-settings/favicons/..."
+						accept=".png,.ico,.svg"
+						uploading={uploadingFavicon}
+						saving={saving}
+						previewAlt="Favicon Preview"
+						previewKind="favicon"
+						uploadButtonText={lang === "es" ? "Subir Favicon" : "Upload Favicon"}
+						onChange={(value) => updateIdentityField("favicon", value)}
+						onUpload={handleFaviconUpload}
+						onDelete={() => void handleDeleteSiteAsset("favicon")}
+						deleting={deletingAsset === "favicon"}
+					/>
 				</div>
 			</SectionCard>
 
@@ -1280,57 +1307,21 @@ export default function SiteSettingsPage() {
 					</div>
 				</div>
 
-				<div>
-					<FieldLabel>OG Image</FieldLabel>
-
-					<div className="space-y-3">
-						<TextInput
-							value={siteForm.seo.defaultOgImage}
-							onChange={(e) => updateSeoField("defaultOgImage", e.target.value)}
-							placeholder="admin/site-settings/seo/... o /assets/..."
-						/>
-
-						<div className="flex flex-wrap items-center gap-3">
-							<label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition hover:bg-surface-soft">
-								<input
-									type="file"
-									accept=".png,.jpg,.jpeg,.webp,.svg"
-									className="hidden"
-									onChange={handleOgImageUpload}
-									disabled={uploadingOgImage || saving}
-								/>
-								{uploadingOgImage
-									? lang === "es"
-										? "Subiendo..."
-										: "Uploading..."
-									: "Subir OG Image"}
-							</label>
-
-							{siteForm.seo.defaultOgImage ? (
-								<span className="text-xs text-text-secondary">
-									{siteForm.seo.defaultOgImage}
-								</span>
-							) : null}
-						</div>
-
-						{siteForm.seo.defaultOgImage ? (
-							<div className="rounded-xl border border-border bg-background p-4">
-								<div className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-text-secondary">
-									{lang === "es" ? "Vista previa" : "Preview"}
-								</div>
-
-								<Image
-									src={toAdminUploadSrc(siteForm.seo.defaultOgImage)}
-									alt="OG Image Preview"
-									width={320}
-									height={180}
-									unoptimized
-									className="max-h-40 w-auto object-contain"
-								/>
-							</div>
-						) : null}
-					</div>
-				</div>
+				<SiteAssetUploader
+					label="OG Image"
+					value={siteForm.seo.defaultOgImage}
+					placeholder="admin/site-settings/seo/... o /assets/..."
+					accept=".png,.jpg,.jpeg,.webp,.svg"
+					uploading={uploadingOgImage}
+					saving={saving}
+					previewAlt="OG Image Preview"
+					previewKind="og"
+					uploadButtonText="Subir OG Image"
+					onChange={(value) => updateSeoField("defaultOgImage", value)}
+					onUpload={handleOgImageUpload}
+					onDelete={() => void handleDeleteSiteAsset("defaultOgImage")}
+					deleting={deletingAsset === "defaultOgImage"}
+				/>
 			</SectionCard>
 
 			<SectionCard

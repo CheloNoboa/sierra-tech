@@ -33,13 +33,13 @@ import { authOptions } from "@/lib/auth/authOptions";
 import { connectToDB } from "@/lib/connectToDB";
 import SiteSettings from "@/models/SiteSettings";
 
-
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
 
 type Locale = "es" | "en";
 type AllowedRole = "admin" | "superadmin";
+type SiteAssetField = "logoLight" | "logoDark" | "favicon" | "defaultOgImage";
 
 interface LocalizedText {
 	es: string;
@@ -168,6 +168,15 @@ const SITE_SETTINGS_DEFAULTS: SiteSettingsPayload = {
 	updatedAt: "",
 	updatedBy: "",
 	updatedByEmail: "",
+};
+
+const BUCKET_NAME = "sierratech-admin-assets";
+
+const SITE_ASSET_FIELD_PATHS: Record<SiteAssetField, string> = {
+	logoLight: "identity.logoLight",
+	logoDark: "identity.logoDark",
+	favicon: "identity.favicon",
+	defaultOgImage: "seo.defaultOgImage",
 };
 
 /* -------------------------------------------------------------------------- */
@@ -379,6 +388,68 @@ async function requireAdmin(): Promise<AdminGuardResult> {
 	};
 }
 
+function isSiteAssetField(value: unknown): value is SiteAssetField {
+	return (
+		value === "logoLight" ||
+		value === "logoDark" ||
+		value === "favicon" ||
+		value === "defaultOgImage"
+	);
+}
+
+function getNestedStringValue(source: unknown, path: string): string {
+	if (!source || typeof source !== "object") return "";
+
+	const keys = path.split(".");
+	let current: unknown = source;
+
+	for (const key of keys) {
+		if (!current || typeof current !== "object") return "";
+		current = (current as Record<string, unknown>)[key];
+	}
+
+	return typeof current === "string" ? current : "";
+}
+
+function getR2Credentials() {
+	const endpoint = process.env.R2_ENDPOINT;
+	const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+	const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+
+	if (!endpoint || !accessKeyId || !secretAccessKey) {
+		throw new Error("Missing R2 environment variables.");
+	}
+
+	return {
+		endpoint,
+		accessKeyId,
+		secretAccessKey,
+	};
+}
+
+async function deleteR2Object(fileKey: string): Promise<void> {
+	if (!fileKey.startsWith("admin/")) return;
+
+	const { endpoint, accessKeyId, secretAccessKey } = getR2Credentials();
+	const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+
+	const client = new S3Client({
+		region: "auto",
+		endpoint,
+		credentials: {
+			accessKeyId,
+			secretAccessKey,
+		},
+	});
+
+	await client.send(
+		new DeleteObjectCommand({
+			Bucket: BUCKET_NAME,
+			Key: fileKey,
+		}),
+	);
+}
+
 /* -------------------------------------------------------------------------- */
 /* GET                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -474,3 +545,79 @@ export async function PUT(request: Request) {
 	}
 }
 
+/* -------------------------------------------------------------------------- */
+/* DELETE                                                                     */
+/* -------------------------------------------------------------------------- */
+
+export async function DELETE(request: Request) {
+	try {
+		const guard = await requireAdmin();
+		if (!guard.ok) return guard.response;
+
+		await connectToDB();
+
+		const body: unknown = await request.json().catch(() => null);
+
+		if (!body || typeof body !== "object") {
+			return NextResponse.json(
+				{
+					error_es: "Payload inválido.",
+					error_en: "Invalid payload.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		const record = body as Record<string, unknown>;
+		const field = record.field;
+
+		if (!isSiteAssetField(field)) {
+			return NextResponse.json(
+				{
+					error_es: "Campo de asset inválido.",
+					error_en: "Invalid asset field.",
+				},
+				{ status: 400 },
+			);
+		}
+
+		const fieldPath = SITE_ASSET_FIELD_PATHS[field];
+
+		const currentDoc = await SiteSettings.findOne({}).lean();
+		const currentFileKey = getNestedStringValue(currentDoc, fieldPath);
+
+		if (currentFileKey) {
+			await deleteR2Object(currentFileKey);
+		}
+
+		const doc = await SiteSettings.findOneAndUpdate(
+			{},
+			{
+				$set: {
+					[fieldPath]: "",
+					updatedBy: guard.userName,
+					updatedByEmail: guard.userEmail,
+				},
+			},
+			{
+				new: true,
+				upsert: true,
+				setDefaultsOnInsert: true,
+			},
+		).lean();
+
+		const payload = toResponsePayload(doc);
+
+		return NextResponse.json(payload, { status: 200 });
+	} catch (error) {
+		console.error("Error deleting admin site setting asset:", error);
+
+		return NextResponse.json(
+			{
+				error_es: "Error interno al eliminar el asset.",
+				error_en: "Internal error while deleting asset.",
+			},
+			{ status: 500 },
+		);
+	}
+}

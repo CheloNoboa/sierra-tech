@@ -12,8 +12,8 @@
  * - ofrecer una experiencia más corporativa y sólida para clientes
  * - mostrar identidad mínima de organización y usuario autenticado
  * - mantener una navegación lateral estable para las secciones del portal
- * - integrar un mini-footer discreto con crédito de desarrollo
- * - incorporar el logotipo corto de CoreVix dentro del footer del portal
+ * - integrar PortalFooter como componente reutilizable
+ * - incorporar la firma Structa by CoreVix dentro del footer del portal
  *
  * Alcance:
  * - protege visualmente la experiencia del portal
@@ -32,8 +32,8 @@
  * - el shell del portal no comparte header/footer del sitio comercial
  * - el footer de CoreVix se mantiene discreto, tipo powered-by
  * - el footer vive dentro de la columna derecha para no romper la grilla
- * - el logotipo de CoreVix se sirve desde:
- *   /public/images/LogoCoreVix.png
+ * - la firma Structa by CoreVix se sirve desde:
+ *   /public/images/StructaByCorevix.png
  *
  * EN:
  * Official client portal layout for Sierra Tech.
@@ -48,39 +48,10 @@ import { Building2, ShieldCheck } from "lucide-react";
 import { authOptions } from "@/lib/auth/authOptions";
 import PortalLogoutButton from "@/components/portal/PortalLogoutButton";
 import PortalSidebarNav from "@/components/portal/PortalSidebarNav";
+import PortalFooter from "@/components/portal/PortalFooter";
 
 interface PortalLayoutProps {
 	children: React.ReactNode;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Footer del portal                                                          */
-/* -------------------------------------------------------------------------- */
-
-function PortalFooter() {
-	return (
-		<footer className="mt-6 rounded-2xl border border-border/80 bg-white/80 px-4 py-4 shadow-sm backdrop-blur">
-			<div className="flex flex-col items-center justify-center gap-2 text-center sm:flex-row sm:gap-3">
-				<span className="text-xs tracking-wide text-text-secondary">
-					© {new Date().getFullYear()} Sierra Tech · Plataforma desarrollada por
-				</span>
-
-				<div className="flex items-center gap-2 rounded-full border border-border/70 bg-white px-3 py-1.5 shadow-sm">
-					<Image
-						src="/images/LogoCoreVix.png"
-						alt="CoreVix"
-						width={22}
-						height={22}
-						className="h-[22px] w-auto object-contain"
-					/>
-
-					<span className="text-xs font-semibold tracking-wide text-text-primary">
-						CoreVix
-					</span>
-				</div>
-			</div>
-		</footer>
-	);
 }
 
 /* -------------------------------------------------------------------------- */

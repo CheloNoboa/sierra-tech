@@ -28,25 +28,24 @@ import Image from "next/image";
 
 export default function PortalFooter() {
 	return (
-		<footer className="mt-6 rounded-2xl border border-border/80 bg-white/80 px-4 py-4 shadow-sm backdrop-blur">
-			<div className="flex flex-col items-center justify-center gap-2 text-center sm:flex-row sm:gap-3">
-				<span className="text-xs text-text-secondary">
-					© {new Date().getFullYear()} Sierra Tech · Plataforma desarrollada por
+		<footer className="mt-6 rounded-2xl border border-border/80 bg-white/80 px-4 py-5 shadow-sm backdrop-blur">
+			<div className="flex flex-col items-center justify-center gap-2 text-center">
+				<span className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-muted">
+					Plataforma impulsada por
 				</span>
 
-				<div className="flex items-center gap-2">
-					<Image
-						src="/images/LogoCoreVix.png"
-						alt="CoreVix"
-						width={22}
-						height={22}
-						className="h-[22px] w-auto object-contain"
-					/>
+				<Image
+					src="/images/StructaByCorevix.png"
+					alt="Structa by CoreVix"
+					width={420}
+					height={90}
+					priority
+					className="h-12 w-auto max-w-[320px] object-contain opacity-95"
+				/>
 
-					<span className="text-xs font-semibold text-text-primary">
-						CoreVix
-					</span>
-				</div>
+				<span className="text-xs text-text-secondary">
+					© {new Date().getFullYear()} Sierra Tech. Todos los derechos reservados.
+				</span>
 			</div>
 		</footer>
 	);

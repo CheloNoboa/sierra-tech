@@ -628,7 +628,7 @@ export default function Footer() {
 
 				{/* BOTTOM */}
 				<div className="border-t border-border pt-6">
-					<div className="flex flex-col gap-4">
+					<div className="flex flex-col gap-3">
 						{/* ROW 1 */}
 						<div className="flex flex-col items-center justify-between gap-4 md:flex-row">
 							<div className="text-center text-xs text-text-muted md:text-left">
@@ -694,35 +694,19 @@ export default function Footer() {
 						</div>
 
 						{/* SIGNATURE STRIP */}
-						<div className="flex items-center justify-center">
-							<div className="flex flex-wrap items-center justify-center gap-3 text-xs text-text-muted">
-								<span className="hidden sm:inline">
-									{lang === "es" ? "Desarrollado por" : "Developed by"}
-								</span>
+						<div className="flex flex-col items-center gap-2 pt-2">
+							<span className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-muted">
+								{lang === "es" ? "Plataforma impulsada por" : "Powered by"}
+							</span>
 
-								<div className="flex items-center gap-2 rounded-full border border-border bg-bg-surface px-3 py-1.5">
-									<Image
-										src="/images/LogoCoreVix.png"
-										alt="CoreVix"
-										width={96}
-										height={48}
-										priority
-										className="h-8 w-auto object-contain"
-									/>
-
-									<span className="font-semibold tracking-wide text-text-primary">
-										CoreVix
-									</span>
-								</div>
-
-								<span className="hidden sm:inline text-border">—</span>
-
-								<span className="hidden sm:inline">
-									{lang === "es"
-										? "Construye sistemas más inteligentes"
-										: "Build Smarter Systems"}
-								</span>
-							</div>
+							<Image
+								src="/images/StructaByCorevix.png"
+								alt="Structa by CoreVix"
+								width={520}
+								height={110}
+								priority
+								className="h-16 w-auto max-w-[420px] object-contain opacity-95"
+							/>
 						</div>
 					</div>
 				</div>

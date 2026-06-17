@@ -182,6 +182,17 @@ function formatAlertStatus(value: PortalAlertItem["alertStatus"]): string {
 	}
 }
 
+function formatEffectiveAlertStatus(item: PortalAlertItem): string {
+	const isCompleted =
+		item.completed === true || item.maintenanceStatus === "done";
+
+	if (isCompleted && item.alertStatus === "pending") {
+		return "No aplica";
+	}
+
+	return formatAlertStatus(item.alertStatus);
+}
+
 function formatMaintenanceStatus(
 	value: PortalAlertItem["maintenanceStatus"],
 	completed: PortalAlertItem["completed"],
@@ -519,120 +530,116 @@ function AttachmentLinks({ item }: { item: PortalAlertItem }) {
 	);
 }
 
-function HistoryTable({ items }: { items: PortalAlertItem[] }) {
+function HistoryFeed({ items }: { items: PortalAlertItem[] }) {
 	return (
-		<div className="mt-6 overflow-hidden rounded-3xl border border-border">
-			<div className="overflow-x-auto">
-				<table className="min-w-[1180px] w-full border-collapse bg-white text-sm">
-					<thead className="bg-surface text-left text-xs uppercase tracking-[0.14em] text-text-secondary">
-						<tr>
-							<th className="px-5 py-4 font-semibold">Fecha</th>
-							<th className="px-5 py-4 font-semibold">Proyecto</th>
-							<th className="px-5 py-4 font-semibold">Mantenimiento / alerta</th>
-							<th className="px-5 py-4 font-semibold">Alerta</th>
-							<th className="px-5 py-4 font-semibold">Estado</th>
-							<th className="px-5 py-4 font-semibold">Realizado</th>
-							<th className="px-5 py-4 font-semibold">Realizado por</th>
-							<th className="px-5 py-4 font-semibold">Nota</th>
-							<th className="px-5 py-4 font-semibold">Acciones</th>
-						</tr>
-					</thead>
+		<div className="mt-6 space-y-4">
+			{items.map((item) => (
+				<article
+					key={item.alertId}
+					className="rounded-3xl border border-border bg-white p-5 shadow-sm"
+				>
+					<div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+						<div className="min-w-0 flex-1 space-y-4">
+							<div className="flex flex-wrap items-center gap-2">
+								<span
+									className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusPillClasses(
+										item,
+									)}`}
+								>
+									{formatMaintenanceStatus(
+										item.maintenanceStatus,
+										item.completed,
+									)}
+								</span>
 
-					<tbody className="divide-y divide-border">
-						{items.map((item) => (
-							<tr key={item.alertId} className="align-top hover:bg-surface/60">
-								<td className="px-5 py-4 font-medium text-text-primary">
+								<span
+									className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getPriorityPillClasses(
+										item.priority,
+									)}`}
+								>
+									Prioridad {formatAlertPriority(item.priority)}
+								</span>
+
+								<span className="inline-flex rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-text-secondary">
 									{formatDateLabel(item.maintenanceDate ?? item.dueDate)}
-								</td>
+								</span>
+							</div>
 
-								<td className="px-5 py-4">
-									<p className="max-w-[220px] text-sm font-semibold text-text-primary">
-										{item.projectTitle?.trim() || "—"}
+							<div>
+								<p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-primaryStrong">
+									{item.projectTitle?.trim() || "Proyecto"}
+								</p>
+
+								<h3 className="mt-2 text-lg font-bold text-text-primary">
+									{item.maintenanceTitle ?? item.title}
+								</h3>
+
+								<p className="mt-2 max-w-3xl text-sm leading-7 text-text-secondary">
+									{item.description}
+								</p>
+							</div>
+
+							<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+								<div className="rounded-2xl border border-border bg-surface px-4 py-3">
+									<p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+										Alerta
 									</p>
-								</td>
-
-								<td className="px-5 py-4">
-									<p className="max-w-[280px] text-sm font-semibold text-text-primary">
-										{item.maintenanceTitle ?? item.title}
+									<p className="mt-2 text-sm font-semibold text-text-primary">
+										{formatEffectiveAlertStatus(item)}
 									</p>
-									<p className="mt-1 max-w-[320px] text-xs leading-5 text-text-secondary">
-										{item.description}
+									<p className="mt-1 text-xs text-text-secondary">
+										{formatDateLabel(item.alertDate)}
 									</p>
-									<div className="mt-3">
-										<AttachmentLinks item={item} />
-									</div>
-								</td>
+								</div>
 
-								<td className="px-5 py-4">
-									<div className="space-y-2">
-										<span
-											className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getPriorityPillClasses(
-												item.priority,
-											)}`}
-										>
-											{formatAlertPriority(item.priority)}
-										</span>
-										<p className="text-xs text-text-secondary">
-											{formatAlertStatus(item.alertStatus)}
-										</p>
-										<p className="text-xs text-text-secondary">
-											Alerta: {formatDateLabel(item.alertDate)}
-										</p>
-									</div>
-								</td>
+								<div className="rounded-2xl border border-border bg-surface px-4 py-3">
+									<p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+										Realizado
+									</p>
+									<p className="mt-2 text-sm font-semibold text-text-primary">
+										{item.completed ? "Sí" : "No"}
+									</p>
+									<p className="mt-1 text-xs text-text-secondary">
+										{formatDateLabel(item.completedAt)}
+									</p>
+								</div>
 
-								<td className="px-5 py-4">
-									<span
-										className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusPillClasses(
-											item,
-										)}`}
-									>
-										{formatMaintenanceStatus(
-											item.maintenanceStatus,
-											item.completed,
-										)}
-									</span>
-								</td>
+								<div className="rounded-2xl border border-border bg-surface px-4 py-3">
+									<p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+										Realizado por
+									</p>
+									<p className="mt-2 text-sm font-semibold text-text-primary">
+										{formatCompletedByRole(item.completedByRole)}
+									</p>
+								</div>
 
-								<td className="px-5 py-4">
-									<div className="space-y-1">
-										<p className="text-sm font-semibold text-text-primary">
-											{item.completed ? "Sí" : "No"}
-										</p>
-										<p className="text-xs text-text-secondary">
-											{formatDateLabel(item.completedAt)}
-										</p>
-									</div>
-								</td>
-
-								<td className="px-5 py-4 text-sm text-text-secondary">
-									{formatCompletedByRole(item.completedByRole)}
-								</td>
-
-								<td className="px-5 py-4">
-									<p className="max-w-[220px] text-sm leading-6 text-text-secondary">
+								<div className="rounded-2xl border border-border bg-surface px-4 py-3">
+									<p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+										Nota
+									</p>
+									<p className="mt-2 text-sm leading-6 text-text-secondary">
 										{item.note?.trim() || "—"}
 									</p>
-								</td>
+								</div>
+							</div>
 
-								<td className="px-5 py-4">
-									<div className="flex flex-col gap-2">
-										<CompleteMaintenanceButton item={item} />
+							<AttachmentLinks item={item} />
+						</div>
 
-										<Link
-											href={getActionHref(item)}
-											className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
-										>
-											Ver proyecto
-											<ArrowRight className="h-4 w-4" />
-										</Link>
-									</div>
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
+						<div className="flex w-full flex-col gap-2 lg:w-auto lg:min-w-[220px]">
+							<CompleteMaintenanceButton item={item} />
+
+							<Link
+								href={getActionHref(item)}
+								className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary transition hover:border-brand-primary/40 hover:bg-brand-primary/5"
+							>
+								Ver proyecto
+								<ArrowRight className="h-4 w-4" />
+							</Link>
+						</div>
+					</div>
+				</article>
+			))}
 		</div>
 	);
 }
@@ -795,7 +802,7 @@ export default async function PortalAlertsPage({
 				) : filteredItems.length === 0 ? (
 					<EmptyFilterResultsState />
 				) : (
-					<HistoryTable items={filteredItems} />
+					<HistoryFeed items={filteredItems} />
 				)}
 			</section>
 		</div>

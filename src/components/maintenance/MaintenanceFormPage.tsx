@@ -146,7 +146,7 @@ type MaintenanceContextResponse =
 	| { ok: false; error: string };
 
 
-type MaintenanceAlertStatus = "pending" | "emitted";
+type MaintenanceAlertStatus = "pending" | "emitted" | "skipped";
 type MaintenanceEmailStatus = "pending" | "sent" | "failed" | "skipped";
 
 type MaintenanceScheduleEntryAdmin = MaintenanceScheduleEntry & {
@@ -577,6 +577,114 @@ function formatDate(
 	dateFormat: AppDateFormat,
 ): string {
 	return formatAppDate(value, dateFormat);
+}
+
+function resolveAlertStatusLabel(
+	value: MaintenanceAlertStatus | undefined,
+	locale: Locale,
+): string {
+	const status = value ?? "pending";
+
+	const labels: Record<Locale, Record<MaintenanceAlertStatus, string>> = {
+		es: {
+			pending: "Pendiente",
+			emitted: "Emitido",
+			skipped: "No aplica",
+		},
+		en: {
+			pending: "Pending",
+			emitted: "Emitted",
+			skipped: "Not applicable",
+		},
+	};
+
+	return labels[locale][status];
+}
+
+function resolveEmailStatusLabel(
+	value: MaintenanceEmailStatus | undefined,
+	locale: Locale,
+): string {
+	const status = value ?? "pending";
+
+	const labels: Record<Locale, Record<MaintenanceEmailStatus, string>> = {
+		es: {
+			pending: "Pendiente",
+			sent: "Enviado",
+			failed: "Fallido",
+			skipped: "Omitido",
+		},
+		en: {
+			pending: "Pending",
+			sent: "Sent",
+			failed: "Failed",
+			skipped: "Skipped",
+		},
+	};
+
+	return labels[locale][status];
+}
+
+function getAlertStatusBadgeClasses(
+	value: MaintenanceAlertStatus | undefined,
+): string {
+	const status = value ?? "pending";
+
+	switch (status) {
+		case "skipped":
+			return "border-slate-200 bg-slate-100 text-slate-700";
+		case "emitted":
+			return "border-emerald-200 bg-emerald-50 text-emerald-700";
+		case "pending":
+		default:
+			return "border-amber-200 bg-amber-50 text-amber-700";
+	}
+}
+
+function getEmailStatusBadgeClasses(
+	value: MaintenanceEmailStatus | undefined,
+): string {
+	const status = value ?? "pending";
+
+	switch (status) {
+		case "sent":
+			return "border-emerald-200 bg-emerald-50 text-emerald-700";
+		case "failed":
+			return "border-rose-200 bg-rose-50 text-rose-700";
+		case "skipped":
+			return "border-slate-200 bg-slate-100 text-slate-700";
+		case "pending":
+		default:
+			return "border-amber-200 bg-amber-50 text-amber-700";
+	}
+}
+
+function resolveEffectiveAlertStatus(
+	row: MaintenanceScheduleEntry,
+	adminRow: MaintenanceScheduleEntryAdmin,
+): MaintenanceAlertStatus {
+	if (
+		(row.completed || row.maintenanceStatus === "done") &&
+		(adminRow.alertStatus ?? "pending") === "pending"
+	) {
+		return "skipped";
+	}
+
+	return adminRow.alertStatus ?? "pending";
+}
+
+function resolveEffectiveEmailStatus(
+	row: MaintenanceScheduleEntry,
+	adminRow: MaintenanceScheduleEntryAdmin,
+): MaintenanceEmailStatus {
+	if (
+		(row.completed || row.maintenanceStatus === "done") &&
+		(adminRow.emailStatus ?? "pending") === "pending"
+	) {
+		return "skipped";
+	}
+
+	return adminRow.emailStatus ?? "pending";
 }
 
 function createEmptyMaintenanceEntity(): MaintenanceEntity {
@@ -1850,6 +1958,8 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 							<tbody>
 								{form.schedule.map((row, index) => {
 									const adminRow = row as MaintenanceScheduleEntryAdmin;
+									const effectiveAlertStatus = resolveEffectiveAlertStatus(row, adminRow);
+									const effectiveEmailStatus = resolveEffectiveEmailStatus(row, adminRow);
 
 									return (
 										<tr key={row.eventId} className="border-t border-border">
@@ -1924,8 +2034,12 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 											</td>
 
 											<td className="px-3 py-3">
-												<span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-text-primary">
-													{adminRow.alertStatus ?? "pending"}
+												<span
+													className={`rounded-full border px-3 py-1 text-xs font-semibold ${getAlertStatusBadgeClasses(
+														effectiveAlertStatus,
+													)}`}
+												>
+													{resolveAlertStatusLabel(effectiveAlertStatus, lang)}
 												</span>
 											</td>
 
@@ -1934,8 +2048,12 @@ export default function MaintenanceFormPage({ mode }: MaintenanceFormPageProps) 
 											</td>
 
 											<td className="px-3 py-3">
-												<span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-text-primary">
-													{adminRow.emailStatus ?? "pending"}
+												<span
+													className={`rounded-full border px-3 py-1 text-xs font-semibold ${getEmailStatusBadgeClasses(
+														effectiveEmailStatus,
+													)}`}
+												>
+													{resolveEmailStatusLabel(effectiveEmailStatus, lang)}
 												</span>
 											</td>
 

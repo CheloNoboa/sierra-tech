@@ -1,6 +1,3 @@
-// File: src/components/LoginModal.tsx
-"use client";
-
 /**
  * =============================================================================
  * 📌 Component: LoginModal — Public Authentication Modal
@@ -11,20 +8,18 @@
  * Modal público oficial de autenticación para Sierra Tech.
  *
  * Objetivo:
- * - permitir login con credentials
- * - permitir login con Google para usuarios internos
+ * - permitir login con correo y contraseña
+ * - mantener Google Login disponible pero oculto por configuración
  * - permitir recuperación de contraseña
  * - resolver redirección post-login según la sesión real
  *
- * Contrato de redirección:
- * - userType = "internal" -> /admin/dashboard
- * - userType = "client"   -> /portal
- *
  * Decisiones:
+ * - Google Login queda deshabilitado visualmente por AUTH_CONFIG.enableGoogleLogin
+ * - El primer SuperAdmin se crea desde el primer registro disponible
+ * - Luego el registro público queda deshabilitado
+ * - Los usuarios internos y de organización se crean desde administración
  * - NO usa getSession()
- * - resuelve la sesión consultando /api/auth/session después del signIn
- * - NO depende de rutas heredadas como /user/home
- * - la separación final de audiencias sigue viviendo en middleware
+ * - consulta /api/auth/session después del signIn
  *
  * EN:
  * Official public authentication modal for Sierra Tech.
@@ -40,6 +35,7 @@ import { HiOutlineEye, HiOutlineEyeOff } from "react-icons/hi";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useToast } from "@/hooks/useToast";
 import { AUTH_MODAL_STYLES } from "@/components/auth/authModalStyles";
+import { AUTH_CONFIG } from "@/config/auth";
 
 /* -------------------------------------------------------------------------- */
 /* 🧱 Tipos                                                                   */
@@ -282,25 +278,35 @@ export default function LoginModal({
 
 				<h2 className={AUTH_MODAL_STYLES.title}>{t.login.title}</h2>
 
-				<button
-					type="button"
-					onClick={() => void handleGoogleLogin()}
-					className={AUTH_MODAL_STYLES.googleButton}
-				>
-					<Image
-						src="/icons/google_logo.png"
-						alt="Google"
-						width={20}
-						height={20}
-					/>
-					{t.login.google}
-				</button>
+				<p className="mb-6 text-center text-sm text-text-secondary">
+					{locale === "es"
+						? "Accede de forma segura a la plataforma Sierra Tech."
+						: "Securely access the Sierra Tech platform."}
+				</p>
 
-				<div className={AUTH_MODAL_STYLES.dividerWrap}>
-					<div className={AUTH_MODAL_STYLES.dividerLine} />
-					<span className={AUTH_MODAL_STYLES.dividerText}>{t.login.or}</span>
-					<div className={AUTH_MODAL_STYLES.dividerLine} />
-				</div>
+				{AUTH_CONFIG.enableGoogleLogin && (
+					<>
+						<button
+							type="button"
+							onClick={() => void handleGoogleLogin()}
+							className={AUTH_MODAL_STYLES.googleButton}
+						>
+							<Image
+								src="/icons/google_logo.png"
+								alt="Google"
+								width={20}
+								height={20}
+							/>
+							{t.login.google}
+						</button>
+
+						<div className={AUTH_MODAL_STYLES.dividerWrap}>
+							<div className={AUTH_MODAL_STYLES.dividerLine} />
+							<span className={AUTH_MODAL_STYLES.dividerText}>{t.login.or}</span>
+							<div className={AUTH_MODAL_STYLES.dividerLine} />
+						</div>
+					</>
+				)}
 
 				<form onSubmit={handleLogin} className="flex flex-col space-y-4">
 					<label htmlFor="login-email" className="sr-only">
