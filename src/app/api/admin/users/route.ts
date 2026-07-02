@@ -80,6 +80,24 @@ interface AppSession {
 	user: SessionUser;
 }
 
+interface CreateUserBody {
+	name?: unknown;
+	email?: unknown;
+	password?: unknown;
+	role?: unknown;
+	phone?: unknown;
+	active?: unknown;
+}
+
+interface UpdateUserBody {
+	_id?: unknown;
+	name?: unknown;
+	email?: unknown;
+	role?: unknown;
+	phone?: unknown;
+	active?: unknown;
+}
+
 /* =============================================================================
  * 🔐 Helpers de sesión y permisos
  * ========================================================================== */
@@ -119,6 +137,33 @@ function getLocaleFromRequest(req: NextRequest): string {
 		req.headers.get("accept-language")?.split(",")[0].slice(0, 2) ||
 		"es"
 	);
+}
+
+function normalizeString(value: unknown): string {
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeEmail(value: unknown): string {
+	return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function serializeUser(user: Partial<IUser> | null) {
+	if (!user || !user._id) return null;
+
+	const status = user.status === "inactive" ? "inactive" : "active";
+
+	return {
+		_id: String(user._id),
+		name: typeof user.name === "string" ? user.name : "",
+		email: typeof user.email === "string" ? user.email : "",
+		role: typeof user.role === "string" ? user.role : "",
+		phone: typeof user.phone === "string" ? user.phone : null,
+		active: status === "active",
+		provider: user.provider === "google" ? "google" : "credentials",
+		isRegistered: user.isRegistered === true,
+		lastLogin:
+			user.lastLogin instanceof Date ? user.lastLogin.toISOString() : null,
+	};
 }
 
 /* =============================================================================
@@ -171,7 +216,7 @@ export async function GET(req: NextRequest) {
 		.sort({ name: 1 })
 		.lean<IUser[]>();
 
-	return NextResponse.json(users);
+	return NextResponse.json(users.map((user) => serializeUser(user)));
 }
 
 /* =============================================================================
@@ -197,33 +242,21 @@ export async function POST(req: NextRequest) {
 	}
 
 	await connectToDB();
-	const body = await req.json();
+	const body = (await req.json()) as CreateUserBody;
 
-	const { name, email, password, role, phone } = body as {
-		name?: unknown;
-		email?: unknown;
-		password?: unknown;
-		role?: unknown;
-		phone?: unknown;
-	};
+	const name = normalizeString(body.name);
+	const email = normalizeEmail(body.email);
+	const password = normalizeString(body.password);
+	const role = normalizeString(body.role);
+	const phone = normalizeString(body.phone) || null;
+	const active = body.active !== false;
 
-	if (
-		typeof name !== "string" ||
-		typeof email !== "string" ||
-		typeof password !== "string" ||
-		typeof role !== "string" ||
-		!name.trim() ||
-		!email.trim() ||
-		!password ||
-		!role.trim()
-	) {
+	if (!name || !email || !password || !role) {
 		return NextResponse.json(
 			{ error: t(locale, "missingFields") },
 			{ status: 400 },
 		);
 	}
-
-	const normalizedEmail = email.trim().toLowerCase();
 
 	if (typeof phone === "string" && phone) {
 		const clean = phone.replace(/\D/g, "");
@@ -236,7 +269,7 @@ export async function POST(req: NextRequest) {
 		}
 	}
 
-	const exists = await UserModel.findOne({ email: normalizedEmail });
+	const exists = await UserModel.findOne({ email });
 	if (exists) {
 		return NextResponse.json(
 			{ error: t(locale, "emailInUse") },
@@ -247,11 +280,12 @@ export async function POST(req: NextRequest) {
 	const hashed = await bcrypt.hash(password, 10);
 
 	const newUser = await UserModel.create({
-		name: name.trim(),
-		email: normalizedEmail,
+		name,
+		email,
 		password: hashed,
-		role: role.trim(),
-		phone: typeof phone === "string" ? phone : null,
+		role,
+		phone,
+		status: active ? "active" : "inactive",
 		provider: "credentials",
 		isRegistered: false,
 	});
@@ -260,7 +294,16 @@ export async function POST(req: NextRequest) {
 		.select("-password")
 		.lean();
 
-	return NextResponse.json(created, { status: 201 });
+	const serialized = serializeUser(created as Partial<IUser> | null);
+
+	if (!serialized) {
+		return NextResponse.json(
+			{ error: "Created user could not be serialized." },
+			{ status: 500 },
+		);
+	}
+
+	return NextResponse.json(serialized, { status: 201 });
 }
 
 /* =============================================================================
@@ -286,15 +329,11 @@ export async function PUT(req: NextRequest) {
 	}
 
 	await connectToDB();
-	const body = await req.json();
+	const body = (await req.json()) as UpdateUserBody;
 
-	const { _id, name, email, role, phone } = body as {
-		_id?: unknown;
-		name?: unknown;
-		email?: unknown;
-		role?: unknown;
-		phone?: unknown;
-	};
+	const _id = normalizeString(body._id);
+	const phone =
+		body.phone === null ? null : normalizeString(body.phone) || null;
 
 	if (typeof _id !== "string" || !_id.trim()) {
 		return NextResponse.json(
@@ -326,17 +365,35 @@ export async function PUT(req: NextRequest) {
 	const updated = await UserModel.findByIdAndUpdate(
 		_id,
 		{
-			name: typeof name === "string" ? name : undefined,
-			email: typeof email === "string" ? email.trim().toLowerCase() : undefined,
-			role: typeof role === "string" ? role : undefined,
-			phone: typeof phone === "string" ? phone : undefined,
+			name: typeof body.name === "string" ? body.name.trim() : undefined,
+			email:
+				typeof body.email === "string"
+					? body.email.trim().toLowerCase()
+					: undefined,
+			role: typeof body.role === "string" ? body.role.trim() : undefined,
+			phone,
+			status:
+				typeof body.active === "boolean"
+					? body.active
+						? "active"
+						: "inactive"
+					: undefined,
 		},
 		{ new: true },
 	)
 		.select("-password")
 		.lean();
 
-	return NextResponse.json(updated);
+	const serialized = serializeUser(updated as Partial<IUser> | null);
+
+	if (!serialized) {
+		return NextResponse.json(
+			{ error: "Updated user could not be serialized." },
+			{ status: 500 },
+		);
+	}
+
+	return NextResponse.json(serialized);
 }
 
 /* =============================================================================
@@ -383,4 +440,3 @@ export async function DELETE(req: NextRequest) {
 
 	return NextResponse.json({ ok: true });
 }
-

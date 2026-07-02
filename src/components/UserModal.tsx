@@ -121,21 +121,22 @@ function serializeForm(values: UserFormValues): string {
 
 function isUserDTO(value: unknown): value is UserDTO {
 	if (!isObj(value)) return false;
-	if (typeof value._id !== "string") return false;
-	if (typeof value.name !== "string") return false;
-	if (typeof value.email !== "string") return false;
-	if (typeof value.role !== "string") return false;
-	if (typeof value.active !== "boolean") return false;
 
-	if (
-		value.phone !== undefined &&
-		value.phone !== null &&
-		typeof value.phone !== "string"
-	) {
-		return false;
-	}
-
-	return true;
+	return (
+		typeof value._id === "string" &&
+		typeof value.name === "string" &&
+		typeof value.email === "string" &&
+		typeof value.role === "string" &&
+		typeof value.active === "boolean" &&
+		(value.provider === "credentials" || value.provider === "google") &&
+		typeof value.isRegistered === "boolean" &&
+		(value.phone === undefined ||
+			value.phone === null ||
+			typeof value.phone === "string") &&
+		(value.lastLogin === undefined ||
+			value.lastLogin === null ||
+			typeof value.lastLogin === "string")
+	);
 }
 
 function extractSavedUserCandidate(raw: unknown): unknown {
@@ -156,33 +157,46 @@ function normalizeSavedUser(
 	},
 ): UserDTO | null {
 	const candidate = extractSavedUserCandidate(raw);
+	const source = isObj(candidate) ? candidate : null;
 
-	if (isUserDTO(candidate)) {
-		return candidate;
-	}
+	const id = getString(source?._id) || context.existingUser?._id || "";
 
-	if (context.existingUser) {
-		const source = isObj(candidate) ? candidate : null;
+	if (!id) return null;
 
-		const merged: UserDTO = {
-			...context.existingUser,
-			_id: getString(source?._id) || context.existingUser._id,
-			name: getString(source?.name) || context.values.name.trim(),
-			email: getString(source?.email) || context.values.email.trim(),
-			role: getString(source?.role) || context.values.role,
-			phone:
-				typeof source?.phone === "string"
-					? source.phone
-					: source?.phone === null
-						? null
-						: context.values.phone.e164,
-			active: getBoolean(source?.active, context.values.active),
-		};
+	const provider =
+		source?.provider === "google" || source?.provider === "credentials"
+			? source.provider
+			: context.existingUser?.provider ?? "credentials";
 
-		return merged;
-	}
-
-	return null;
+	return {
+		_id: id,
+		name: getString(source?.name) || context.values.name.trim(),
+		email: getString(source?.email) || context.values.email.trim(),
+		role: getString(source?.role) || context.values.role,
+		phone:
+			typeof source?.phone === "string"
+				? source.phone
+				: source?.phone === null
+					? null
+					: context.values.phone.e164,
+		active:
+			typeof source?.active === "boolean"
+				? source.active
+				: source?.status === "inactive"
+					? false
+					: context.values.active,
+		provider,
+		isRegistered:
+			typeof source?.isRegistered === "boolean"
+				? source.isRegistered
+				: context.existingUser?.isRegistered ?? false,
+		lastLogin:
+			typeof source?.lastLogin === "string"
+				? source.lastLogin
+				: source?.lastLogin === null
+					? null
+					: context.existingUser?.lastLogin ?? null,
+	};
 }
 
 /* =============================================================================
@@ -372,14 +386,19 @@ export default function UserModal({
 				values: form,
 			});
 
+
 			if (!savedUser) {
 				toast.error(t.invalidSavedUser);
 				return;
 			}
 
 			toast.success(json?.message ?? (isEditing ? t.updatedOk : t.createdOk));
+
 			onSaved(savedUser);
+
+			setInitialSnapshot(serializeForm(form));
 			setShowUnsaved(false);
+			onClose();
 		} finally {
 			setSaving(false);
 		}
