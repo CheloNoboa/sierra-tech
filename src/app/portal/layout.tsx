@@ -13,7 +13,7 @@
  * - mostrar identidad mínima de organización y usuario autenticado
  * - mantener una navegación lateral estable para las secciones del portal
  * - integrar PortalFooter como componente reutilizable
- * - incorporar la firma Structa by CoreVix dentro del footer del portal
+ * - incorporar la firma Structa by LyrCore dentro del footer del portal
  *
  * Alcance:
  * - protege visualmente la experiencia del portal
@@ -33,7 +33,7 @@
  * - el footer de CoreVix se mantiene discreto, tipo powered-by
  * - el footer vive dentro de la columna derecha para no romper la grilla
  * - la firma Structa by CoreVix se sirve desde:
- *   /public/images/StructaByCorevix.png
+ *   /public/images/StructaByLyrCore.png
  *
  * EN:
  * Official client portal layout for Sierra Tech.

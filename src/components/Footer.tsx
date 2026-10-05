@@ -700,8 +700,8 @@ export default function Footer() {
 							</span>
 
 							<Image
-								src="/images/StructaByCorevix.png"
-								alt="Structa by CoreVix"
+								src="/images/StructaByLyrCore.png"
+								alt="Structa by LyrCore"
 								width={520}
 								height={110}
 								priority

@@ -20,7 +20,7 @@
  * - alineación limpia
  *
  * EN:
- * Lightweight footer with CoreVix branding.
+ * Lightweight footer with LyrCore branding.
  * =============================================================================
  */
 
@@ -35,8 +35,8 @@ export default function PortalFooter() {
 				</span>
 
 				<Image
-					src="/images/StructaByCorevix.png"
-					alt="Structa by CoreVix"
+					src="/images/StructaByLyrCore.png"
+					alt="Structa by LyrCore"
 					width={420}
 					height={90}
 					priority
